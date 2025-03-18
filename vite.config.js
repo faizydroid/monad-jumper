@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       rollupOptions: {
         input: {
-          main: 'index.html',
+          main: '/index.html',
           app: 'app.html'
         },
       },
