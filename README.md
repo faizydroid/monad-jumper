@@ -17,18 +17,3 @@ A blockchain-based jumping game built on Monad testnet.
 - HTML5 Canvas
 - Supabase
 
-## Development
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Create `.env` file with required variables
-4. Run development server: `npm run dev`
-
-## Environment Variables
-```env
-VITE_REACT_APP_SUPABASE_URL=your_supabase_url
-VITE_REACT_APP_SUPABASE_ANON_KEY=your_supabase_key
-VITE_JUMP_CONTRACT_ADDRESS=your_contract_address
-```
-
-## License
-MIT
