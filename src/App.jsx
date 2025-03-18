@@ -876,21 +876,6 @@ const handlePlayAgain = useCallback(() => {
       <div className="wallet-error">
         <h2>Wallet Connection Error</h2>
         <p>{providerError}</p>
-        {window.__EDGE_FALLBACK_MODE__ ? (
-          <>
-            <p>Your browser (Microsoft Edge) is having issues with wallet extensions.</p>
-            <div style={{display: 'flex', gap: '10px', justifyContent: 'center', margin: '20px 0'}}>
-              <a href="https://www.mozilla.org/firefox/new/" target="_blank" rel="noopener noreferrer">
-                <button className="browser-button">Get Firefox</button>
-              </a>
-              <a href="https://metamask.io/download/" target="_blank" rel="noopener noreferrer">
-                <button className="metamask-button">Get MetaMask</button>
-              </a>
-            </div>
-          </>
-        ) : (
-          <p>Please install MetaMask or a compatible wallet to use this application.</p>
-        )}
         <a href="https://metamask.io/download/" target="_blank" rel="noopener noreferrer">
           <button className="metamask-button">Get MetaMask</button>
         </a>
@@ -1201,30 +1186,17 @@ function App() {
   const location = useLocation();
   const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
 
-  useEffect(() => {
-    // Fix for Edge browser showing only background
-    if (navigator.userAgent.indexOf("Edg") !== -1) {
-      // Add CSS fix to ensure content is visible in Edge
-      const style = document.createElement('style');
-      style.textContent = `
-        #root { opacity: 1 !important; visibility: visible !important; }
-        .container, .game-container { display: block !important; }
-      `;
-      document.head.appendChild(style);
-      
-      console.log('Applied Edge-specific CSS fixes');
-    }
-  }, []);
-
   return (
-    <Web3Provider>
-      {isGameScreen ? <GameNavbar /> : <Navbar />}
-      <Routes>
-        <Route path="/" element={<GameComponent />} />
-        <Route path="/admin" element={<AdminAccess />} />
-      </Routes>
-      <TransactionNotifications />
-    </Web3Provider>
+    <div className="app">
+      <Web3Provider>
+        {isGameScreen ? <GameNavbar /> : <Navbar />}
+        <Routes>
+          <Route path="/" element={<GameComponent />} />
+          <Route path="/admin" element={<AdminAccess />} />
+        </Routes>
+        <TransactionNotifications />
+      </Web3Provider>
+    </div>
   );
 }
 
