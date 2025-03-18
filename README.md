@@ -1,12 +1,34 @@
-# Doodle-Jump
-This game is built using HTML5 Canvas Element and Object Oriented Programming in JavaScript.
+# Monad Jumper
 
-It makes use of concepts like infinite scrolling of game objects and background. The game gets more difficult to play with the increase in score value. Also uploaded its tutorial on my youTube channel
+A blockchain-based jumping game built on Monad testnet.
 
-### Demo Instructions:
-ArrowUp to shoot, ArrowLeft and ArrowRight to move       
+## Features
+- Jump mechanics with blockchain transactions
+- Score tracking on Monad testnet
+- Beautiful UI/UX design
+- Responsive gameplay
+- Transaction bundling for efficiency
 
-Deployment Link: https://m-adil-as.github.io/Doodle-Jump/
+## Tech Stack
+- React
+- Vite
+- Ethers.js
+- Monad Testnet
+- HTML5 Canvas
+- Supabase
 
-Demo Video:   
-https://user-images.githubusercontent.com/115668271/196476702-01ae3e88-3783-45c9-b357-cfc00d015bcf.mp4
+## Development
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Create `.env` file with required variables
+4. Run development server: `npm run dev`
+
+## Environment Variables
+```env
+VITE_REACT_APP_SUPABASE_URL=your_supabase_url
+VITE_REACT_APP_SUPABASE_ANON_KEY=your_supabase_key
+VITE_JUMP_CONTRACT_ADDRESS=your_contract_address
+```
+
+## License
+MIT

@@ -1,0 +1,150 @@
+.leaderboard-container {
+  font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', sans-serif;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 20px;
+  perspective: 1000px;
+}
+
+.leaderboard-title {
+  text-align: center;
+  font-size: 2.5rem;
+  color: #ff6b6b;
+  text-shadow: 
+    3px 3px 0 #4bc0c8,
+    -2px -2px 0 #4bc0c8,
+    2px -2px 0 #4bc0c8,
+    -2px 2px 0 #4bc0c8;
+  margin-bottom: 20px;
+  transform: rotate(-2deg);
+  animation: bounce 0.5s ease infinite alternate;
+}
+
+@keyframes bounce {
+  from { transform: rotate(-2deg) translateY(0); }
+  to { transform: rotate(-2deg) translateY(-5px); }
+}
+
+.leaderboard-board {
+  background-color: #ffeaa7;
+  border: 8px solid #fdcb6e;
+  border-radius: 20px;
+  box-shadow: 
+    0 10px 0 #e17055,
+    0 0 20px rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(5deg);
+}
+
+.leaderboard-board:before {
+  content: '';
+  position: absolute;
+  top: -15px;
+  left: 20px;
+  right: 20px;
+  height: 30px;
+  background-color: #fab1a0;
+  border-radius: 15px;
+  z-index: -1;
+  transform: translateZ(-10px);
+}
+
+.leaderboard-scores {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 10px;
+  padding: 10px 15px;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.leaderboard-row:hover {
+  transform: scale(1.02);
+  background-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+}
+
+.top-three {
+  background-color: rgba(255, 234, 167, 0.7);
+}
+
+.first-place {
+  background-color: rgba(255, 218, 121, 0.9);
+  position: relative;
+  overflow: hidden;
+}
+
+.first-place:after {
+  content: '';
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 60px;
+  height: 60px;
+  background-color: #fdcb6e;
+  transform: rotate(45deg);
+  z-index: -1;
+}
+
+.rank {
+  flex: 0 0 40px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #e17055;
+}
+
+.medal {
+  font-size: 1.5rem;
+}
+
+.player-name {
+  flex: 1;
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: #2d3436;
+  margin: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.score-bubble {
+  background-color: #74b9ff;
+  color: white;
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-weight: bold;
+  min-width: 50px;
+  text-align: center;
+  box-shadow: 0 3px 0 #0984e3;
+}
+
+.no-scores {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #e17055;
+  padding: 30px 0;
+  font-weight: bold;
+}
+
+/* Add some fun animations */
+@keyframes pulsate {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.first-place .score-bubble {
+  background-color: #fbc531;
+  box-shadow: 0 3px 0 #e1b12c;
+  animation: pulsate 1.5s infinite;
+} 

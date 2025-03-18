@@ -1,0 +1,1300 @@
+import { Player } from '/js/player.js'
+import { Background } from '/js/background.js'
+import { InputHandler } from '/js/input.js'
+import { Platform } from '/js/platform.js'
+import { Enemy } from '/js/enemy.js'
+
+// Make sure window.totalJumps is initialized globally
+window.totalJumps = 0;
+console.log('Main.js: Jump counter initialized to', window.totalJumps);
+
+// Find the keydown listener and replace it with this
+document.addEventListener('keydown', function(e) {
+    if ((e.key === ' ' || e.key === 'ArrowUp')) {
+        // Increment jump counter
+        window.totalJumps = (window.totalJumps || 0) + 1;
+        // Log to verify it's being tracked
+        console.log(`Main.js: Jump #${window.totalJumps} tracked`);
+    }
+});
+
+// Add this at the beginning of your JS file to ensure the animation is defined
+(function() {
+  // Add a style element for the pulse animation
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      }
+      50% {
+        transform: scale(1.05);
+        box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      }
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+window.addEventListener('load', () => {
+    // Initialize global variables
+    window.gameInitialized = false;
+    
+    const canvas = document.querySelector('#canvas1')
+    const ctx = canvas.getContext('2d')
+    canvas.width = 532
+    canvas.height = 850
+
+    class Game {
+        constructor(width, height) {
+            this.width = width
+            this.height = height
+            this.canvas = canvas
+            this.vy = 0
+            this.gameOver = false
+            this.gameStart = false
+            this.platforms = []
+            this.enemies = []
+            this.level = 0
+            this.score = 0
+            this.enemyChance = 0
+            this.enemyMaxChance = 50
+            this.object_vx = 3
+            this.object_max_vx = 6
+            this.platform_gap = 100
+            this.platform_max_gap = 175
+            this.blue_white_platform_chance = 0
+            this.blue_white_platform_max_chance = 85
+            this.gameOverButtons = {
+                tryAgain: {
+                    x: canvas.width / 2 - 100,
+                    y: canvas.height / 2 + 50,
+                    width: 200,
+                    height: 50,
+                    text: 'Try Again'
+                },
+                backToHome: {
+                    x: canvas.width / 2 - 100,
+                    y: canvas.height / 2 + 120,
+                    width: 200,
+                    height: 50,
+                    text: 'Back to Home'
+                }
+            };
+
+            // Initialize click handler in constructor
+            canvas.addEventListener('click', (event) => this.handleGameOverClick(event));
+            this.animationId = null;
+            this.loading = false;
+            this.loadingProgress = 0;
+
+            this.debugPanel = new DebugPanel(this);
+            this.isGameOver = false;
+
+            // Add transaction tracking
+            this.pendingJumps = [];
+            this.jumpTimestamps = [];
+            window.__jumpCount = 0;
+            
+            console.log("🎮 Game initialized with transaction tracking");
+
+            // Initialize game state
+            this.initializeGame();
+
+            // Always initialize the jump counter when a new game starts
+            window.totalJumps = 0;
+            console.log("Game created - Jump counter reset to 0");
+        }
+    
+        initializeGame() {
+            // Add initial platforms
+            this.add_platforms(0, this.height-15)
+            this.add_broken_platforms(0, this.height-15)
+            this.add_platforms(-this.height, -15)
+            this.add_broken_platforms(-this.height, -15)  
+
+            // Initialize player and background
+            this.background = new Background(this)
+            this.player = new Player(this)
+            
+            // Only create ONE input handler
+            this.inputHandler = new InputHandler(this)
+        }
+    
+        update() {
+            if (this.gameOver) {
+                // Stop all game updates when game is over
+                return;
+            }
+
+            if (!this.gameStart) {
+                return;
+            }
+
+            this.background.update();
+            this.platforms.forEach(platform => platform.update());
+            this.player.update(this.inputHandler);
+            this.enemies.forEach(enemy => enemy.update());
+
+            // Filter out deleted objects
+            this.platforms = this.platforms.filter(platform => !platform.markedForDeletion);
+            this.enemies = this.enemies.filter(enemy => !enemy.markedForDeletion);
+
+            // Check for game over condition
+            if (this.checkGameOver()) {
+                console.log('Game over condition met in update');
+            }
+        }
+    
+        draw(context) {
+            // Always draw background
+            this.background.draw(context);
+
+            if (this.loading) {
+                this.drawLoadingScreen(context);
+                return;
+            }
+
+            if (!this.gameStart) {
+                // Draw start screen
+                this.drawStartButton(context);
+                return;
+            }
+
+            // Draw game elements
+            this.platforms.forEach(platform => platform.draw(context));
+            this.player.draw(context);
+            this.enemies.forEach(enemy => enemy.draw(context));
+
+            // Draw score
+            context.fillStyle = "black";
+            context.font = '20px Arial';
+            context.textAlign = 'start';
+            context.fillText(`Score: ${Math.floor(this.score)}`, 20, 40);
+
+            // Draw debug panel
+            if (this.debugPanel && typeof this.debugPanel.draw === 'function') {
+                this.debugPanel.draw(context);
+            }
+
+            // Draw game over screen if needed
+            if (this.gameOver) {
+                this.drawGameOverScreen(context);
+                
+                // Add HTML overlay button
+                if (!this.overlayCreated) {
+                    this.createPlayAgainOverlay();
+                    this.overlayCreated = true;
+                }
+            } else {
+                // Remove overlay if game is not over
+                if (this.overlayCreated) {
+                    const overlay = document.getElementById('play-again-overlay');
+                    if (overlay) {
+                        document.body.removeChild(overlay);
+                    }
+                    this.overlayCreated = false;
+                }
+            }
+        }
+
+        add_enemy() {
+            this.enemies.push(new Enemy(this))
+        }
+
+        add_platforms(lowerY, upperY) {
+            const platformHeight = 30; // INCREASED FROM ORIGINAL VALUE
+            
+            do{
+                let type = 'green'
+                if(Math.random() < (this.blue_white_platform_chance/100)){
+                    type = (Math.random() < 0.5)  ? 'blue' : 'white'
+                }
+                
+                this.platforms.unshift(new Platform(this, lowerY, upperY, type))
+            }
+            while(this.platforms[0].y >= lowerY)
+        }
+
+        add_broken_platforms(lowerY, upperY) {
+            let num = Math.floor(Math.random() * (5 - 0 + 1)) + 0
+
+            for(let i=0; i<num; i++){
+                this.platforms.push(new Platform(this, lowerY, upperY, 'brown'))
+            }
+        }
+
+        change_difficulty() {
+            this.level++
+            if(this.platform_max_gap > this.platform_gap){
+                this.platform_gap += 5
+            }
+            if(this.blue_white_platform_max_chance > this.blue_white_platform_chance){
+                this.blue_white_platform_chance += 1
+            }
+            if(this.level%8 == 0 && this.object_max_vx > this.object_vx){
+                this.object_vx++
+            }
+            if(this.level%5 == 0 && this.enemyMaxChance > this.enemyChance){
+                this.enemyChance += 5
+            }
+        }
+
+        gameOver() {
+            this.gameOver = true;
+            const finalScore = Math.floor(this.score);
+            const jumpCount = window.__jumpCount || 0;
+            
+            // Create game over menu
+            const gameOverMenu = document.createElement('div');
+            gameOverMenu.className = 'game-over-menu';
+            
+            // Add content
+            gameOverMenu.innerHTML = `
+                <h2 class="game-over-title">Game Over!</h2>
+                <div class="game-over-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Score</span>
+                        <span class="stat-value">${finalScore}</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-label">Jumps</span>
+                        <span class="stat-value">${jumpCount}</span>
+                    </div>
+                </div>
+                <div class="game-over-buttons">
+                    <button class="play-again-button">Play Again</button>
+                    <button class="home-button">Home</button>
+                </div>
+            `;
+            
+            document.body.appendChild(gameOverMenu);
+            
+            // Add event listeners
+            const playAgainButton = gameOverMenu.querySelector('.play-again-button');
+            playAgainButton.onclick = () => {
+                gameOverMenu.remove();
+                this.reset();
+            };
+            
+            const homeButton = gameOverMenu.querySelector('.home-button');
+            homeButton.onclick = () => {
+                if (window.parent) {
+                    window.parent.postMessage({ type: 'RETURN_HOME' }, '*');
+                }
+            };
+            
+            // Send game over message to parent
+            if (window.parent) {
+                try {
+                    window.parent.postMessage({
+                        type: 'BUNDLE_JUMPS',
+                        data: {
+                            score: finalScore,
+                            jumpCount: jumpCount,
+                            timestamp: Date.now(),
+                            saveId: Date.now().toString()
+                        }
+                    }, '*');
+                    console.log('Game over message sent with bundled jumps:', jumpCount);
+                } catch (err) {
+                    console.error('Failed to post game over message:', err);
+                }
+            }
+        }
+
+        drawButton(button) {
+            ctx.fillStyle = '#ff6b6b';
+            ctx.strokeStyle = '#ff5252';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(button.x, button.y, button.width, button.height, 25);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(button.text, button.x + button.width/2, button.y + button.height/2);
+        }
+
+        handleGameOverClick(event) {
+            if (!this.gameOver) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (event.clientX - rect.left) * scaleX;
+            const y = (event.clientY - rect.top) * scaleY;
+
+            // Check Try Again button
+            const tryAgain = this.gameOverButtons.tryAgain;
+            if (x >= tryAgain.x && x <= tryAgain.x + tryAgain.width &&
+                y >= tryAgain.y && y <= tryAgain.y + tryAgain.height) {
+                this.reset();
+                return;
+            }
+
+            // Check Back to Home button
+            const backToHome = this.gameOverButtons.backToHome;
+            if (x >= backToHome.x && x <= backToHome.x + backToHome.width &&
+                y >= backToHome.y && y <= backToHome.y + backToHome.height) {
+                window.location.href = '/';
+                return;
+            }
+        }
+
+        reset() {
+            console.log("🔄 FULL GAME RESET");
+            
+            // Reset game state without stopping animation
+            this.gameOver = false;
+            this.gameStart = true;
+            this.score = 0;
+            this.level = 0;
+            this.enemyChance = 0;
+            this.object_vx = 3;
+            this.platform_gap = 100;
+            this.blue_white_platform_chance = 0;
+            
+            // IMPORTANT: Reset ALL jump counters
+            window.__jumpCount = 0;
+            window.totalJumps = 0;
+            this.finalJumpCount = 0;
+            this.isGameOver = false;
+            console.log("🔄 All jump counters reset to 0");
+            
+            // Clear existing entities
+            this.platforms = [];
+            this.enemies = [];
+            
+            // Reset player position
+            this.player.x = this.width / 2 - this.player.width / 2;
+            this.player.y = this.height - this.player.height - 20;
+            this.player.vy = this.player.min_vy;
+            this.player.vx = 0;
+            this.player.bullets = [];
+            
+            // Add initial platforms
+            this.add_platforms(0, this.height-15);
+            this.add_broken_platforms(0, this.height-15);
+            this.add_platforms(-this.height, -15);
+            this.add_broken_platforms(-this.height, -15);
+
+            // Reset transaction tracking
+            this.pendingJumps = [];
+            this.jumpTimestamps = [];
+            console.log("🔄 Game reset - All jump transactions cleared");
+
+            // Reset the jump count sent flag
+            this.jumpCountSent = false;
+        }
+
+        animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (this.gameStart && !this.loading) this.update();
+            this.draw(ctx);
+            if (!this.gameOver || this.loading) {
+                this.animationId = requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        drawLoadingScreen(context) {
+            // Semi-transparent background
+            context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            context.fillRect(0, 0, this.width, this.height);
+            
+            // Loading text
+            context.fillStyle = 'white';
+            context.font = '32px Arial';
+            context.textAlign = 'center';
+            context.fillText('Loading...', this.width/2, this.height/2 - 50);
+            
+            // Loading bar background
+            context.fillStyle = '#333';
+            const barWidth = 300;
+            const barHeight = 20;
+            context.fillRect(
+                this.width/2 - barWidth/2,
+                this.height/2 - barHeight/2,
+                barWidth,
+                barHeight
+            );
+            
+            // Loading bar progress
+            context.fillStyle = '#4CAF50';
+            context.fillRect(
+                this.width/2 - barWidth/2,
+                this.height/2 - barHeight/2,
+                barWidth * (this.loadingProgress / 100),
+                barHeight
+            );
+        }
+
+        startLoading() {
+            this.loading = true;
+            this.loadingProgress = 0;
+            this.simulateLoading();
+        }
+
+        simulateLoading() {
+            if (this.loadingProgress < 100) {
+                this.loadingProgress += 2;
+                setTimeout(() => {
+                    this.simulateLoading();
+                }, 50);
+            } else {
+                this.loading = false;
+                this.reset();
+            }
+        }
+
+        drawGameOverScreen(context) {
+            // Semi-transparent background
+            context.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            context.fillRect(0, 0, this.width, this.height);
+            
+            // Define panel dimensions
+            const panelWidth = 380;
+            const panelHeight = 440;
+            const x = this.width/2 - panelWidth/2;
+            const y = this.height/2 - panelHeight/2;
+            
+            // Draw cloud-shaped bubble panel with shadow
+            context.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            context.shadowBlur = 15;
+            context.shadowOffsetY = 8;
+            
+            // Panel background - white with slight blue tint
+            context.fillStyle = '#f8faff';
+            this.drawBubblePanel(context, x, y, panelWidth, panelHeight);
+            
+            // Reset shadow
+            context.shadowColor = 'transparent';
+            context.shadowBlur = 0;
+            context.shadowOffsetY = 0;
+            
+            // Draw "GAME OVER" banner
+            const bannerHeight = 80;
+            context.fillStyle = '#FF5A5F'; // Cartoonish red
+            this.drawWavyBanner(context, x + 10, y - 15, panelWidth - 20, bannerHeight);
+            
+            // Add "GAME OVER" text with cartoon style
+            context.fillStyle = 'white';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            this.setCartoonFont(context, 36);
+            context.fillText('GAME OVER!', this.width/2, y + 25);
+            
+            // Draw star decoration
+            this.drawStar(context, x + 30, y + 25, 20, 5, 0.5);
+            this.drawStar(context, x + panelWidth - 30, y + 25, 20, 5, 0.5);
+            
+            // Score section with cartoonish style
+            context.fillStyle = '#333';
+            this.setCartoonFont(context, 24);
+            context.fillText('YOUR SCORE', this.width/2, y + 100);
+            
+            // Score value with fun pop
+            context.fillStyle = '#FF5A5F';
+            this.setCartoonFont(context, 65);
+            this.drawPopText(context, Math.floor(this.score).toString(), this.width/2, y + 160);
+            
+            // Funky divider
+            this.drawWavyLine(context, x + 40, y + 200, panelWidth - 80, 5, '#E0E0E0');
+            
+            // Jump count with icon - use ONLY current game's jump count
+            const jumpCount = window.__jumpCount || 0;
+            context.fillStyle = '#333';
+            this.setCartoonFont(context, 22);
+            context.fillText('Total Jumps', this.width/2, y + 230);
+            
+            // Display the current game's jump count
+            context.fillStyle = '#4CAF50'; // Green
+            this.setCartoonFont(context, 40);
+            context.fillText(jumpCount, this.width/2, y + 270);
+            
+            // Only send the final count message ONCE
+            if (!this.jumpCountSent) {
+                window.parent.postMessage({
+                    type: 'FINAL_JUMP_COUNT',
+                    jumpCount: jumpCount
+                }, '*');
+                this.jumpCountSent = true; // Mark as sent
+                console.log(`🎮 Final jump count ${jumpCount} sent to parent`);
+            }
+            
+            // Store the final jump count
+            this.finalJumpCount = jumpCount;
+
+            // Transaction message in a fun speech bubble
+            this.drawSpeechBubble(context, x + 20, y + 300, panelWidth - 40, 50);
+            context.fillStyle = '#333';
+            this.setCartoonFont(context, 14);
+            context.fillText('Approve transaction and continue playing!', this.width/2, y + 325);
+        }
+
+        drawBubblePanel(ctx, x, y, width, height) {
+            const radius = 30;
+            const triangleSize = 15;
+            
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            
+            // Draw pointer on the left side
+            ctx.lineTo(x + width/4 + triangleSize, y + height);
+            ctx.lineTo(x + width/4, y + height + triangleSize);
+            ctx.lineTo(x + width/4 - triangleSize, y + height);
+            
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Add stroke
+            ctx.strokeStyle = '#E0E0E0';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        drawWavyBanner(ctx, x, y, width, height) {
+            const waveHeight = 10;
+            const segments = 12;
+            const segmentWidth = width / segments;
+            
+            ctx.beginPath();
+            ctx.moveTo(x, y + waveHeight);
+            
+            // Top wavy edge
+            for (let i = 0; i < segments; i++) {
+                const curveX = x + (i + 0.5) * segmentWidth;
+                const curveY = y + (i % 2 === 0 ? 0 : waveHeight * 2);
+                const endX = x + (i + 1) * segmentWidth;
+                const endY = y + waveHeight;
+                ctx.quadraticCurveTo(curveX, curveY, endX, endY);
+            }
+            
+            // Right side
+            ctx.lineTo(x + width, y + height - waveHeight);
+            
+            // Bottom wavy edge
+            for (let i = segments; i > 0; i--) {
+                const curveX = x + (i - 0.5) * segmentWidth;
+                const curveY = y + height - (i % 2 === 0 ? 0 : waveHeight * 2);
+                const endX = x + (i - 1) * segmentWidth;
+                const endY = y + height - waveHeight;
+                ctx.quadraticCurveTo(curveX, curveY, endX, endY);
+            }
+            
+            // Left side
+            ctx.lineTo(x, y + waveHeight);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        setCartoonFont(ctx, size) {
+            ctx.font = `bold ${size}px "Comic Sans MS", "Chalkboard SE", "Marker Felt", cursive`;
+        }
+
+        drawStar(ctx, cx, cy, outerRadius, points, innerRatio) {
+            ctx.beginPath();
+            ctx.fillStyle = 'rgba(255, 255, 100, 0.8)';
+            
+            for (let i = 0; i < points * 2; i++) {
+                const radius = i % 2 === 0 ? outerRadius : outerRadius * innerRatio;
+                const angle = (Math.PI * 2) * (i / (points * 2)) - Math.PI/2;
+                const x = cx + Math.cos(angle) * radius;
+                const y = cy + Math.sin(angle) * radius;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        drawPopText(ctx, text, x, y) {
+            // Text shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.fillText(text, x + 3, y + 3);
+            
+            // Main text
+            ctx.fillStyle = '#FF5A5F';
+            ctx.fillText(text, x, y);
+            
+            // Highlight
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.fillText(text, x - 2, y - 2);
+        }
+
+        drawWavyLine(ctx, x, y, width, amplitude, color) {
+            const segments = 20;
+            const segmentWidth = width / segments;
+            
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            
+            for (let i = 0; i < segments; i++) {
+                const curveX = x + (i + 0.5) * segmentWidth;
+                const curveY = y + (i % 2 === 0 ? -amplitude : amplitude);
+                const endX = x + (i + 1) * segmentWidth;
+                const endY = y;
+                ctx.quadraticCurveTo(curveX, curveY, endX, endY);
+            }
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        drawSpeechBubble(ctx, x, y, width, height) {
+            const radius = 15;
+            const triangleSize = 15;
+            
+            // Draw rounded rectangle
+            ctx.fillStyle = '#FFEB3B'; // Yellow for visibility
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            
+            // Draw pointer on the left side
+            ctx.lineTo(x + width/4 + triangleSize, y + height);
+            ctx.lineTo(x + width/4, y + height + triangleSize);
+            ctx.lineTo(x + width/4 - triangleSize, y + height);
+            
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Add stroke
+            ctx.strokeStyle = '#E0E0E0';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        drawBouncyButton(ctx, x, y, width, height) {
+            // Draw main button body
+            const radius = 20;
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Add highlight at top
+            const gradientHeight = height * 0.4;
+            const gradient = ctx.createLinearGradient(0, y, 0, y + gradientHeight);
+            gradient.addColorStop(0, 'rgba(255,255,255,0.4)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + gradientHeight);
+            ctx.lineTo(x, y + gradientHeight);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        restartGame() {
+            console.log('RESTART GAME called - resetting everything');
+            
+            // Reset all game state
+            this.isGameOver = false;
+            this.gameOver = false;
+            
+            // Reset score and counters
+            this.score = 0;
+            window.totalJumps = 0;
+            window.__jumpCount = 0;
+            
+            // Reset player position
+            this.player.y = this.height / 2;
+            this.player.x = this.width / 2 - this.player.width / 2;
+            
+            // Clear all platforms
+            this.platforms = [];
+            
+            // Add new platforms
+            this.add_platforms(0, this.height-15);
+            this.add_broken_platforms(0, this.height-15);
+            this.add_platforms(-this.height, -15);
+            this.add_broken_platforms(-this.height, -15);
+            
+            // Clear enemies
+            this.enemies = [];
+            
+            // Set game to running state directly
+            this.gameStart = true;
+            
+            console.log('Game fully reset, starting new game');
+        }
+
+        checkGameOver() {
+            if (this.player.y > this.canvas.height && !this.isGameOver) {
+                const finalScore = Math.floor(this.score);
+                const jumpCount = window.__jumpCount || 0;
+                
+                console.log('🎮 Game Over triggered');
+                console.log('📊 Final Stats:', { score: finalScore, jumps: jumpCount });
+                
+                if (jumpCount > 0) {
+                    try {
+                        // Send the bundled jumps for blockchain transaction
+                        window.parent.postMessage({
+                            type: 'BUNDLE_JUMPS',
+                            data: {
+                                score: finalScore,
+                                jumpCount: jumpCount,
+                                timestamp: Date.now(),
+                                saveId: Date.now().toString()
+                            }
+                        }, '*');
+                        console.log('📤 Bundled jumps sent for processing:', jumpCount);
+                    } catch (error) {
+                        console.error('❌ Error sending bundle:', error);
+                    }
+                }
+                
+                this.isGameOver = true;
+                this.gameOver = true;
+                return true;
+            }
+            return false;
+        }
+
+        startGame() {
+            if (!this.gameStart) {
+                console.log('Starting game');
+                window.totalJumps = 0; // Reset jump counter using window variable
+                this.gameStart = true;
+                this.gameOver = false;
+                this.isGameOver = false;
+                this.score = 0;
+            }
+        }
+ 
+
+        drawStartButton(context) {
+            // Hide the canvas initially
+            this.canvas.style.display = 'none';
+            
+            // Show the start screen
+            const startScreen = document.getElementById('startScreen');
+            startScreen.style.display = 'block';
+            
+            // Add decorative elements to the start screen
+            const decorations = document.createElement('div');
+            decorations.className = 'start-screen-decorations';
+            
+            // Add floating clouds
+            for (let i = 0; i < 3; i++) {
+                const cloud = document.createElement('div');
+                cloud.className = 'floating-cloud';
+                decorations.appendChild(cloud);
+            }
+            
+            // Add stars
+            for (let i = 0; i < 5; i++) {
+                const star = document.createElement('div');
+                star.className = 'twinkling-star';
+                decorations.appendChild(star);
+            }
+            
+            // Check if play button already exists
+            let playButton = document.getElementById('playButton');
+            
+            // Only create button if it doesn't exist
+            if (!playButton) {
+                playButton = document.createElement('button');
+                playButton.id = 'playButton';
+                playButton.textContent = 'PLAY!';
+                
+                // Add click handler
+                playButton.onclick = () => {
+                    // Hide the start screen with fade out
+                    startScreen.style.opacity = '0';
+                    setTimeout(() => {
+                        startScreen.style.display = 'none';
+                        // Show the canvas with fade in
+                        this.canvas.style.display = 'block';
+                        setTimeout(() => {
+                            this.canvas.style.opacity = '1';
+                        }, 50);
+                    }, 500);
+                    
+                    // Start the game
+                    this.startGame();
+                };
+            }
+            
+            // Add elements to start screen if not already present
+            if (!startScreen.querySelector('.start-screen-decorations')) {
+                startScreen.appendChild(decorations);
+                startScreen.appendChild(playButton);
+            }
+        }
+
+        createPlayAgainOverlay() {
+            // Remove existing overlay
+            const existingOverlay = document.getElementById('play-again-overlay');
+            if (existingOverlay) {
+                document.body.removeChild(existingOverlay);
+            }
+            
+            // Create new overlay
+            const overlay = document.createElement('div');
+            overlay.id = 'play-again-overlay';
+            overlay.style.position = 'absolute';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.pointerEvents = 'none';
+            
+            // Get panel dimensions from drawGameOverScreen
+            const panelWidth = 380;
+            const panelHeight = 440;
+            const x = this.width/2 - panelWidth/2;
+            const y = this.height/2 - panelHeight/2;
+            
+            // The transaction text is at y + 325
+            // Position button exactly 40px below the transaction text
+            const buttonY = y + 365;
+            
+            // Create the button
+            const button = document.createElement('button');
+            button.id = 'play-again-button';
+            button.innerText = 'PLAY AGAIN';
+            
+            // Position right below the approve transaction text
+            button.style.position = 'absolute';
+            button.style.width = '180px';
+            button.style.top = `${buttonY}px`;
+            button.style.left = '50%';
+            button.style.transform = 'translateX(-50%)';
+            
+            // Standard styling
+            button.style.padding = '12px 0';
+            button.style.fontSize = '24px';
+            button.style.fontWeight = 'bold';
+            button.style.backgroundColor = '#4CAF50';
+            button.style.color = 'white';
+            button.style.border = 'none';
+            button.style.borderRadius = '10px';
+            button.style.cursor = 'pointer';
+            button.style.pointerEvents = 'auto';
+            button.style.zIndex = '9999';
+            button.style.textAlign = 'center';
+            
+            // Click handler
+            const self = this;
+            button.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Play Again button clicked!');
+                
+                // Reset ALL jump counters before starting new game
+                window.__jumpCount = 0;
+                window.totalJumps = 0;
+                self.finalJumpCount = 0;
+                console.log("🔄 Jump counters reset for new game");
+                
+                // Remove overlay
+                document.body.removeChild(overlay);
+                
+                // Reset game state
+                self.overlayCreated = false;
+                self.gameOver = false;
+                
+                // Restart game without loading animation
+                self.reset();
+                self.loading = false;
+                self.loadingProgress = 100;
+                self.gameStart = true;
+                
+                return false;
+            };
+            
+            // Add button to overlay
+            overlay.appendChild(button);
+            document.body.appendChild(overlay);
+        }
+
+        // Add this new method to track each jump
+        recordJumpTransaction() {
+            const jumpData = {
+                timestamp: Date.now(),
+                jumpNumber: ++window.__jumpCount
+            };
+            
+            this.pendingJumps.push(jumpData);
+            this.jumpTimestamps.push(jumpData.timestamp);
+            
+            console.log(`🎮 Jump #${jumpData.jumpNumber} recorded for bundling`);
+            
+            // Notify parent of the jump for UI updates
+            window.parent.postMessage({
+                type: 'JUMP_PERFORMED',
+                data: {
+                    jumpCount: window.__jumpCount,
+                    timestamp: jumpData.timestamp
+                }
+            }, '*');
+        }
+
+        jump() {
+            if (this.canJump) {
+                // Existing jump code...
+                
+                // Track jump
+                window.__jumpCount = (window.__jumpCount || 0) + 1;
+                console.log('🦘 Jump recorded:', window.__jumpCount);
+                
+                // Notify parent of jump
+                window.parent.postMessage({
+                    type: 'JUMP_PERFORMED',
+                    jumpCount: window.__jumpCount
+                }, '*');
+            }
+        }
+    }
+    
+    const game = new Game(canvas.width,canvas.height)
+    window.gameInstance = game; // Make game globally accessible
+    
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (game.gameStart) game.update();
+        game.draw(ctx);
+        requestAnimationFrame(animate);
+    }
+    
+    animate()
+
+    // Add key listener for game start
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !game.gameStart) {
+            console.log('Enter pressed - starting game');
+            game.startGame();
+        }
+    });
+
+    // Also add debugging to track jumps clearly
+    document.addEventListener('keydown', (e) => {
+        if ((e.key === ' ' || e.key === 'ArrowUp')) {
+            if (typeof window.totalJumps === 'undefined') {
+                window.totalJumps = 1;
+            } else {
+                window.totalJumps++;
+            }
+            console.log(`Jump #${window.totalJumps} detected (will be bundled at game over)`);
+        }
+    });
+
+    console.log('Game initialized successfully!');
+})
+
+class DebugPanel {
+    constructor(game) {
+        this.game = game;
+        this.visible = true;
+        this.txCount = 0;
+        this.txFailed = 0;
+        
+        // Toggle with tilde key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '`') {
+                this.visible = !this.visible;
+            }
+        });
+        
+        // Create global method for tracking transactions
+        window.trackJumpTransaction = (success) => {
+            if (success) {
+                this.txCount++;
+            } else {
+                this.txFailed++;
+            }
+        };
+    }
+    
+   
+}
+
+// When player collects a coin or jumps on a platform
+function onScoreIncrease(points) {
+  // Update local score
+  game.score += points;
+  
+  // Send transaction for blockchain record
+  sendScoreIncrement(points);
+}
+
+// When player dies
+function onPlayerDeath() {
+  // Ask if player wants to continue
+  const CONTINUE_DELAY = 3000; // ms
+  
+  // Show continue UI
+  showContinuePrompt();
+  
+  // Set a timeout to handle the continue or game over
+  setTimeout(() => {
+    if (continueSelected) {
+      requestContinue();
+    } else {
+      game.gameOver();
+      game.reset();
+    }
+  }, CONTINUE_DELAY);
+}
+
+// For power-ups
+function onPowerUpCollection(type) {
+  requestPowerUp(type);
+}
+
+// Update game loop
+function gameLoop() {
+    if (!game.gameOver) {
+        // ... existing game loop code ...
+        
+        if (checkGameOver()) {
+            console.log('Game loop ended due to game over');
+            game.gameOver = true;
+        }
+    }
+}
+
+// Add this near the end of the file
+try {
+    console.log('Checking game initialization status...');
+    if (window.gameInstance) {
+        console.log('Game instance exists, status:', {
+            gameStart: window.gameInstance.gameStart,
+            gameOver: window.gameInstance.gameOver,
+            isGameOver: window.gameInstance.isGameOver
+        });
+    } else {
+        console.error('Game instance not found or not properly initialized');
+    }
+} catch (err) {
+    console.error('Error checking game status:', err);
+}
+
+// Complete rewrite of the jump saving system to prevent duplicates
+(function() {
+  console.log('COMPLETE REWRITE OF JUMP SAVING SYSTEM');
+  
+  // Clear ALL existing intervals to stop ALL previous implementations
+  for (let i = 1; i < 2000; i++) {
+    clearInterval(i);
+    clearTimeout(i);
+  }
+  
+  // Remove all existing jump tracking functions to avoid conflicts
+  window.saveJumpsToSupabase = null;
+  window.saveJumpsToSupabaseOnce = null;
+  window.ensureJumpCountTracking = null;
+  
+  // Track game instances
+  const getGame = () => window.gameInstance || window.game;
+  
+  // Single global state for jump tracking
+  const jumpState = {
+    currentJumps: 0,          // Jumps in current game
+    saved: false,             // Whether jumps have been saved to Supabase
+    saveMessageSent: false,   // Whether the save message has been sent
+    saveMessageId: null,      // Unique ID for the current save message
+    gameOverDetected: false   // Whether game over has been detected
+  };
+  
+  // Reset jump state on game restart or new game
+  function resetJumpState() {
+    jumpState.currentJumps = 0;
+    jumpState.saved = false;
+    jumpState.saveMessageSent = false;
+    jumpState.saveMessageId = null;
+    jumpState.gameOverDetected = false;
+    
+    console.log('🔄 Jump tracking state reset');
+  }
+  
+  // ONLY function that should send the save message
+  function sendJumpSaveMessage(jumps) {
+    // Generate a unique ID for this save attempt
+    const saveId = Date.now().toString();
+    jumpState.saveMessageId = saveId;
+    
+    // Mark as sent to prevent duplicates
+    jumpState.saveMessageSent = true;
+    
+    console.log(`💾 SENDING JUMP SAVE (ID: ${saveId}): ${jumps} jumps`);
+    
+    // Send message to React app with the unique save ID
+    window.parent.postMessage({
+      type: 'SAVE_JUMPS',
+      jumps: jumps,
+      saveId: saveId
+    }, '*');
+    
+    // Set a flag in localStorage to further prevent duplicates
+    try {
+      localStorage.setItem('last_jump_save', `${saveId}:${jumps}`);
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }
+  
+  // Track jumps by hooking into the jump method
+  if (window.Game && window.Game.prototype) {
+    // Only add our jump counter if it doesn't already exist
+    if (window.Game.prototype.jumpPlayer) {
+      console.log('📝 Adding jump counter to jumpPlayer method');
+      const originalJumpPlayer = window.Game.prototype.jumpPlayer;
+      
+      window.Game.prototype.jumpPlayer = function() {
+        // Call original jump method
+        originalJumpPlayer.apply(this, arguments);
+        
+        // Increment our jump counter
+        jumpState.currentJumps++;
+        this.finalJumpCount = jumpState.currentJumps;
+        
+        // Less verbose logging
+        if (jumpState.currentJumps % 5 === 0) {
+          console.log(`🦘 Jump count: ${jumpState.currentJumps}`);
+        }
+      };
+    }
+    
+    // Override restart game to reset our state
+    if (window.Game.prototype.restartGame) {
+      console.log('📝 Adding jump reset to restartGame method');
+      const originalRestart = window.Game.prototype.restartGame;
+      
+      window.Game.prototype.restartGame = function() {
+        // Reset jump tracking before restarting game
+        resetJumpState();
+        
+        // Also reset game's internal counters
+        this.jumpsSaved = false;
+        this.finalJumpCount = 0;
+        
+        // Call original restart
+        originalRestart.apply(this, arguments);
+      };
+    }
+  }
+  
+  // Single monitor function to detect game over and save jumps once
+  function monitorGameAndSaveJumps() {
+    const game = getGame();
+    if (!game) return;
+    
+    // Check if game is over and jumps haven't been saved yet
+    if (game.gameOver && !jumpState.gameOverDetected) {
+      // Mark game over as detected to prevent multiple triggers
+      jumpState.gameOverDetected = true;
+      
+      // Get final jump count
+      const jumps = game.finalJumpCount || jumpState.currentJumps;
+      
+      if (jumps > 0 && !jumpState.saveMessageSent) {
+        console.log(`🎮 Game over detected with ${jumps} jumps - preparing to save...`);
+        
+        // Add slight delay to ensure we only save once
+        setTimeout(() => {
+          if (!jumpState.saveMessageSent) {
+            sendJumpSaveMessage(jumps);
+          }
+        }, 1000);
+      }
+    }
+    
+    // If game is back in play, reset the game over detection
+    if (!game.gameOver && jumpState.gameOverDetected) {
+      jumpState.gameOverDetected = false;
+    }
+  }
+  
+  // Create a single interval for the monitor function
+  const monitorInterval = setInterval(monitorGameAndSaveJumps, 2000);
+  
+  // Store the interval ID globally so it won't be cleared accidentally
+  window.JUMP_MONITOR_INTERVAL = monitorInterval;
+  
+  // Add a global manual save function for debugging
+  window.debugSaveJumps = function(amount) {
+    const jumps = amount || 1;
+    console.log(`🐞 Debug: Manually saving ${jumps} jumps`);
+    sendJumpSaveMessage(jumps);
+  };
+  
+  console.log('✅ NEW JUMP SAVING SYSTEM INSTALLED - DUPLICATES PREVENTED');
+})();
+
+// Replace the jump transaction simulation code
+const originalSetTimeout = window.setTimeout;
+window.setTimeout = function(callback, delay) {
+    if (callback?.toString().includes('jump transaction')) {
+        return originalSetTimeout(() => {
+            // Increment jump counter
+            window.__jumpCount = (window.__jumpCount || 0) + 1;
+            console.log(`🎮 Jump #${window.__jumpCount} recorded`);
+            
+            // Notify parent of jump
+            window.parent.postMessage({
+                type: 'JUMP_PERFORMED',
+                jumpCount: window.__jumpCount
+            }, '*');
+            
+            return true;
+        }, 10);
+    }
+    return originalSetTimeout(callback, delay);
+};
+
+// Update the message listener to handle reset
+window.addEventListener('message', (event) => {
+    if (event.data?.type === 'RESET_GAME') {
+        console.log('🔄 Received reset game message');
+        game.reset();
+        game.start();
+    }
+});

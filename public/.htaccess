@@ -1,0 +1,13 @@
+# Browser detection for Edge
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  
+  # Check if browser is Microsoft Edge
+  RewriteCond %{HTTP_USER_AGENT} Edge [NC]
+  
+  # And it's not already trying to access edge.html
+  RewriteCond %{REQUEST_URI} !edge\.html
+  
+  # Redirect to the Edge-specific page
+  RewriteRule ^(.*)$ edge.html [L]
+</IfModule> 

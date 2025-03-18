@@ -1,0 +1,81 @@
+.leaderboard {
+  width: 100%;
+  padding: 1.5rem;
+  position: relative;
+}
+
+.leaderboard h3 {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.leaderboard-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.leaderboard-header, .leaderboard-row {
+  display: grid;
+  grid-template-columns: 0.5fr 2fr 1fr;
+  padding: 10px;
+  border-radius: 8px;
+  align-items: center;
+}
+
+.leaderboard-header {
+  background: rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.leaderboard-row {
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.leaderboard-row:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(5px);
+}
+
+.top-player {
+  background: rgba(155, 93, 229, 0.15);
+}
+
+.top-player:nth-child(2) {
+  background: rgba(241, 91, 181, 0.15);
+}
+
+.top-player:nth-child(3) {
+  background: rgba(255, 209, 102, 0.15);
+}
+
+.top-player:nth-child(4) {
+  background: rgba(0, 187, 249, 0.15);
+}
+
+.player-rank {
+  font-weight: 600;
+  text-align: center;
+}
+
+.player-name {
+  font-weight: 500;
+}
+
+.player-score {
+  font-weight: 600;
+  text-align: right;
+  color: var(--accent);
+}
+
+.leaderboard-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 150px;
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+} 

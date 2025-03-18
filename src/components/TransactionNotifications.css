@@ -1,0 +1,92 @@
+.transactions-notification-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+  max-width: 300px;
+}
+
+.transaction-notification {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: quick-slide-in 0.2s ease-out, fade-out 0.3s ease-in 1.7s forwards;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.transaction-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top: 2px solid var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+.transaction-details {
+  flex-grow: 1;
+}
+
+.transaction-type {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: white;
+}
+
+.transaction-hash {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: monospace;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes quick-slide-in {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* Add new styles for transaction states */
+.transaction-notification.confirmed {
+  background: rgba(39, 174, 96, 0.8);
+  animation: slide-in 0.2s ease-out, fade-out 0.5s ease-in 2.5s forwards;
+}
+
+.transaction-check {
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(39, 174, 96, 1);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.transaction-status {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.transaction-notification.confirmed .transaction-type,
+.transaction-notification.confirmed .transaction-status {
+  color: white;
+} 

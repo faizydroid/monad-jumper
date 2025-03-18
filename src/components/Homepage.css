@@ -1,0 +1,23 @@
+/* Add styles for NFT status display */
+.nft-check-status {
+  color: #FFD166;
+  padding: 10px;
+  text-align: center;
+}
+
+.nft-status {
+  padding: 10px;
+  text-align: center;
+  border-radius: 5px;
+  margin: 10px 0;
+}
+
+.nft-status.✅ {
+  background-color: rgba(39, 174, 96, 0.2);
+  color: #27AE60;
+}
+
+.nft-status.❌ {
+  background-color: rgba(235, 87, 87, 0.2);
+  color: #EB5757;
+} 

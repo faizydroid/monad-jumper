@@ -1,0 +1,155 @@
+.cartoon-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(3px);
+}
+
+.cartoon-popup {
+  animation: bounce-in 0.5s ease-out;
+  max-width: 90%;
+  width: 500px;
+}
+
+.popup-cloud {
+  background-color: white;
+  border-radius: 30px;
+  padding: 30px;
+  position: relative;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  border: 4px solid #88c1ff;
+  overflow: hidden;
+}
+
+.popup-cloud:before {
+  content: '';
+  position: absolute;
+  bottom: -20px;
+  left: 30px;
+  width: 40px;
+  height: 40px;
+  background-color: white;
+  border-radius: 50%;
+  border: 4px solid #88c1ff;
+  z-index: -1;
+}
+
+.popup-cloud:after {
+  content: '';
+  position: absolute;
+  bottom: -35px;
+  left: 60px;
+  width: 30px;
+  height: 30px;
+  background-color: white;
+  border-radius: 50%;
+  border: 4px solid #88c1ff;
+  z-index: -1;
+}
+
+.popup-title {
+  font-size: 28px;
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #2c7be5;
+  text-align: center;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
+}
+
+.popup-content {
+  font-size: 18px;
+  line-height: 1.5;
+  margin-bottom: 25px;
+  color: #444;
+  text-align: center;
+}
+
+.popup-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+.popup-button {
+  padding: 10px 20px;
+  border-radius: 20px;
+  border: none;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.popup-button:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
+}
+
+.popup-button.primary {
+  background-color: #4caf50;
+  color: white;
+}
+
+.popup-button.secondary {
+  background-color: #f44336;
+  color: white;
+}
+
+.popup-button.neutral {
+  background-color: #9e9e9e;
+  color: white;
+}
+
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.success-icon {
+  display: block;
+  margin: 0 auto 20px;
+  width: 80px;
+  height: 80px;
+  background-color: #4caf50;
+  border-radius: 50%;
+  position: relative;
+}
+
+.success-icon:before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 30%;
+  width: 20%;
+  height: 10%;
+  background-color: white;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.success-icon:after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 60%;
+  width: 40%;
+  height: 10%;
+  background-color: white;
+  transform: translate(-50%, -50%) rotate(-45deg);
+} 

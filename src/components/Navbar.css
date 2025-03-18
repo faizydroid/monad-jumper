@@ -1,0 +1,440 @@
+.navbar {
+  width: 100%;
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  padding: 12px 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  border: none !important;
+}
+
+/* Add this new style for game screen */
+.navbar-game {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.navbar-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  color: white !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Update navbar-logo to handle empty state nicely */
+.navbar-logo {
+  min-width: 150px; /* Ensures spacing remains consistent */
+  display: flex;
+  align-items: center;
+}
+
+.logo-text {
+  font-family: 'Bangers', cursive;
+  font-size: 24px;
+  color: white;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--purple);
+}
+
+.navbar-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wallet-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 8px 16px;
+  border-radius: 100px;
+}
+
+.wallet-address {
+  font-family: 'Fredoka', sans-serif;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.username-display {
+  font-family: 'Fredoka', sans-serif;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.connect-button-container {
+  margin-left: 10px;
+}
+
+.wallet-info.game-mode {
+  background-color: transparent;
+  padding: 0;
+}
+
+.username-wrapper {
+  position: relative;
+}
+
+.username-button {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  border-radius: 12px !important;
+  padding: 8px 15px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  transition: background-color 0.2s !important;
+  color: #ffffff;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.username-button:hover {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.username-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* User icon in button */
+.username-button span[role="img"] {
+  font-size: 18px;
+  background: linear-gradient(45deg, var(--purple), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
+}
+
+.dropdown-arrow {
+  color: #000;
+  font-size: 12px;
+  margin-left: 6px;
+  transition: transform 0.3s ease;
+  opacity: 0.5;
+}
+
+.username-button:hover .dropdown-arrow {
+  transform: translateY(3px);
+  opacity: 0.8;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(5px) !important;
+  border-radius: 16px;
+  padding: 16px;
+  min-width: 240px;
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  animation: dropdown-fade 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: top right;
+}
+
+.dropdown-header {
+  color: var(--accent);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.dropdown-menu .wallet-address {
+  color: white;
+  font-family: monospace;
+  font-size: 14px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 12px 0;
+}
+
+.connect-button-wrapper {
+  margin: 0;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.connect-button-wrapper:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+@keyframes dropdown-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Add a subtle arrow to the dropdown */
+.dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 20px;
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  transform: rotate(45deg);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Add these new styles to your existing Navbar.css */
+
+.nav-button,
+.high-score {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  border-radius: 12px !important;
+  padding: 8px 15px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  transition: background-color 0.2s !important;
+  color: #ffffff;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Specific styles for nav-button */
+.nav-button {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.nav-button:hover {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.nav-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.home-button span[role="img"] {
+  font-size: 16px;
+  background: linear-gradient(45deg, var(--purple), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
+}
+
+.high-score span[role="img"] {
+  font-size: 16px;
+  background: linear-gradient(45deg, #FFD700, #FFA500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
+}
+
+.score-label {
+  opacity: 0.7;
+  font-weight: 500;
+}
+
+.score-value {
+  color: var(--purple);
+  font-weight: 700;
+}
+
+/* Update the high-score styles */
+.high-score {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  border-radius: 12px !important;
+  padding: 8px 15px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  min-width: 140px; /* Add minimum width to prevent text wrapping */
+  white-space: nowrap; /* Prevent text from wrapping */
+  gap: 4px; /* Reduce gap between elements */
+  cursor: default;
+}
+
+/* Update existing media queries */
+@media (max-width: 768px) {
+  .navbar-container {
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  
+  .navbar-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    width: auto;
+  }
+  
+  .wallet-info {
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .navbar-game .navbar-container {
+    flex-direction: row;
+  }
+  
+  .navbar-game .navbar-info {
+    width: auto;
+  }
+  
+  .username-button,
+  .nav-button,
+  .high-score {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+    min-width: auto; /* Remove min-width on mobile */
+  }
+  
+  .high-score {
+    gap: 4px; /* Keep consistent gap on mobile */
+  }
+  
+  @media (max-width: 480px) {
+    .score-label {
+      display: none;
+    }
+    
+    .username-button span[role="img"],
+    .nav-button span[role="img"],
+    .high-score span[role="img"] {
+      font-size: 14px;
+    }
+  }
+  
+  .dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: auto;
+    width: 280px;
+    max-width: calc(100vw - 40px);
+  }
+}
+
+/* Add or update these styles in Navbar.css */
+
+/* Game navbar specific styles */
+.navbar-game .navbar-container {
+  justify-content: flex-end;
+  padding-right: 20px;
+}
+
+.navbar-game .navbar-info {
+  width: auto;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Update the existing styles */
+.navbar-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .navbar-game .navbar-container {
+    padding-right: 12px;
+  }
+  
+  .navbar-game .navbar-info {
+    gap: 8px;
+  }
+  
+  .username-button,
+  .nav-button,
+  .high-score {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+}
+
+/* Add these cursor styles */
+
+/* Hide cursor on non-interactive elements */
+.score-label,
+.score-value,
+.wallet-address,
+.dropdown-header,
+span[role="img"] {
+  cursor: default;
+  user-select: none; /* Prevent text selection */
+}
+
+/* Show pointer cursor on interactive elements */
+.nav-button,
+.username-button,
+.connect-button-wrapper,
+.dropdown-menu button {
+  cursor: pointer;
+}
+
+/* Hide cursor on loading screens */
+.loading-screen,
+.loading-screen * {
+  cursor: default;
+  user-select: none;
+}
+
+/* Show default cursor on the game container */
+.game-container {
+  cursor: default;
+}
+
+/* Show default cursor on the iframe when loading */
+.game-frame[style*="hidden"] {
+  cursor: default;
+} 

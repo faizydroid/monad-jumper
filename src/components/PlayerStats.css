@@ -1,0 +1,303 @@
+.player-stats {
+  padding: 1.5rem;
+  border-radius: 24px;
+  background-color: rgba(144, 238, 233, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  margin-bottom: 2rem;
+  border: 4px solid #00CEC9;
+  position: relative;
+  overflow: hidden;
+}
+
+.player-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.player-avatar {
+  font-size: 32px;
+  background: var(--purple);
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.card-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: #00CEC9;
+  color: white;
+  font-weight: bold;
+  padding: 0.5rem 2rem;
+  border-bottom-right-radius: 15px;
+  font-size: 1.2rem;
+  letter-spacing: 1px;
+}
+
+.greeting-section {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.greeting-title {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.greeting-message {
+  font-size: 1.1rem;
+  color: #555;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.stat-item {
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 15px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  text-align: center;
+}
+
+.stat-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #00a8a3;
+  margin-bottom: 0.25rem;
+  text-align: center;
+  width: 100%;
+}
+
+.stat-label {
+  font-size: 1rem;
+  color: #555;
+  font-weight: 500;
+  text-align: center;
+}
+
+.stat-value.address {
+  font-size: 0.9em;
+  font-family: monospace;
+  background: rgba(0, 0, 0, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.stats-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 150px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Update the existing card styling */
+.player-stats.card {
+  background-color: #81ecec;
+  border: 8px solid #00cec9;
+  border-radius: 20px;
+  box-shadow: 
+    0 10px 0 #00b5b5,
+    0 0 20px rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: perspective(1000px) rotateX(5deg);
+  font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', sans-serif;
+  margin-bottom: 20px;
+}
+
+.player-stats.card:before {
+  content: '';
+  position: absolute;
+  top: -15px;
+  left: 20px;
+  right: 20px;
+  height: 30px;
+  background-color: #0984e3;
+  border-radius: 15px;
+  z-index: -1;
+  transform: translateZ(-10px);
+}
+
+/* Update the card badge */
+.player-stats .card-badge {
+  background-color: #0984e3;
+  color: white;
+  font-weight: bold;
+  padding: 5px 15px;
+  border-radius: 15px;
+  position: absolute;
+  top: -15px;
+  left: 20px;
+  font-size: 0.9rem;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+  transform: rotate(-5deg);
+}
+
+/* Style the title */
+.player-stats .stats-title {
+  text-align: center;
+  font-size: 1.8rem;
+  color: #2d3436;
+  margin-top: 5px;
+  margin-bottom: 15px;
+}
+
+/* Player card styling */
+.player-card {
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 15px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.1);
+}
+
+.player-avatar {
+  width: 50px;
+  height: 50px;
+  background-color: #fd79a8;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: white;
+  margin-right: 15px;
+  box-shadow: 0 4px 0 #e84393;
+}
+
+.player-info {
+  flex: 1;
+}
+
+.player-name {
+  font-size: 1.2rem;
+  margin: 0 0 5px 0;
+  color: #2d3436;
+}
+
+.player-status {
+  font-size: 0.9rem;
+  margin: 0;
+  color: #636e72;
+}
+
+/* Stats grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+.stat-item {
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.1);
+  transition: none;
+}
+
+.stat-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 7px 0 rgba(0, 0, 0, 0.1);
+  transition: none;
+}
+
+.stat-icon {
+  font-size: 1.8rem;
+  align-items: center;
+  margin-right: 12px;
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 1.2rem;
+  font-weight: bold;
+  text-align: center;
+  color: #2d3436;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #636e72;
+}
+
+/* Animation for the card */
+@media (min-width: 992px) {
+  .player-stats.card {
+    transform: perspective(1000px) rotateX(5deg);
+  }
+}
+
+
+
+/* Remove the rocket emoji animation */
+.greeting-message::after {
+  content: "🚀";
+  position: absolute;
+  margin-left: 5px;
+  /* Remove the animation */
+  /* animation: rocket 2s infinite alternate; */
+}
+
+/* Ensure no transitions on any elements in the card */
+.player-stats.card *,
+.player-stats.card *::before,
+.player-stats.card *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .stat-item {
+    padding: 1rem;
+  }
+  
+  .stat-value {
+    font-size: 2rem;
+  }
+} 

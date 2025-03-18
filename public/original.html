@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doodle Jump</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fredoka:wght@400;600&family=Short+Stack&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        #canvas1 {
+            border: 5px solid black;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 100%;
+            max-height: 100%;
+            display: none; /* Hide canvas initially */
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #bg, #monad0, #virus, #green_platform, #blue_platform, #brown_platform, #white_platform, #bullet {
+            display: none;
+        }
+
+        .game-title {
+            font-family: 'Bangers', cursive;
+            font-size: clamp(3.5rem, 10vw, 7rem);
+            color: white;
+            text-align: center;
+            margin-top: 2rem;
+            margin-bottom: 0.25rem;
+            padding-top: 100px; /* Add additional padding above title */
+            letter-spacing: 3px;
+            text-shadow: 
+                5px 5px 0 #9B5DE5,
+                10px 10px 0 rgba(0,0,0,0.2);
+            transform: rotate(-2deg);
+        }
+
+        .character-container {
+            position: relative;
+            width: 170px;
+            height: 60px;
+            margin: 2rem auto;
+        }
+
+        .character {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 120px;
+            background-image: url('images/monad0.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            animation: character-bounce 2s ease-in-out infinite;
+            z-index: 1;
+        }
+
+        .shadow {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 14px;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 50%;
+            filter: blur(3px);
+            animation: shadow-pulse 2s ease-in-out infinite;
+        }
+
+        #playButton {
+            display: block;
+            margin: 20px auto 40px;
+            background: linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%);
+            color: white;
+            font-family: 'Fredoka', cursive;
+            font-size: 24px;
+            font-weight: bold;
+            padding: 18px 42px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 10px 0 rgba(220, 50, 50, 0.5), 0 14px 24px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            position: relative;
+            overflow: hidden;
+            min-width: 240px;
+            transform-origin: center bottom;
+        }
+
+        #playButton:hover {
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 12px 0 rgba(220, 50, 50, 0.5), 0 18px 28px rgba(0, 0, 0, 0.25);
+        }
+
+        #playButton:active {
+            transform: translateY(2px) scale(0.98);
+            box-shadow: 0 6px 0 rgba(220, 50, 50, 0.5), 0 10px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        @keyframes character-bounce {
+            0%, 100% { transform: translateY(0) translateX(-50%); }
+            50% { transform: translateY(-30px) translateX(-50%); }
+        }
+
+        @keyframes shadow-pulse {
+            0%, 100% { width: 70px; opacity: 0.25; }
+            50% { width: 45px; opacity: 0.1; }
+        }
+
+        body {
+            background: linear-gradient(135deg, #5662EB 0%, #7C3AED 100%);
+        }
+
+        #gameCanvas {
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #5662EB 0%, #7C3AED 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+            padding-top: 200px; /* Add padding to move content down */
+        }
+
+        /* Floating clouds */
+        .floating-cloud {
+            position: absolute;
+            width: 100px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 20px;
+            animation: float 15s infinite linear;
+        }
+
+        .floating-cloud:nth-child(1) {
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .floating-cloud:nth-child(2) {
+            top: 30%;
+            right: 15%;
+            animation-delay: -5s;
+        }
+
+        .floating-cloud:nth-child(3) {
+            bottom: 25%;
+            left: 20%;
+            animation-delay: -10s;
+        }
+
+        /* Twinkling stars */
+        .twinkling-star {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 2s infinite;
+            box-shadow: 0 0 4px #fff, 0 0 8px #fff;
+        }
+
+        .twinkling-star:nth-child(4) { top: 15%; right: 25%; animation-delay: -0.5s; }
+        .twinkling-star:nth-child(5) { top: 45%; left: 15%; animation-delay: -1s; }
+        .twinkling-star:nth-child(6) { bottom: 35%; right: 30%; animation-delay: -1.5s; }
+        .twinkling-star:nth-child(7) { bottom: 25%; left: 35%; animation-delay: -2s; }
+        .twinkling-star:nth-child(8) { top: 30%; right: 45%; animation-delay: -2.5s; }
+        .twinkling-star:nth-child(9) { top: 20%; left: 40%; animation-delay: -3s; }
+        .twinkling-star:nth-child(10) { bottom: 40%; right: 15%; animation-delay: -3.5s; }
+        .twinkling-star:nth-child(11) { top: 35%; left: 25%; animation-delay: -4s; }
+        .twinkling-star:nth-child(12) { bottom: 30%; left: 45%; animation-delay: -4.5s; }
+        .twinkling-star:nth-child(13) { top: 25%; right: 35%; animation-delay: -5s; }
+        .twinkling-star:nth-child(14) { bottom: 45%; right: 40%; animation-delay: -5.5s; }
+        .twinkling-star:nth-child(15) { top: 40%; left: 30%; animation-delay: -6s; }
+
+        /* Animations */
+        @keyframes float {
+            0% { transform: translateX(-100%) translateY(0); }
+            100% { transform: translateX(100vw) translateY(0); }
+        }
+
+        @keyframes twinkle {
+            0%, 100% { 
+                opacity: 0.2; 
+                transform: scale(1);
+                box-shadow: 0 0 4px #fff, 0 0 8px #fff;
+            }
+            50% { 
+                opacity: 1; 
+                transform: scale(1.5);
+                box-shadow: 0 0 8px #fff, 0 0 16px #fff;
+            }
+        }
+
+        /* Canvas fade transition */
+        #canvas1 {
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        /* Keep existing play button styles */
+        #playButton {
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 8px 0 #CC4242, 0 15px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            animation: bounce 2s infinite;
+        }
+
+        #playButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 0 #CC4242, 0 15px 25px rgba(0, 0, 0, 0.35);
+        }
+
+        #playButton:active {
+            transform: translateY(4px);
+            box-shadow: 0 4px 0 #CC4242, 0 8px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Improve game over menu styles */
+        .game-over-menu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            padding: 2.5rem;
+            border-radius: 25px;
+            text-align: center;
+            color: white;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 40px rgba(123, 58, 237, 0.6);
+            animation: slideIn 0.5s ease-out;
+            z-index: 1000;
+            min-width: 320px;
+        }
+
+        .game-over-title {
+            font-family: 'Bangers', cursive;
+            font-size: 4rem;
+            color: #FF5252;
+            text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.2);
+            margin-bottom: 1.5rem;
+            animation: bounceIn 0.5s ease-out;
+            letter-spacing: 2px;
+        }
+
+        .game-over-stats {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            margin: 2rem 0;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            animation: fadeIn 0.5s ease-out 0.2s both;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .stat-label {
+            font-family: 'Fredoka', cursive;
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-family: 'Bangers', cursive;
+            font-size: 2.5rem;
+            color: #9B5DE5;
+            text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-divider {
+            width: 2px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .game-over-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+            animation: fadeIn 0.5s ease-out 0.4s both;
+        }
+
+        .play-again-button, .home-button {
+            font-family: 'Fredoka', cursive;
+            font-size: 1.2rem;
+            padding: 0.8rem 1.8rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .play-again-button {
+            background: linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%);
+            color: white;
+            box-shadow: 0 8px 0 #CC4242;
+        }
+
+        .home-button {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .play-again-button:hover, .home-button:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+
+        .play-again-button:active, .home-button:active {
+            transform: translateY(4px);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -40%);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+        }
+
+        @keyframes bounceIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3);
+            }
+            50% {
+                opacity: 0.9;
+                transform: scale(1.1);
+            }
+            80% {
+                opacity: 1;
+                transform: scale(0.9);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas1"></canvas>
+    <img src='/images/background.png' id='bg' /> 
+    <img src='/images/monad0.png' id='monad0' /> 
+    <img src='/images/virus.png' id='virus' /> 
+    <img src='/images/bullet.png' id='bullet' /> 
+    <img src='/images/green_platform.png' id='green_platform' />
+    <img src='/images/blue_platform.png' id='blue_platform' />
+    <img src='/images/brown_platform.png' id='brown_platform' />
+    <img src='/images/white_platform.png' id='white_platform' />
+    
+    <div id="startScreen">
+        <h1 class="game-title">Monad Jumper</h1>
+        <div class="character-container">
+            <div class="shadow"></div>
+            <div class="character"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-focus handler
+        window.addEventListener('message', function(event) {
+            if (event.data === 'focus') {
+                document.getElementById('canvas1').focus();
+            }
+        });
+
+        // Also focus on load
+        window.addEventListener('load', function() {
+            document.getElementById('canvas1').focus();
+        });
+
+        // Add this near the top of your game file to receive messages from the React app
+        let playerAddress = null;
+        let hasWallet = false;
+
+        window.addEventListener('message', (event) => {
+            // Make sure we trust the sender of this message
+            if (event.origin !== window.location.origin) return;
+            
+            const { type, data } = event.data;
+            
+            switch (type) {
+                case 'GAME_INIT':
+                    playerAddress = data.playerAddress;
+                    hasWallet = data.hasWallet;
+                    console.log('Game initialized with address:', playerAddress);
+                    break;
+                    
+                case 'POWER_UP_RESPONSE':
+                    // Handle power-up purchase response
+                    handlePowerUpResponse(data);
+                    break;
+                    
+                case 'CONTINUE_RESPONSE':
+                    // Handle continue purchase response
+                    handleContinueResponse(data);
+                    break;
+            }
+        });
+
+        // Function to send score increments to the blockchain
+        function sendScoreIncrement(points) {
+            if (!hasWallet) return;
+            
+            window.parent.postMessage({
+                type: 'SCORE_INCREMENT',
+                data: { points }
+            }, '*');
+        }
+
+        // Function to request a power-up
+        function requestPowerUp(powerUpType) {
+            if (!hasWallet) return false;
+            
+            window.parent.postMessage({
+                type: 'POWER_UP_REQUEST',
+                data: { powerUpType }
+            }, '*');
+            
+            // Return will happen asynchronously via message event
+            return true;
+        }
+
+        // Function to request a continue after game over
+        function requestContinue() {
+            if (!hasWallet) return false;
+            
+            window.parent.postMessage({
+                type: 'CONTINUE_REQUEST',
+                data: {}
+            }, '*');
+            
+            // Return will happen asynchronously via message event
+            return true;
+        }
+
+        // Add these functions to your game logic:
+        function handlePowerUpResponse(data) {
+            if (data.success) {
+                // Apply the power-up in the game
+                console.log(`Power-up ${data.powerUpType} activated!`);
+                // Your game-specific power-up logic here
+            } else {
+                // Show error message to player
+                console.log(`Failed to purchase power-up: ${data.powerUpType}`);
+            }
+        }
+
+        function handleContinueResponse(data) {
+            if (data.success) {
+                // Continue the game
+                console.log('Game continued!');
+                // Your game-specific continue logic here
+            } else {
+                // Show error message
+                console.log('Failed to purchase continue');
+            }
+        }
+
+        // Call these functions in your game:
+        // Example: When player collects 10 points
+        function exampleCollectPoints() {
+            // Update local game score
+            gameScore += 10;
+            
+            // Send transaction for each 10 points (generates lots of transactions)
+            sendScoreIncrement(10);
+        }
+
+        // Example: When player dies
+        function examplePlayerDies() {
+            // Show continue option
+            const wantsToContinue = confirm('Continue for 0.0002 MON?');
+            
+            if (wantsToContinue) {
+                requestContinue();
+                // The actual continue will happen when the response comes back
+            } else {
+                gameOver(gameScore);
+            }
+        }
+
+        // Example: Power-up purchase
+        function exampleBuyPowerUp() {
+            const powerUpType = 'SUPER_JUMP'; // Or any power-up type your game supports
+            requestPowerUp(powerUpType);
+            // The actual power-up will be applied when the response comes back
+        }
+
+        // Single source of truth for jump counting
+        window.__jumpCount = 0;
+
+        // Intercept jump transactions with a simpler implementation
+        const originalSetTimeout = window.setTimeout;
+        window.setTimeout = function(callback, delay) {
+            if (callback?.toString().includes('jump transaction')) {
+                return originalSetTimeout(() => {
+                    // Increment jump count
+                    window.__jumpCount++;
+                    console.log('🎮 Jump counted:', window.__jumpCount);
+                    return true;
+                }, 10);
+            }
+            return originalSetTimeout(callback, delay);
+        };
+
+        // Clean game over function
+        function gameOver(finalScore) {
+            console.log('🎮 Game Over triggered');
+            console.log('Final Score:', finalScore);
+            console.log('Total Jumps:', window.__jumpCount);
+
+            // Send final data to parent
+            window.parent.postMessage({
+                type: 'GAME_OVER',
+                data: {
+                    finalScore: finalScore,
+                    jumpCount: window.__jumpCount,
+                    timestamp: Date.now()
+                }
+            }, '*');
+        }
+
+        // Clean reset function
+        window.addEventListener('message', function(event) {
+            if (event.data?.type === 'RESET_GAME') {
+                console.log('🎮 Resetting game and jump counter');
+                window.__jumpCount = 0;
+                console.log('Jump counter reset to:', window.__jumpCount);
+            }
+        });
+
+        // Debug logging
+        setInterval(() => {
+            console.log('Current jump count:', window.__jumpCount);
+        }, 5000);
+    </script>
+    
+    <script type="module" src="/js/background.js"></script>
+    <script type="module" src="/js/bullet.js"></script>
+    <script type="module" src="/js/enemy.js"></script>
+    <script type="module" src="/js/input.js"></script>
+    <script type="module" src="/js/platform.js"></script>
+    <script type="module" src="/js/player.js"></script>
+    <script type="module" src="/js/main.js"></script>
+
+    <!-- Add this at the end of the file, right before the closing </body> tag -->
+    <script>
+      // Direct game over detection script - STRICT VERSION
+      (function() {
+        console.log("🎮 Setting up strict game over detection");
+        
+        // We will NOT automatically detect game over through DOM observation
+        // Instead, we'll only rely on the main.js game code to trigger it
+        
+        // Keep track of jumps for bundling
+        let originalJumpCount = window.__jumpCount || 0;
+        let gameHasStarted = false;
+        
+        // Track real gameplay
+        window.addEventListener('keydown', function() {
+          gameHasStarted = true;
+          if (!window.__gameStartTime) {
+            window.__gameStartTime = Date.now();
+            console.log("🎮 Game started tracking at", new Date().toISOString());
+          }
+        });
+        
+        // Override the gameOver function to add strict validation
+        const originalGameOver = window.gameOver;
+        window.gameOver = function(finalScore) {
+          console.log("🎮 Game over function called with score:", finalScore);
+          
+          // Strict validation before processing game over
+          const jumpsMade = (window.__jumpCount || 0) - originalJumpCount;
+          const gameTime = window.__gameStartTime ? (Date.now() - window.__gameStartTime) : 0;
+          const minimumGameTime = 3000; // 3 seconds
+          
+          console.log(`🎮 Game over validation: gameStarted=${gameHasStarted}, jumpsMade=${jumpsMade}, gameTime=${gameTime}ms`);
+          
+          // Only proceed if all conditions are met:
+          // 1. Game has started through user interaction
+          // 2. Game has been played for at least 3 seconds
+          // 3. Player has a score or made jumps
+          if (!gameHasStarted) {
+            console.log("🎮 Rejected game over: Game never started");
+            return;
+          }
+          
+          if (gameTime < minimumGameTime) {
+            console.log(`🎮 Rejected game over: Game time too short (${gameTime}ms < ${minimumGameTime}ms)`);
+            return;
+          }
+          
+          if (jumpsMade <= 0 && (!finalScore || finalScore <= 0)) {
+            console.log("🎮 Rejected game over: No jumps or score recorded");
+            return;
+          }
+          
+          // We have a valid game over condition - get the actual jump count and score
+          const jumpCount = window.__jumpCount || 0;
+          finalScore = finalScore || window.currentScore || 0;
+          
+          // Log for debugging
+          console.log(`🎮 VALID GAME OVER: Score=${finalScore}, Jumps=${jumpCount}, GameTime=${gameTime}ms`);
+          
+          // Now process the real game over
+          try {
+            // Send the message to parent window
+            window.parent.postMessage({
+              type: 'GAME_OVER',
+              data: {
+                finalScore: finalScore,
+                jumpCount: jumpCount,
+                timestamp: Date.now()
+              }
+            }, '*');
+            console.log('🎮 Game over message sent with bundled jumps:', jumpCount);
+            
+            // Reset jump counter
+            window.__jumpCount = 0;
+            
+            // Reset game tracking
+            gameHasStarted = false;
+            window.__gameStartTime = null;
+          } catch (error) {
+            console.error('🎮 Error sending game over message:', error);
+          }
+        };
+        
+        console.log("🎮 Strict game over detection installed");
+      })();
+    </script>
+
+    <!-- Add this to the bottom of the page, right before </body> -->
+    <script>
+      // Direct access to check jump counter
+      setInterval(() => {
+        console.log('Current jump count:', window.__jumpCount || window.totalJumps || 0);
+      }, 5000);
+    </script>
+
+    <!-- Add this to check if the platform images are loaded correctly -->
+    <script>
+      window.addEventListener('load', () => {
+        // Check if platform images are loaded
+        const platformTypes = ['green', 'blue', 'white', 'brown'];
+        platformTypes.forEach(type => {
+          const img = document.querySelector(`#${type}_platform`);
+          if (img) {
+            console.log(`${type}_platform image loaded: ${img.complete}`);
+          } else {
+            console.error(`${type}_platform image not found!`);
+          }
+        });
+      });
+    </script>
+</body>
+</html> 
