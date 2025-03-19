@@ -109,6 +109,16 @@ window.addEventListener('load', () => {
             // Always initialize the jump counter when a new game starts
             window.totalJumps = 0;
             console.log("Game created - Jump counter reset to 0");
+
+            // Add mobile controls initialization
+            this.isMobile = this.detectMobile();
+            this.gyroEnabled = false;
+            this.gyroData = { beta: 0 }; // For storing device tilt data
+            
+            // Initialize mobile controls if on mobile device
+            if (this.isMobile) {
+                this.initMobileControls();
+            }
         }
     
         initializeGame() {
@@ -138,7 +148,15 @@ window.addEventListener('load', () => {
 
             this.background.update();
             this.platforms.forEach(platform => platform.update());
-            this.player.update(this.inputHandler);
+            
+            // Update player with input handler or gyroscope data
+            if (this.isMobile && this.gyroEnabled) {
+                // We'll use the gyroData in the player update
+                this.player.update(this.inputHandler, this.gyroData);
+            } else {
+                this.player.update(this.inputHandler);
+            }
+            
             this.enemies.forEach(enemy => enemy.update());
 
             // Filter out deleted objects
@@ -931,12 +949,12 @@ window.addEventListener('load', () => {
             // Position right below the approve transaction text
             button.style.position = 'absolute';
             button.style.width = '180px';
-            button.style.top = `${buttonY}px`;
+            button.style.top = `${buttonY + 45}px`;
             button.style.left = '50%';
             button.style.transform = 'translateX(-50%)';
             
             // Standard styling
-            button.style.padding = '12px 0';
+            button.style.padding = '15px 0';
             button.style.fontSize = '24px';
             button.style.fontWeight = 'bold';
             button.style.backgroundColor = '#ce0202';
@@ -1018,6 +1036,185 @@ window.addEventListener('load', () => {
                     jumpCount: window.__jumpCount
                 }, '*');
             }
+        }
+
+        // Add these new methods to the Game class
+        detectMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+
+        initMobileControls() {
+            console.log('📱 Initializing mobile controls');
+            
+            // Add touch event for jumping/firing
+            this.canvas.addEventListener('touchstart', (event) => {
+                event.preventDefault(); // Prevent scrolling
+                
+                // Tap to jump/fire
+                if (this.gameStart && !this.gameOver) {
+                    // Jump action
+                    this.player.jump();
+                    
+                    // Record jump transaction like in keyboard controls
+                    window.__jumpCount = (window.__jumpCount || 0) + 1;
+                    console.log(`🦘 Jump #${window.__jumpCount} recorded via touch`);
+                    
+                    // Play jump sound if available
+                    if (window.audioManager) {
+                        window.audioManager.play('jump', 0.7);
+                    }
+                    
+                    // Notify parent of jump (for UI updates)
+                    window.parent.postMessage({
+                        type: 'JUMP_PERFORMED',
+                        jumpCount: window.__jumpCount
+                    }, '*');
+                } else if (!this.gameStart) {
+                    // Start the game on touch if not started
+                    this.startGame();
+                }
+            }, { passive: false });
+            
+            // Try to enable gyroscope controls
+            if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientation', this.handleGyroscope.bind(this));
+                
+                // Check if permission is needed (iOS 13+)
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    // Create a permission button
+                    const gyroButton = document.createElement('button');
+                    gyroButton.id = 'gyro-permission';
+                    gyroButton.innerText = 'ENABLE TILT CONTROLS';
+                    gyroButton.style.position = 'absolute';
+                    gyroButton.style.bottom = '20px';
+                    gyroButton.style.left = '50%';
+                    gyroButton.style.transform = 'translateX(-50%)';
+                    gyroButton.style.padding = '10px 20px';
+                    gyroButton.style.backgroundColor = '#ff5a5f';
+                    gyroButton.style.color = 'white';
+                    gyroButton.style.border = 'none';
+                    gyroButton.style.borderRadius = '5px';
+                    gyroButton.style.zIndex = '1000';
+                    
+                    gyroButton.addEventListener('click', async () => {
+                        try {
+                            const permission = await DeviceOrientationEvent.requestPermission();
+                            if (permission === 'granted') {
+                                this.gyroEnabled = true;
+                                gyroButton.style.display = 'none';
+                                console.log('Gyroscope permission granted!');
+                            }
+                        } catch (error) {
+                            console.error('Error requesting gyroscope permission:', error);
+                        }
+                    });
+                    
+                    document.body.appendChild(gyroButton);
+                } else {
+                    // No permission needed, enable right away
+                    this.gyroEnabled = true;
+                }
+            }
+            
+            // Add on-screen controls as a fallback
+            this.addOnScreenControls();
+        }
+
+        handleGyroscope(event) {
+            if (!this.gyroEnabled) return;
+            
+            // Store the beta value (device tilt forward/backward)
+            this.gyroData.beta = event.beta;
+            
+            // Store gamma value (device tilt left/right)
+            const gamma = event.gamma;
+            
+            // Map gamma (-90 to 90) to player movement
+            // Negative gamma is tilting left, positive gamma is tilting right
+            if (this.player && this.gameStart && !this.gameOver) {
+                // Apply movement based on gyroscope data
+                if (gamma < -10) {
+                    // Move left
+                    this.player.moveLeft();
+                } else if (gamma > 10) {
+                    // Move right
+                    this.player.moveRight();
+                } else {
+                    // Stop moving when device is relatively flat
+                    this.player.stopMoving();
+                }
+            }
+        }
+
+        addOnScreenControls() {
+            // Create control container
+            const controlsContainer = document.createElement('div');
+            controlsContainer.id = 'mobile-controls';
+            controlsContainer.style.position = 'absolute';
+            controlsContainer.style.bottom = '10px';
+            controlsContainer.style.left = '0';
+            controlsContainer.style.width = '100%';
+            controlsContainer.style.display = 'flex';
+            controlsContainer.style.justifyContent = 'space-between';
+            controlsContainer.style.padding = '0 20px';
+            controlsContainer.style.boxSizing = 'border-box';
+            controlsContainer.style.zIndex = '999';
+            
+            // Create left button
+            const leftBtn = document.createElement('button');
+            leftBtn.id = 'left-btn';
+            leftBtn.innerText = '←';
+            leftBtn.style.width = '70px';
+            leftBtn.style.height = '70px';
+            leftBtn.style.fontSize = '30px';
+            leftBtn.style.backgroundColor = 'rgba(255,90,95,0.7)';
+            leftBtn.style.color = 'white';
+            leftBtn.style.border = 'none';
+            leftBtn.style.borderRadius = '50%';
+            leftBtn.style.padding = '0';
+            leftBtn.style.lineHeight = '1';
+            
+            // Create right button
+            const rightBtn = document.createElement('button');
+            rightBtn.id = 'right-btn';
+            rightBtn.innerText = '→';
+            rightBtn.style.width = '70px';
+            rightBtn.style.height = '70px';
+            rightBtn.style.fontSize = '30px';
+            rightBtn.style.backgroundColor = 'rgba(255,90,95,0.7)';
+            rightBtn.style.color = 'white';
+            rightBtn.style.border = 'none';
+            rightBtn.style.borderRadius = '50%';
+            rightBtn.style.padding = '0';
+            rightBtn.style.lineHeight = '1';
+            
+            // Add event listeners for buttons
+            leftBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (this.player) this.player.moveLeft();
+            }, { passive: false });
+            
+            leftBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if (this.player) this.player.stopMoving();
+            }, { passive: false });
+            
+            rightBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (this.player) this.player.moveRight();
+            }, { passive: false });
+            
+            rightBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if (this.player) this.player.stopMoving();
+            }, { passive: false });
+            
+            // Add buttons to container
+            controlsContainer.appendChild(leftBtn);
+            controlsContainer.appendChild(rightBtn);
+            
+            // Add container to body
+            document.body.appendChild(controlsContainer);
         }
     }
     

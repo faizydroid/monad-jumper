@@ -597,7 +597,7 @@ function GameComponent() {
         
         // Use upsert instead of delete/insert
       const { error } = await supabase
-        .from('users')
+            .from('users')
             .upsert({ 
                 wallet_address: address.toLowerCase(),
             username: newUsername,
@@ -611,9 +611,9 @@ function GameComponent() {
         // Update local state
         setUsername(newUsername);
         setShowModal(false);
-        setShowUsernameModal(false);
+            setShowUsernameModal(false);
         
-    } catch (error) {
+        } catch (error) {
         console.error("🔴 Error saving username:", error);
         alert("Error saving username. Please try again.");
     }
@@ -631,11 +631,11 @@ function GameComponent() {
         
         // Remove noCache() as it's not a valid method
         const { data, error } = await supabase
-            .from('users')
+        .from('users')
             .select('username')
             .eq('wallet_address', address.toLowerCase())
-            .single();
-        
+        .single();
+      
         console.log("📊 Supabase response:", { data, error });
         
         if (error) {
@@ -646,9 +646,9 @@ function GameComponent() {
             } else {
                 console.error("Error checking username:", error);
             }
-            return;
-        }
-        
+        return;
+      }
+      
         if (data?.username) {
             console.log("✅ Found username:", data.username);
             setUsername(data.username);
@@ -735,13 +735,13 @@ function GameComponent() {
               if (success) {
             console.log('✅ Transaction processed successfully');
             setShowPlayAgain(true);
-              } else {
+      } else {
             console.error('❌ Transaction failed');
-              }
+      }
           } catch (error) {
           console.error('🔴 Error in game over handler:', error);
           console.error('Error details:', error.message);
-        } finally {
+    } finally {
           console.log('📊 Resetting transaction pending state');
           setTransactionPending(false);
         }
@@ -822,20 +822,20 @@ function GameComponent() {
   useEffect(() => {
     const handleBundledJumps = async (event) => {
         if (event.data?.type === 'BUNDLE_JUMPS') {
-            const { score, jumpCount } = event.data.data;
-            console.log(`🎮 Received bundle request with ${jumpCount} jumps`);
+            // Extract jump count from the message
+            const jumpCount = event.data.data?.jumpCount || 0;
+            console.log(`🎮 DEBUG: Received bundle request with ${jumpCount} jumps`);
             
             if (!jumpCount || jumpCount <= 0) {
                 console.log('⚠️ No jumps to process, skipping transaction');
-                return;
-            }
-            
-            try {
+                            return;
+                        }
+                        
+        try {
                 setTransactionPending(true);
-                console.log(`🔄 Processing transaction for ${jumpCount} jumps...`);
-
+                        
                 // Get the active wallet from Rainbow Kit
-                if (!address) {
+                        if (!address) {
                     throw new Error("No wallet connected. Please connect your wallet first.");
                 }
                 
@@ -887,7 +887,7 @@ function GameComponent() {
                             timeout: 60_000, // 60 second timeout
                         });
                         console.log('✅ Transaction confirmed!', receipt);
-                    } else {
+            } else {
                         // Normal handling for other browsers
                         const hash = await walletClient.writeContract(request);
                         console.log('📤 Transaction sent! Hash:', hash);
@@ -897,18 +897,103 @@ function GameComponent() {
                         });
                         console.log('✅ Transaction confirmed!', receipt);
                     }
-                } else {
+            } else {
                     throw new Error("Rainbow Kit wallet not properly connected");
                 }
                 
-                // Set play again button after transaction
+                // Normalize wallet address to ensure consistent matching (lowercase)
+                const normalizedAddress = address.toLowerCase();
+
+                console.log(`🔍 Looking for existing record with wallet: ${normalizedAddress}`);
+
+                // Step 1: Get ALL records for this wallet to debug what's happening
+                const { data: allRecords, error: listError } = await supabase
+                    .from('jumps')
+                    .select('*')
+                    .eq('wallet_address', normalizedAddress);
+
+                console.log('DEBUG - All records found:', allRecords);
+                console.log('DEBUG - List error:', listError);
+
+                // Step 2: Get specific record more carefully
+                const { data: existingData, error: fetchError } = await supabase
+                    .from('jumps')
+                    .select('id, count, wallet_address')
+                    .eq('wallet_address', normalizedAddress)
+                    .maybeSingle();
+
+                console.log('DEBUG - Existing data:', existingData);
+                console.log('DEBUG - Fetch error:', fetchError);
+
+                // Step 3: Calculate new total
+                let currentCount = 0;
+                if (existingData?.count) {
+                    currentCount = Number(existingData.count);
+                    console.log(`Found existing record with ID: ${existingData.id} and count: ${currentCount}`);
+            } else {
+                    console.log('No existing record found, will create new');
+                }
+
+                const jumpCountNum = Number(jumpCount);
+                const newTotalCount = currentCount + jumpCountNum;
+
+                console.log(`➕ Adding ${jumpCountNum} jumps to ${currentCount} for a new total of ${newTotalCount}`);
+
+                // Step 4: Use upsert with PRIMARY KEY conflict resolution
+                if (existingData?.id) {
+                    // Update by ID for absolute certainty
+                    console.log(`📝 Updating record with ID: ${existingData.id}`);
+                    const { data: updateData, error: updateError } = await supabase
+                        .from('jumps')
+                        .update({ 
+                            count: newTotalCount 
+                        })
+                        .eq('id', existingData.id)
+                        .select();
+                    
+                    console.log('Update result:', updateData);
+                    console.log('Update error:', updateError);
+                    
+                    if (updateError) {
+                        console.error('❌ Error updating jump count:', updateError);
+                        throw updateError;
+                    }
+                } else {
+                    // Insert new record
+                    console.log(`📝 Creating new record for wallet: ${normalizedAddress}`);
+                    const { data: insertData, error: insertError } = await supabase
+                        .from('jumps')
+                        .insert({ 
+                            wallet_address: normalizedAddress,
+                            count: newTotalCount,
+                            created_at: new Date().toISOString()
+                        })
+                        .select();
+                    
+                    console.log('Insert result:', insertData);
+                    console.log('Insert error:', insertError);
+                    
+                    if (insertError) {
+                        console.error('❌ Error inserting jump count:', insertError);
+                        throw insertError;
+                    }
+                }
+
+                // Step 5: Verify the result
+                const { data: verifyData } = await supabase
+                    .from('jumps')
+                    .select('*')
+                    .eq('wallet_address', normalizedAddress);
+
+                console.log('✅ Final verification - Records in database:', verifyData);
+                
+                // Set play again button after all operations complete
                 setShowPlayAgain(true);
                 
             } catch (error) {
                 console.error('❌ Error processing jumps:', error);
                 console.error('Error details:', error.message);
                 console.error('Error code:', error.code);
-                if (error.details) console.error('Error details:', error.details);
             } finally {
                 setTransactionPending(false);
             }
@@ -917,7 +1002,7 @@ function GameComponent() {
     
     window.addEventListener('message', handleBundledJumps);
     return () => window.removeEventListener('message', handleBundledJumps);
-}, [address, walletClient, publicClient]);
+}, [address, walletClient, publicClient, supabase]);
 
 // Add a useEffect to track jumps for UI updates
 useEffect(() => {

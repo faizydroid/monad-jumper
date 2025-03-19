@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Doodle Jump</title>
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fredoka:wght@400;600&family=Short+Stack&display=swap" rel="stylesheet">
     <style>
@@ -494,6 +496,101 @@
             align-items: center;
             overflow: hidden;
         }
+
+        /* Controls display styling - more minimal and beautiful */
+        .controls-container {
+            background-color: rgba(255, 255, 255, 0.15); 
+            backdrop-filter: blur(8px);
+            border-radius: 20px;
+            padding: 16px 20px;
+            max-width: 320px;
+            margin: 0 auto 25px;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .controls-title {
+            color: white;
+            font-size: 18px;
+            margin: 0 0 12px;
+            letter-spacing: 1px;
+            font-weight: 600;
+            text-align: center;
+            opacity: 0.9;
+        }
+        
+        .controls-instructions {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+        }
+        
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-icon {
+            font-size: 20px;
+            height: 40px;
+            width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+        
+        .control-text {
+            font-size: 14px;
+            text-align: center;
+            opacity: 0.8;
+            font-weight: 400;
+        }
+        
+        /* Control icon hover effect */
+        .control-item:hover .control-icon {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* Adjust for mobile */
+        @media (max-width: 480px) {
+            .controls-container {
+                padding: 12px 16px;
+                max-width: 280px;
+            }
+            
+            .controls-title {
+                font-size: 16px;
+                margin-bottom: 10px;
+            }
+            
+            .control-icon {
+                font-size: 18px;
+                height: 36px;
+                width: 36px;
+            }
+            
+            .control-text {
+                font-size: 12px;
+            }
+        }
+
+        /* Adjust spacing for controls after play button */
+        #playButton {
+            margin-bottom: 10px;
+        }
+        
+        #controls-instructions {
+            margin-top: 20px;
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
@@ -838,6 +935,110 @@
           }
         });
       });
+    </script>
+
+    <!-- Add this script before the closing body tag -->
+    <script>
+        // Detect if device is mobile
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        
+        // Create and display appropriate control instructions
+        function displayControlInstructions() {
+            const controlsContainer = document.getElementById('controls-instructions');
+            const isMobile = isMobileDevice();
+            
+            // Clear any existing content
+            controlsContainer.innerHTML = '';
+            
+            // Create title
+            const title = document.createElement('h2');
+            title.className = 'controls-title';
+            title.textContent = 'CONTROLS';
+            controlsContainer.appendChild(title);
+            
+            // Create instructions container
+            const instructionsDiv = document.createElement('div');
+            instructionsDiv.className = 'controls-instructions';
+            
+            if (isMobile) {
+                // Mobile controls - minimal version
+                instructionsDiv.innerHTML = `
+                    <div class="control-item">
+                        <div class="control-icon">👆</div>
+                        <div class="control-text">Tap</div>
+                    </div>
+                    <div class="control-item">
+                        <div class="control-icon">📱</div>
+                        <div class="control-text">Tilt</div>
+                    </div>
+                `;
+            } else {
+                // Desktop controls - updated to show space bar
+                instructionsDiv.innerHTML = `
+                    <div class="control-item">
+                        <div class="control-icon" style="font-size: 14px; letter-spacing: -1px;">Space</div>
+                        <div class="control-text">Shoot</div>
+                    </div>
+                    <div class="control-item">
+                        <div class="control-icon">←→</div>
+                        <div class="control-text">Move</div>
+                    </div>
+                `;
+            }
+            
+            controlsContainer.appendChild(instructionsDiv);
+        }
+        
+        // Run this when the page loads
+        window.addEventListener('load', displayControlInstructions);
+    </script>
+
+    <!-- Move the controls-instructions div to appear under the Play button -->
+    <script>
+        // 1. Remove the controls-instructions div from its current location (after character-container)
+        const controlsElement = document.getElementById('controls-instructions');
+        if (controlsElement) {
+            controlsElement.remove();
+        }
+
+        // 2. Create a new function to insert controls after Play button is added
+        function insertControlsAfterPlayButton() {
+            const playButton = document.getElementById('playButton');
+            if (!playButton) {
+                // If play button isn't available yet, try again in 100ms
+                setTimeout(insertControlsAfterPlayButton, 100);
+                return;
+            }
+            
+            // Get or create the controls container
+            let controlsContainer = document.getElementById('controls-instructions');
+            if (!controlsContainer) {
+                controlsContainer = document.createElement('div');
+                controlsContainer.id = 'controls-instructions';
+                controlsContainer.className = 'controls-container';
+            }
+            
+            // Style adjustment for positioning under the play button
+            controlsContainer.style.marginTop = '30px';
+            controlsContainer.style.marginBottom = '0';
+            
+            // Insert the controls container after the play button
+            playButton.parentNode.insertBefore(controlsContainer, playButton.nextSibling);
+            
+            // Display the correct controls
+            displayControlInstructions();
+        }
+
+        // 3. Modify the existing load event to call our new function
+        const originalLoadHandler = window.onload;
+        window.onload = function() {
+            if (originalLoadHandler) originalLoadHandler();
+            
+            // Call our new function to place controls after play button
+            setTimeout(insertControlsAfterPlayButton, 100);
+        };
     </script>
 </body>
 </html> 
