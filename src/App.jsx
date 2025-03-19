@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, Component } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
@@ -20,7 +20,6 @@ import SimpleModal from './components/SimpleModal';
 import { encodeFunctionData, parseEther } from 'viem';
 import CartoonPopup from './components/CartoonPopup';
 import { createClient } from '@supabase/supabase-js';
-import ErrorBoundary from './components/ErrorBoundary';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1182,21 +1181,56 @@ function AdminAccessCheck() {
   );
 }
 
+// Error boundary component
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    this.setState({
+      hasError: true,
+      error: error,
+      errorInfo: errorInfo
+    });
+    console.error("Error caught by boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', color: 'red', backgroundColor: '#ffeeee', border: '1px solid #ff0000', borderRadius: '5px' }}>
+          <h2>Something went wrong</h2>
+          <details style={{ whiteSpace: 'pre-wrap' }}>
+            {this.state.error && this.state.error.toString()}
+            <br />
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
+          </details>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   const location = useLocation();
   const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
 
   return (
-    <div className="app">
-      <Web3Provider>
-        {isGameScreen ? <GameNavbar /> : <Navbar />}
-        <Routes>
-          <Route path="/" element={<GameComponent />} />
-          <Route path="/admin" element={<AdminAccess />} />
-        </Routes>
-        <TransactionNotifications />
-      </Web3Provider>
-    </div>
+    <ErrorBoundary>
+      <div className="app">
+        <Web3Provider>
+          {isGameScreen ? <GameNavbar /> : <Navbar />}
+          <Routes>
+            <Route path="/" element={<GameComponent />} />
+            <Route path="/admin" element={<AdminAccess />} />
+          </Routes>
+          <TransactionNotifications />
+        </Web3Provider>
+      </div>
+    </ErrorBoundary>
   );
 }
 
