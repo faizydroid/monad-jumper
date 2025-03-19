@@ -29,6 +29,9 @@ import {
   coinbaseWallet,
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
+import { configureChains, getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { publicProvider } from '@rainbow-me/rainbowkit';
+import { createClient as wagmiCreateClient } from '@wagmi/core';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -934,7 +937,7 @@ function GameComponent() {
                             hash: hash
                         });
                         console.log('✅ Transaction confirmed!', receipt);
-                    }
+                }
             } else {
                     throw new Error("Rainbow Kit wallet not properly connected");
                 }
@@ -1142,7 +1145,7 @@ useEffect(() => {
             >
               Connect
             </button>
-          </div>
+                </div>
         );
       } else {
         // Desktop: Original behavior with Rainbow Kit button
@@ -1161,7 +1164,7 @@ useEffect(() => {
           {isMobileView 
             ? `${address.slice(0, 4)}...${address.slice(-4)}` 
             : `${address.slice(0, 6)}...${address.slice(-4)}`}
-        </div>
+                </div>
         <button onClick={() => disconnect()} className="disconnect-button">
           {isMobileView ? 'X' : 'Disconnect'}
         </button>
@@ -1200,7 +1203,6 @@ useEffect(() => {
   if (!isConnected) {
     return (
       <>
-        <Navbar />
         <BackgroundElements />
         <div className="container">
           <h1 className="game-title">Monad Jumper</h1>
@@ -1244,8 +1246,6 @@ useEffect(() => {
   if (!username && showModal) {
     return (
       <>
-        <Navbar />
-        <BackgroundElements />
         <div className="container">
           <h1 className="game-title">Monad Jumper</h1>
           <div className="character-container">
@@ -1492,6 +1492,9 @@ function AdminAccessCheck() {
 function App() {
   const location = useLocation();
   const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
+  
+  // Add this line to access connection state
+  const { isConnected } = useAccount();
 
   useEffect(() => {
     // Fix for Edge browser showing only background
@@ -1510,7 +1513,10 @@ function App() {
 
   return (
     <Web3Provider>
-      {isGameScreen ? <GameNavbar /> : <Navbar />}
+      {/* Only show navbar when wallet is connected */}
+      {isConnected ? (
+        isGameScreen ? <GameNavbar /> : <Navbar />
+      ) : null}
       <Routes>
         <Route path="/" element={<GameComponent />} />
         <Route path="/admin" element={<AdminAccess />} />

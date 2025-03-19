@@ -1451,4 +1451,22 @@ iframe.game-frame {
     --rk-modal-width: 90vw;
     --rk-modal-max-width: 360px;
   }
+}
+
+/* Find the tagline styling and update it with these cross-browser compatible rules */
+.tagline {
+  width: 100%;
+  text-align: center;
+  margin: 0 auto;
+  padding: 0 20px;
+  font-family: 'Chalkboard SE', 'Short Stack', cursive;
+  color: #FFD700;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  /* Edge-specific fixes */
+  display: block;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 100%;
+  box-sizing: border-box;
 } 
