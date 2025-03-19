@@ -1294,60 +1294,139 @@
 
     <!-- Add this script to handle mobile wallet connection -->
     <script>
-        // Wallet connection handler for both desktop and mobile
+        // Enhanced wallet connection handler for mobile and desktop
         document.addEventListener('DOMContentLoaded', function() {
             const connectButton = document.getElementById('connectButton');
             const walletMessage = document.getElementById('wallet-message');
-            const playButton = document.getElementById('playButton');
             let isWalletConnected = false;
-            
-            // Hide play button initially until wallet is connected
-            if (playButton) {
-                playButton.style.display = 'none';
-            }
+            let connectionAttemptCount = 0;
             
             // Listen for wallet connection status from parent
             window.addEventListener('message', function(event) {
+                console.log('📱 Game received message:', event.data.type);
+                
                 if (event.data.type === 'WALLET_STATUS') {
                     isWalletConnected = event.data.data.connected;
                     updateUI();
+                    
+                    // Reset connect button if not connected
+                    if (!isWalletConnected && connectButton) {
+                        connectButton.textContent = 'Connect Wallet';
+                        connectButton.disabled = false;
+                    }
                 } else if (event.data.type === 'GAME_INIT') {
                     isWalletConnected = !!event.data.data.playerAddress;
+                    console.log('📱 Game initialized, wallet connected:', isWalletConnected);
                     updateUI();
+                } else if (event.data.type === 'WALLET_CONNECT_ERROR') {
+                    // Handle connection errors
+                    console.error('📱 Wallet connection error:', event.data.error);
+                    if (connectButton) {
+                        connectButton.textContent = 'Try Again';
+                        connectButton.disabled = false;
+                    }
                 }
             });
             
             // Update UI based on wallet connection status
             function updateUI() {
+                console.log('📱 Updating UI, wallet connected:', isWalletConnected);
+                const playButton = document.getElementById('playButton');
+                
                 if (isWalletConnected) {
-                    // Hide wallet message and show play button when connected
+                    // Hide wallet message when connected
                     if (walletMessage) walletMessage.style.display = 'none';
+                    // Show play button when connected
                     if (playButton) playButton.style.display = 'block';
                 } else {
-                    // Show wallet message and hide play button when not connected
-                    if (walletMessage) walletMessage.style.display = 'block';
+                    // Show wallet message when not connected
+                    if (walletMessage) walletMessage.style.display = 'flex';
+                    // Hide play button when not connected
                     if (playButton) playButton.style.display = 'none';
+                    
+                    // Make sure connect button is visible and enabled
+                    if (connectButton) {
+                        connectButton.style.display = 'block';
+                        connectButton.disabled = false;
+                    }
                 }
             }
             
-            // Add click handler to connect button
+            // Add click handler to connect button with mobile detection
             if (connectButton) {
                 connectButton.addEventListener('click', function() {
-                    // Request wallet connection from parent
-                    window.parent.postMessage({
-                        type: 'CONNECT_WALLET_REQUEST'
-                    }, '*');
-                    
                     // Show loading state
                     connectButton.textContent = 'Connecting...';
                     connectButton.disabled = true;
+                    connectionAttemptCount++;
+                    
+                    // Detect if mobile device
+                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                    console.log('📱 Connect button clicked, mobile device:', isMobile);
+                    
+                    // Request wallet connection from parent with device info
+                    window.parent.postMessage({
+                        type: 'CONNECT_WALLET_REQUEST',
+                        data: {
+                            isMobile: isMobile,
+                            attemptCount: connectionAttemptCount
+                        }
+                    }, '*');
+                    
+                    // Add a timeout to reset button if no response
+                    setTimeout(function() {
+                        if (!isWalletConnected && connectButton) {
+                            connectButton.textContent = 'Connect Wallet';
+                            connectButton.disabled = false;
+                        }
+                    }, 10000); // 10 second timeout
                 });
             }
             
-            // Check for initial wallet status
+            // Request initial wallet status with device info
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            console.log('📱 Requesting wallet status, mobile device:', isMobile);
+            
             window.parent.postMessage({
-                type: 'REQUEST_WALLET_STATUS'
+                type: 'REQUEST_WALLET_STATUS',
+                data: {
+                    isMobile: isMobile
+                }
             }, '*');
+            
+            // For mobile: Add a direct deep link for common wallets as fallback
+            if (isMobile) {
+                // Override wallet message to include fallback links
+                if (walletMessage) {
+                    walletMessage.innerHTML = `
+                        <p>Connect your wallet to play and earn MON tokens!</p>
+                        <button id="connectButton">Connect Wallet</button>
+                        <div class="wallet-fallback" style="margin-top: 12px; font-size: 0.8em; opacity: 0.8;">
+                            <p style="margin-bottom: 8px;">Not working? Open directly:</p>
+                            <div class="wallet-links" style="display: flex; justify-content: center; gap: 10px;">
+                                <a href="https://metamask.app.link/dapp/${window.location.href}" style="color: #FF9800;">MetaMask</a>
+                                <a href="https://link.trustwallet.com/open_url?coin_id=60&url=${window.location.href}" style="color: #3375BB;">Trust</a>
+                                <a href="https://go.cb-w.com/dapp?cb_url=${window.location.href}" style="color: #0052FF;">Coinbase</a>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Re-assign the connect button
+                    const newConnectButton = document.getElementById('connectButton');
+                    if (newConnectButton) {
+                        connectButton.addEventListener('click', function() {
+                            // Duplicate the event handler for the new button
+                            newConnectButton.textContent = 'Connecting...';
+                            newConnectButton.disabled = true;
+                            
+                            window.parent.postMessage({
+                                type: 'CONNECT_WALLET_REQUEST',
+                                data: { isMobile: true }
+                            }, '*');
+                        });
+                    }
+                }
+            }
             
             // Update UI on initial load
             updateUI();
