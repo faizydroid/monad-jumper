@@ -12,6 +12,7 @@
   "routes": [
     { "handle": "filesystem" },
     { "src": "/error", "dest": "/error.html" },
-    { "src": "/(.*)", "dest": "/index.html" }
+    { "src": "/react", "dest": "/index.html" },
+    { "src": "/(.*)", "dest": "/index-real.html" }
   ]
 } 
