@@ -23,6 +23,9 @@ export default defineConfig(({ mode }) => {
       base: './',
       assetsDir: 'assets',
       rollupOptions: {
+        input: {
+          main: 'index.html',
+        },
         output: {
           entryFileNames: '[name].js',
           chunkFileNames: '[name].js',
