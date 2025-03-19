@@ -20,8 +20,12 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
+      emptyOutDir: true,
       rollupOptions: {
-        input: 'index.html',
+        input: {
+          main: 'index.html',
+          app: 'app.html'
+        },
       },
     },
     optimizeDeps: {
@@ -36,5 +40,7 @@ export default defineConfig(({ mode }) => {
       ],
       exclude: ['public/js/*'],
     },
+    root: '.',
+    publicDir: 'public',
   }
 }) 
