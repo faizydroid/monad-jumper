@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
+import { resolve } from 'path'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': resolve(__dirname, 'src'),
       },
     },
     define: {
@@ -21,10 +21,13 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       base: './',
+      assetsDir: 'assets',
       rollupOptions: {
-        input: {
-          main: 'index.html',
-        },
+        output: {
+          entryFileNames: '[name].js',
+          chunkFileNames: '[name].js',
+          assetFileNames: '[name].[ext]'
+        }
       },
     },
     optimizeDeps: {
