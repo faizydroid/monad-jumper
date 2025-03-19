@@ -1451,4 +1451,8 @@ iframe.game-frame {
   transform: translateX(-50%);
   max-width: 100%;
   box-sizing: border-box;
+  /* Add flexbox for better centering */
+  display: flex;
+  justify-content: center; /* Center horizontally */
+  align-items: center; /* Center vertically if needed */
 } 
