@@ -21,7 +21,6 @@ import { encodeFunctionData, parseEther } from 'viem';
 import CartoonPopup from './components/CartoonPopup';
 import { createClient } from '@supabase/supabase-js';
 import ErrorBoundary from './components/ErrorBoundary';
-import { isMobile } from 'react-device-detect'; // Install with: npm install react-device-detect
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1108,40 +1107,46 @@ useEffect(() => {
   }, [setGameScore]);
 
   // Detect mobile view on component mount and window resize
+  const detectMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobileView(window.innerWidth <= 768);
+      setIsMobileView(window.innerWidth <= 768 || detectMobile());
     };
     
-    // Check initially
     checkMobile();
-    
-    // Add resize listener
     window.addEventListener('resize', checkMobile);
-    
-    // Clean up
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
   // Adjust wallet button display for mobile
   const renderWalletButton = () => {
     if (!isConnected) {
-      return (
-        <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
-          {connectors.map((connector) => (
+      if (isMobileView) {
+        // Mobile: Show single button that opens Rainbow Kit modal
+        return (
+          <div className="wallet-connect mobile">
             <button
-              key={connector.id}
-              onClick={() => connect({ connector })}
+              onClick={openConnectModal}
               className="connect-button"
             >
-              {isMobileView ? 'Connect' : 'Connect Wallet'}
+              Connect
             </button>
-          ))}
-        </div>
-      );
+          </div>
+        );
+      } else {
+        // Desktop: Original behavior with Rainbow Kit button
+        return (
+          <div className="wallet-connect">
+            <ConnectButton />
+          </div>
+        );
+      }
     }
     
-    // Connected state UI
+    // Connected state UI (unchanged)
     return (
       <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
         <div className="wallet-address">
