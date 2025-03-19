@@ -906,7 +906,7 @@ const handlePlayAgain = useCallback(() => {
         <BackgroundElements />
         <div className="container">
           <h1 className="game-title">Monad Jumper</h1>
-          <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
+      
           
           <div className="character-container">
             <div className="shadow"></div>

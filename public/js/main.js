@@ -247,62 +247,67 @@ window.addEventListener('load', () => {
 
         gameOver() {
             this.gameOver = true;
-            const finalScore = Math.floor(this.score);
-            const jumpCount = window.__jumpCount || 0;
             
-            // Create game over menu
+            // Create a styled game over menu
             const gameOverMenu = document.createElement('div');
             gameOverMenu.className = 'game-over-menu';
             
-            // Add content
-            gameOverMenu.innerHTML = `
-                <h2 class="game-over-title">Game Over!</h2>
-                <div class="game-over-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Score</span>
-                        <span class="stat-value">${finalScore}</span>
-                    </div>
-                    <div class="stat-divider"></div>
-                    <div class="stat-item">
-                        <span class="stat-label">Jumps</span>
-                        <span class="stat-value">${jumpCount}</span>
-                    </div>
-                </div>
-                <div class="game-over-buttons">
-                    <button class="play-again-button">Play Again</button>
-                    <button class="home-button">Home</button>
-                </div>
-            `;
+            // Add game over title
+            const gameOverTitle = document.createElement('h2');
+            gameOverTitle.className = 'game-over-title';
+            gameOverTitle.textContent = 'Game Over!';
+            gameOverMenu.appendChild(gameOverTitle);
             
-            document.body.appendChild(gameOverMenu);
+            // Add score
+            const finalScore = Math.floor(this.score);
+            const scoreText = document.createElement('div');
+            scoreText.className = 'game-over-score';
+            scoreText.textContent = `Score: ${finalScore}`;
+            gameOverMenu.appendChild(scoreText);
             
-            // Add event listeners
-            const playAgainButton = gameOverMenu.querySelector('.play-again-button');
+            // Add jumps
+            const jumpsText = document.createElement('div');
+            jumpsText.className = 'game-over-jumps';
+            jumpsText.textContent = `Jumps: ${window.__jumpCount || 0}`;
+            gameOverMenu.appendChild(jumpsText);
+            
+            // Add play again button
+            const playAgainButton = document.createElement('button');
+            playAgainButton.className = 'play-again-button';
+            playAgainButton.textContent = 'Play Again';
             playAgainButton.onclick = () => {
-                gameOverMenu.remove();
+                document.body.removeChild(gameOverMenu);
                 this.reset();
             };
+            gameOverMenu.appendChild(playAgainButton);
             
-            const homeButton = gameOverMenu.querySelector('.home-button');
-            homeButton.onclick = () => {
-                if (window.parent) {
-                    window.parent.postMessage({ type: 'RETURN_HOME' }, '*');
-                }
-            };
+            // Add to the document
+            document.body.appendChild(gameOverMenu);
             
-            // Send game over message to parent
+            // Post message to parent window
             if (window.parent) {
                 try {
+                    window.parent.postMessage({
+                        type: 'gameOver',
+                        data: {
+                            score: finalScore,
+                            jumpCount: window.__jumpCount || 0,
+                            timestamp: Date.now()
+                        }
+                    }, '*');
+                    
+                    // Also send BUNDLE_JUMPS message
                     window.parent.postMessage({
                         type: 'BUNDLE_JUMPS',
                         data: {
                             score: finalScore,
-                            jumpCount: jumpCount,
+                            jumpCount: window.__jumpCount || 0,
                             timestamp: Date.now(),
                             saveId: Date.now().toString()
                         }
                     }, '*');
-                    console.log('Game over message sent with bundled jumps:', jumpCount);
+                    
+                    console.log('Game over messages sent to parent');
                 } catch (err) {
                     console.error('Failed to post game over message:', err);
                 }
@@ -817,22 +822,26 @@ window.addEventListener('load', () => {
             const startScreen = document.getElementById('startScreen');
             startScreen.style.display = 'block';
             
-            // Add decorative elements to the start screen
-            const decorations = document.createElement('div');
-            decorations.className = 'start-screen-decorations';
-            
-            // Add floating clouds
-            for (let i = 0; i < 3; i++) {
-                const cloud = document.createElement('div');
-                cloud.className = 'floating-cloud';
-                decorations.appendChild(cloud);
-            }
-            
-            // Add stars
-            for (let i = 0; i < 5; i++) {
-                const star = document.createElement('div');
-                star.className = 'twinkling-star';
-                decorations.appendChild(star);
+            // Add decorative elements if they don't exist
+            if (!startScreen.querySelector('.start-screen-decorations')) {
+                const decorations = document.createElement('div');
+                decorations.className = 'start-screen-decorations';
+                
+                // Add floating clouds
+                for (let i = 0; i < 3; i++) {
+                    const cloud = document.createElement('div');
+                    cloud.className = 'floating-cloud';
+                    decorations.appendChild(cloud);
+                }
+                
+                // Add stars
+                for (let i = 0; i < 20; i++) {
+                    const star = document.createElement('div');
+                    star.className = 'twinkling-star';
+                    decorations.appendChild(star);
+                }
+                
+                startScreen.appendChild(decorations);
             }
             
             // Check if play button already exists
@@ -843,6 +852,7 @@ window.addEventListener('load', () => {
                 playButton = document.createElement('button');
                 playButton.id = 'playButton';
                 playButton.textContent = 'PLAY!';
+                startScreen.appendChild(playButton);
                 
                 // Add click handler
                 playButton.onclick = () => {
@@ -860,12 +870,6 @@ window.addEventListener('load', () => {
                     // Start the game
                     this.startGame();
                 };
-            }
-            
-            // Add elements to start screen if not already present
-            if (!startScreen.querySelector('.start-screen-decorations')) {
-                startScreen.appendChild(decorations);
-                startScreen.appendChild(playButton);
             }
         }
 
