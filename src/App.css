@@ -1444,15 +1444,12 @@ iframe.game-frame {
   font-family: 'Chalkboard SE', 'Short Stack', cursive;
   color: #FFD700;
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
-  /* Edge-specific fixes */
-  display: block;
   position: relative;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
   max-width: 100%;
   box-sizing: border-box;
-  /* Add flexbox for better centering */
-  display: flex;
-  justify-content: center; /* Center horizontally */
-  align-items: center; /* Center vertically if needed */
 } 
