@@ -6,7 +6,7 @@
   "description": "",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node prebuild.mjs",
+    "prebuild": "node prebuild.mjs || true",
     "build": "vite build",
     "preview": "vite preview"
   },
