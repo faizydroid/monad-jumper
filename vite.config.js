@@ -23,8 +23,7 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       rollupOptions: {
         input: {
-          main: 'index.html',
-          app: 'app.html'
+          main: 'index.html'
         },
       },
     },
