@@ -21,10 +21,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       rollupOptions: {
-        input: {
-          main: 'index.html',
-          app: 'app.html'
-        },
+        input: 'index.html',
       },
     },
     optimizeDeps: {
