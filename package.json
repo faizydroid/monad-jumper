@@ -1,12 +1,11 @@
 {
-  "name": "monad-jumper",
+  "name": "new-doodle",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "description": "",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node prebuild.mjs || true",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -20,7 +19,6 @@
     "ethers": "^5.7.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-error-boundary": "^5.0.0",
     "react-router-dom": "^6.22.3",
     "viem": "^2.23.10",
     "wagmi": "^2.14.13"
