@@ -1,3 +1,6 @@
+/* Import fonts first (must be at the top of the file) */
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Chalkboard+SE&family=Short+Stack&display=swap');
+
 /* === CARTOON GAME UI === */
 @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Bubblegum+Sans&family=Fredoka:wght@400;600&family=Chalkboard+SE&family=Short+Stack&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
@@ -10,10 +13,10 @@
 
 :root {
   /* Cartoon color palette */
-  --primary: #FF6B6B;
+  --primary: #5662EB;
   --primary-dark: #FF5252;
-  --secondary: #4ECDC4;
-  --accent: #FFD166;
+  --secondary: #9B5DE5;
+  --accent: #FF6B6B;
   --accent-dark: #FFBC1F;
   --purple: #9B5DE5;
   --pink: #F15BB5;
