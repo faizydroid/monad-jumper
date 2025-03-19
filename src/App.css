@@ -1404,42 +1404,24 @@ iframe.game-frame {
 
 /* Mobile wallet styles */
 .wallet-connect.mobile {
-  background-color: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(5px);
-  border-radius: 12px;
-  padding: 8px 12px;
   display: flex;
-  align-items: center;
   justify-content: center;
+  margin-top: 20px;
 }
 
-.wallet-connect.mobile .connect-button {
-  font-size: 14px;
-  padding: 8px 12px;
-  border-radius: 20px;
+.connect-button {
   background-color: #FF5A5F;
   color: white;
   border: none;
-  font-weight: bold;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background-color 0.3s;
 }
 
-.wallet-connect.mobile .wallet-address {
-  font-size: 14px;
-  margin-right: 8px;
-  color: white;
-}
-
-.wallet-connect.mobile .disconnect-button {
-  font-size: 14px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(255, 90, 95, 0.8);
-  color: white;
-  border: none;
+.connect-button:hover {
+  background-color: #e04e4e;
 }
 
 /* Override any RainbowKit default styles for mobile */

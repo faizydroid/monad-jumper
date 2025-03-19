@@ -32,6 +32,7 @@ import {
 import { configureChains, getDefaultWallets } from '@rainbow-me/rainbowkit';
 import { publicProvider } from '@rainbow-me/rainbowkit';
 import { createClient as wagmiCreateClient } from '@wagmi/core';
+import { walletConnectProvider } from 'wagmi/providers/walletConnect';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1135,38 +1136,26 @@ useEffect(() => {
   // Adjust wallet button display for mobile
   const renderWalletButton = () => {
     if (!isConnected) {
-      if (isMobileView) {
-        // Mobile: Show single button that opens Rainbow Kit modal
-        return (
-          <div className="wallet-connect mobile">
-            <button
-              onClick={openConnectModal}
-              className="connect-button"
-            >
-              Connect
-            </button>
-                </div>
-        );
-      } else {
-        // Desktop: Original behavior with Rainbow Kit button
-        return (
-          <div className="wallet-connect">
-            <ConnectButton />
-          </div>
-        );
-      }
+      return (
+        <div className="wallet-connect mobile">
+          <button
+            onClick={openConnectModal}
+            className="connect-button"
+          >
+            Connect
+          </button>
+        </div>
+      );
     }
     
-    // Connected state UI (unchanged)
+    // Connected state UI
     return (
       <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
         <div className="wallet-address">
-          {isMobileView 
-            ? `${address.slice(0, 4)}...${address.slice(-4)}` 
-            : `${address.slice(0, 6)}...${address.slice(-4)}`}
-                </div>
+          {address.slice(0, 4)}...{address.slice(-4)}
+        </div>
         <button onClick={() => disconnect()} className="disconnect-button">
-          {isMobileView ? 'X' : 'Disconnect'}
+          Disconnect
         </button>
       </div>
     );
