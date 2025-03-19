@@ -1,34 +1,41 @@
-import React from 'react'
+import React, { useEffect } from 'react';
 
 function App() {
+  useEffect(() => {
+    // Log to verify the component is mounting
+    console.log('App component mounted');
+  }, []);
+
   return (
     <div style={{ 
       padding: '20px', 
       textAlign: 'center',
-      maxWidth: '800px',
-      margin: '0 auto',
-      fontFamily: 'Arial, sans-serif'
+      background: '#5662EB',
+      color: 'white',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center'
     }}>
-      <h1 style={{ color: '#5662EB', marginBottom: '20px' }}>Monad Jumper</h1>
-      <p style={{ fontSize: '18px', marginBottom: '20px' }}>
-        This is the React application successfully loaded!
-      </p>
+      <h1>Monad Jumper</h1>
+      <p>If you see this, React is working!</p>
       <button 
         style={{
           padding: '10px 20px',
-          backgroundColor: '#7C3AED',
+          background: '#FF5252',
           color: 'white',
           border: 'none',
-          borderRadius: '5px',
+          borderRadius: '50px',
           cursor: 'pointer',
-          fontSize: '16px'
+          marginTop: '20px'
         }}
-        onClick={() => alert('React is working correctly!')}
+        onClick={() => alert('Button clicked!')}
       >
         Click Me
       </button>
     </div>
-  )
+  );
 }
 
-export default App 
+export default App; 

@@ -10,9 +10,8 @@
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+    { "handle": "filesystem" },
+    { "src": "/error", "dest": "/error.html" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 } 

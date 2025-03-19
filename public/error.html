@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error - Monad Jumper</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #5662EB;
+            color: white;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        h1 {
+            color: #FF5252;
+        }
+        pre {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 5px;
+            max-width: 800px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Something went wrong</h1>
+    <p>The application failed to load. Please check the console for errors.</p>
+    <pre id="errorDetails">No errors logged yet.</pre>
+
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            document.getElementById('errorDetails').textContent = 
+                `Error: ${message}\nSource: ${source}\nLine: ${lineno}:${colno}`;
+            return false;
+        };
+    </script>
+</body>
+</html> 

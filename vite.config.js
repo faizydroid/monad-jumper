@@ -6,6 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react()],
+    base: '/',
     server: {
       port: 3000,
       open: true,
@@ -20,6 +21,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
+      sourcemap: true,
       base: './',
       assetsDir: 'assets',
       rollupOptions: {
