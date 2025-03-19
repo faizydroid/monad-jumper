@@ -248,63 +248,41 @@ window.addEventListener('load', () => {
         gameOver() {
             this.gameOver = true;
             
-            // Create a styled game over menu
-            const gameOverMenu = document.createElement('div');
-            gameOverMenu.className = 'game-over-menu';
+            // Semi-transparent background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Add game over title
-            const gameOverTitle = document.createElement('h2');
-            gameOverTitle.className = 'game-over-title';
-            gameOverTitle.textContent = 'Game Over!';
-            gameOverMenu.appendChild(gameOverTitle);
+            // Game Over text
+            ctx.fillStyle = 'white';
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Game Over!', canvas.width/2, canvas.height/2 - 50);
             
-            // Add score
+            // Score text
+            ctx.font = '24px Arial';
+            ctx.fillText(`Score: ${Math.floor(this.score)}`, canvas.width/2, canvas.height/2);
+            
+            // Draw buttons
+            this.drawButton(this.gameOverButtons.tryAgain);
+            this.drawButton(this.gameOverButtons.backToHome);
+
             const finalScore = Math.floor(this.score);
-            const scoreText = document.createElement('div');
-            scoreText.className = 'game-over-score';
-            scoreText.textContent = `Score: ${finalScore}`;
-            gameOverMenu.appendChild(scoreText);
-            
-            // Add jumps
-            const jumpsText = document.createElement('div');
-            jumpsText.className = 'game-over-jumps';
-            jumpsText.textContent = `Jumps: ${window.__jumpCount || 0}`;
-            gameOverMenu.appendChild(jumpsText);
-            
-            // Add play again button
-            const playAgainButton = document.createElement('button');
-            playAgainButton.className = 'play-again-button';
-            playAgainButton.textContent = 'Play Again';
-            playAgainButton.onclick = () => {
-                document.body.removeChild(gameOverMenu);
-                this.reset();
-            };
-            gameOverMenu.appendChild(playAgainButton);
-            
-            // Add to the document
-            document.body.appendChild(gameOverMenu);
+            console.log(`Game Over - Sending final score: ${finalScore} with ${window.totalJumps} jumps`);
             
             // Post message to parent window
             if (window.parent) {
                 try {
                     window.parent.postMessage({
                         type: 'gameOver',
-                        data: {
-                            score: finalScore,
-                            jumpCount: window.__jumpCount || 0,
-                            timestamp: Date.now()
-                        }
+                        score: finalScore,
+                        jumps: window.totalJumps
                     }, '*');
                     
-                    // Also send BUNDLE_JUMPS message
+                    // Also send as gameScore for backward compatibility
                     window.parent.postMessage({
-                        type: 'BUNDLE_JUMPS',
-                        data: {
-                            score: finalScore,
-                            jumpCount: window.__jumpCount || 0,
-                            timestamp: Date.now(),
-                            saveId: Date.now().toString()
-                        }
+                        type: 'gameScore',
+                        score: finalScore,
+                        jumps: window.totalJumps
                     }, '*');
                     
                     console.log('Game over messages sent to parent');
@@ -544,6 +522,62 @@ window.addEventListener('load', () => {
             context.fillStyle = '#333';
             this.setCartoonFont(context, 14);
             context.fillText('Approve transaction and continue playing!', this.width/2, y + 325);
+
+            // Add red ribbon effect behind game over text
+            const gameOverText = "GAME OVER!";
+            context.font = 'bold 60px "Fredoka", sans-serif';
+            const textMetrics = context.measureText(gameOverText);
+            const textWidth = textMetrics.width;
+            const textHeight = 60;
+            
+            const centerX = this.canvas.width / 2;
+            
+            // Move ribbon to the top of the popup panel - calculate position based on panel
+            const panelTop = this.canvas.height / 2 - 180; // Estimate where your panel starts
+            const textY = panelTop - 15; // Position text just above panel
+            
+            // Draw ribbon
+            context.save();
+            
+            // Ribbon background
+            const ribbonWidth = textWidth + 60;
+            const ribbonHeight = textHeight + 30;
+            
+            // Red ribbon with 3D effect
+            context.fillStyle = '#D81E1E';  // Base red color
+            context.beginPath();
+            context.roundRect(centerX - ribbonWidth/2, textY - textHeight/2 - 10, ribbonWidth, ribbonHeight, 10);
+            context.fill();
+            
+            // Ribbon highlight
+            const gradient = context.createLinearGradient(
+                centerX - ribbonWidth/2, 
+                textY - textHeight/2 - 10, 
+                centerX - ribbonWidth/2, 
+                textY + ribbonHeight - textHeight/2 - 10
+            );
+            gradient.addColorStop(0, 'rgba(245, 107, 107, 0.7)');
+            gradient.addColorStop(0.5, 'rgba(255, 100, 100, 0)');
+            gradient.addColorStop(1, 'rgba(206, 15, 15, 0.3)');
+            
+            context.fillStyle = gradient;
+            context.beginPath();
+            context.roundRect(centerX - ribbonWidth/2, textY - textHeight/2 - 10, ribbonWidth, ribbonHeight, 10);
+            context.fill();
+            
+           
+            
+            // Draw text with shadow for better visibility
+            context.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            context.shadowBlur = 5;
+            context.shadowOffsetX = 3;
+            context.shadowOffsetY = 3;
+            context.fillStyle = 'white';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(gameOverText, centerX, textY);
+            
+            context.restore();
         }
 
         drawBubblePanel(ctx, x, y, width, height) {
@@ -774,12 +808,13 @@ window.addEventListener('load', () => {
                 const finalScore = Math.floor(this.score);
                 const jumpCount = window.__jumpCount || 0;
                 
-                console.log('🎮 Game Over triggered');
-                console.log('📊 Final Stats:', { score: finalScore, jumps: jumpCount });
+                console.log('🎮 GAME OVER');
+                console.log(`📊 Final Score: ${finalScore}, Total Jumps: ${jumpCount}`);
                 
+                // Only send transaction if there are jumps to record
                 if (jumpCount > 0) {
                     try {
-                        // Send the bundled jumps for blockchain transaction
+                        // Send bundled jumps for blockchain transaction
                         window.parent.postMessage({
                             type: 'BUNDLE_JUMPS',
                             data: {
@@ -789,9 +824,9 @@ window.addEventListener('load', () => {
                                 saveId: Date.now().toString()
                             }
                         }, '*');
-                        console.log('📤 Bundled jumps sent for processing:', jumpCount);
+                        console.log(`📤 TRANSACTION: Bundling ${jumpCount} jumps to send to blockchain`);
                     } catch (error) {
-                        console.error('❌ Error sending bundle:', error);
+                        console.error('❌ Error sending bundle transaction:', error);
                     }
                 }
                 
@@ -822,28 +857,6 @@ window.addEventListener('load', () => {
             const startScreen = document.getElementById('startScreen');
             startScreen.style.display = 'block';
             
-            // Add decorative elements if they don't exist
-            if (!startScreen.querySelector('.start-screen-decorations')) {
-                const decorations = document.createElement('div');
-                decorations.className = 'start-screen-decorations';
-                
-                // Add floating clouds
-                for (let i = 0; i < 3; i++) {
-                    const cloud = document.createElement('div');
-                    cloud.className = 'floating-cloud';
-                    decorations.appendChild(cloud);
-                }
-                
-                // Add stars
-                for (let i = 0; i < 20; i++) {
-                    const star = document.createElement('div');
-                    star.className = 'twinkling-star';
-                    decorations.appendChild(star);
-                }
-                
-                startScreen.appendChild(decorations);
-            }
-            
             // Check if play button already exists
             let playButton = document.getElementById('playButton');
             
@@ -852,24 +865,34 @@ window.addEventListener('load', () => {
                 playButton = document.createElement('button');
                 playButton.id = 'playButton';
                 playButton.textContent = 'PLAY!';
+                
+                // Add padding above the button with margin-top
+                playButton.style.marginTop = '30px';
+                
+                // Add more button styling directly
+                playButton.style.fontSize = '28px';
+                playButton.style.padding = '18px 50px';
+                playButton.style.boxShadow = '0 8px 0 rgba(220, 50, 50, 0.5), 0 12px 20px rgba(0, 0, 0, 0.2)';
+                
                 startScreen.appendChild(playButton);
                 
                 // Add click handler
                 playButton.onclick = () => {
-                    // Hide the start screen with fade out
-                    startScreen.style.opacity = '0';
-                    setTimeout(() => {
-                        startScreen.style.display = 'none';
-                        // Show the canvas with fade in
-                        this.canvas.style.display = 'block';
-                        setTimeout(() => {
-                            this.canvas.style.opacity = '1';
-                        }, 50);
-                    }, 500);
+                    // Hide the start screen
+                    startScreen.style.display = 'none';
+                    
+                    // Show the canvas
+                    this.canvas.style.display = 'block';
                     
                     // Start the game
                     this.startGame();
                 };
+            }
+            
+            // Remove any existing connect wallet message if present
+            const connectMessage = document.getElementById('connectWalletMessage');
+            if (connectMessage) {
+                connectMessage.remove();
             }
         }
 
@@ -916,7 +939,7 @@ window.addEventListener('load', () => {
             button.style.padding = '12px 0';
             button.style.fontSize = '24px';
             button.style.fontWeight = 'bold';
-            button.style.backgroundColor = '#4CAF50';
+            button.style.backgroundColor = '#ce0202';
             button.style.color = 'white';
             button.style.border = 'none';
             button.style.borderRadius = '10px';
@@ -1273,23 +1296,27 @@ try {
   console.log('✅ NEW JUMP SAVING SYSTEM INSTALLED - DUPLICATES PREVENTED');
 })();
 
-// Replace the jump transaction simulation code
+// Update the jump tracking system
+// Replace the setTimeout override with a better implementation
 const originalSetTimeout = window.setTimeout;
 window.setTimeout = function(callback, delay) {
-    if (callback?.toString().includes('jump transaction')) {
+    // Look for jump-related callbacks
+    if (callback?.toString().includes('jump') || 
+        (typeof callback === 'function' && callback.name?.includes('jump'))) {
         return originalSetTimeout(() => {
             // Increment jump counter
             window.__jumpCount = (window.__jumpCount || 0) + 1;
-            console.log(`🎮 Jump #${window.__jumpCount} recorded`);
+            console.log(`🦘 Jump #${window.__jumpCount} recorded`);
             
-            // Notify parent of jump
+            // Notify parent of jump (for UI updates)
             window.parent.postMessage({
                 type: 'JUMP_PERFORMED',
                 jumpCount: window.__jumpCount
             }, '*');
             
-            return true;
-        }, 10);
+            // Call the original callback
+            callback();
+        }, delay);
     }
     return originalSetTimeout(callback, delay);
 };
@@ -1302,3 +1329,112 @@ window.addEventListener('message', (event) => {
         game.start();
     }
 });
+
+// Add this after your existing window.addEventListener code
+window.addEventListener('message', (event) => {
+    if (event.data?.type === 'WALLET_CONNECTION_STATUS') {
+        console.log('Received wallet status:', event.data.connected);
+        window.walletConnected = event.data.connected;
+        
+        // Force redraw of start button based on new wallet status
+        if (game) {
+            game.drawStartButton(game.context);
+        }
+    }
+});
+
+// Initialize wallet as disconnected by default
+window.walletConnected = false;
+
+// Add this code to preload and manage game audio with better synchronization
+class AudioManager {
+    constructor() {
+        // Initialize audio context
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.soundBuffers = {};
+        this.sounds = {
+            jump: '/sounds/jump.mp3',
+            collision: '/sounds/collision.mp3',
+            gameOver: '/sounds/gameover.mp3',
+            powerUp: '/sounds/powerup.mp3',
+            // Add any other sounds your game uses
+        };
+        
+        // Preload all sounds
+        this.preloadSounds();
+    }
+    
+    async preloadSounds() {
+        console.log('Preloading game sounds...');
+        const loadPromises = [];
+        
+        for (const [name, url] of Object.entries(this.sounds)) {
+            const promise = fetch(url)
+                .then(response => response.arrayBuffer())
+                .then(arrayBuffer => this.audioContext.decodeAudioData(arrayBuffer))
+                .then(audioBuffer => {
+                    this.soundBuffers[name] = audioBuffer;
+                    console.log(`Sound loaded: ${name}`);
+                })
+                .catch(error => console.error(`Error loading sound ${name}:`, error));
+                
+            loadPromises.push(promise);
+        }
+        
+        try {
+            await Promise.all(loadPromises);
+            console.log('All sounds preloaded successfully');
+        } catch (error) {
+            console.error('Error preloading sounds:', error);
+        }
+    }
+    
+    play(soundName, volume = 1.0) {
+        if (!this.soundBuffers[soundName]) {
+            console.warn(`Sound not loaded: ${soundName}`);
+            return;
+        }
+        
+        // Resume audio context if it's suspended (needed for some browsers)
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
+        
+        // Create sound source
+        const source = this.audioContext.createBufferSource();
+        source.buffer = this.soundBuffers[soundName];
+        
+        // Create volume control
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.value = volume;
+        
+        // Connect the nodes
+        source.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        // Play immediately
+        source.start(0);
+    }
+}
+
+// Add this to your Game class initialization
+function initAudio() {
+    // Create global audio manager
+    window.audioManager = new AudioManager();
+    
+    // Initialize audio with user interaction (needed for most browsers)
+    document.addEventListener('click', () => {
+        if (window.audioManager.audioContext.state === 'suspended') {
+            window.audioManager.audioContext.resume();
+        }
+    }, { once: true });
+    
+    document.addEventListener('keydown', () => {
+        if (window.audioManager.audioContext.state === 'suspended') {
+            window.audioManager.audioContext.resume();
+        }
+    }, { once: true });
+}
+
+// Call this when the game starts
+initAudio();

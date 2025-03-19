@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import './App.css';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -369,7 +369,8 @@ function GameComponent() {
     contract,
     updateScore,
     recordJump,
-    providerError
+    providerError,
+    signer
   } = useWeb3();
   
   const [username, setUsername] = useState(webUsername || null);
@@ -405,18 +406,29 @@ function GameComponent() {
   // Add the missing showPlayAgain state
   const [showPlayAgain, setShowPlayAgain] = useState(false);
   
+  // Add this hook near your other hook declarations
+  const { openConnectModal } = useConnectModal();
+  
   // Initialize fallback provider for offline mode
   useEffect(() => {
     // Create a fallback provider if we don't have one from web3
     if (!provider) {
       console.log("Creating fallback provider for offline mode");
       try {
-        const offlineProvider = new ethers.providers.JsonRpcProvider(
+        // For ethers v6
+        const offlineProvider = new ethers.JsonRpcProvider(
           "https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"
         );
+        
+        // Or alternatively for older ethers v5 (if needed)
+        // const offlineProvider = new ethers.providers.JsonRpcProvider(...)
+        
+        console.log("Fallback provider created successfully");
         setFallbackProvider(offlineProvider);
       } catch (error) {
         console.error("Failed to create fallback provider:", error);
+        // Don't stop execution if fallback provider fails
+        console.log("Continuing without fallback provider");
       }
     }
   }, [provider]);
@@ -806,70 +818,178 @@ function GameComponent() {
     console.log("Game initialized with new session:", newGameId);
   }, [setGameScore]);
 
-  // Update the bundle jumps handler
+  // Update the bundle jumps handler with Edge-specific fixes
   useEffect(() => {
-    console.log('🔄 Setting up bundle jumps handler');
-    
     const handleBundledJumps = async (event) => {
         if (event.data?.type === 'BUNDLE_JUMPS') {
             const { score, jumpCount } = event.data.data;
-            console.log('🎯 Processing BUNDLE_JUMPS:', { score, jumpCount });
+            console.log(`🎮 Received bundle request with ${jumpCount} jumps`);
             
             if (!jumpCount || jumpCount <= 0) {
-                console.error('❌ No jumps to process');
+                console.log('⚠️ No jumps to process, skipping transaction');
                 return;
             }
             
             try {
                 setTransactionPending(true);
-                console.log('📤 Preparing transaction for', jumpCount, 'jumps');
+                console.log(`🔄 Processing transaction for ${jumpCount} jumps...`);
 
-                // Reset game state before processing new transaction
-                setShowPlayAgain(false);
-                
-                const success = await updateScore(score, jumpCount);
-                console.log('📤 Transaction result:', success);
-
-                if (success) {
-                    console.log('✅ Transaction successful');
-                    setShowPlayAgain(true);
-                } else {
-                    console.error('❌ Transaction failed');
+                // Get the active wallet from Rainbow Kit
+                if (!address) {
+                    throw new Error("No wallet connected. Please connect your wallet first.");
                 }
+                
+                // Use the exact contract address we deployed
+                const contractAddress = "0xc9fc1784df467a22f5edbcc20625a3cf87278547";
+                console.log(`📝 Using MonadJumperGame contract: ${contractAddress}`);
+                console.log(`🔑 Using connected wallet address: ${address}`);
+                
+                // Check if running in Edge browser
+                const isEdgeBrowser = navigator.userAgent.indexOf("Edg") !== -1;
+                console.log(`Browser detection: Edge = ${isEdgeBrowser}`);
+                
+                // Explicitly enforce using wagmi wallet client
+                if (walletClient && publicClient) {
+                    console.log('📤 Using Rainbow Kit wallet to send transaction');
+                    console.log('Connected account:', walletClient.account);
+                    
+                    // Create strongly typed request for record jumps
+                    const { request } = await publicClient.simulateContract({
+                        address: contractAddress,
+                        abi: [
+                            {
+                                name: 'recordJumps',
+                                type: 'function',
+                                stateMutability: 'nonpayable',
+                                inputs: [{ name: '_jumps', type: 'uint256' }],
+                                outputs: []
+                            }
+                        ],
+                        functionName: 'recordJumps',
+                        args: [BigInt(jumpCount)],
+                        account: walletClient.account,
+                    });
+                    
+                    // For Edge browser, add extra wallet enforcement
+                    if (isEdgeBrowser) {
+                        console.log('🔒 Using Edge-specific wallet handling');
+                        
+                        // Force explicit account selection in Edge
+                        const hash = await walletClient.writeContract({
+                            ...request,
+                            account: walletClient.account,
+                        });
+                        console.log('📤 Transaction sent! Hash:', hash);
+                        
+                        // Wait for confirmation with timeout
+                        const receipt = await publicClient.waitForTransactionReceipt({
+                            hash: hash,
+                            timeout: 60_000, // 60 second timeout
+                        });
+                        console.log('✅ Transaction confirmed!', receipt);
+                    } else {
+                        // Normal handling for other browsers
+                        const hash = await walletClient.writeContract(request);
+                        console.log('📤 Transaction sent! Hash:', hash);
+                        
+                        const receipt = await publicClient.waitForTransactionReceipt({
+                            hash: hash
+                        });
+                        console.log('✅ Transaction confirmed!', receipt);
+                    }
+                } else {
+                    throw new Error("Rainbow Kit wallet not properly connected");
+                }
+                
+                // Set play again button after transaction
+                setShowPlayAgain(true);
+                
             } catch (error) {
-                console.error('❌ Transaction error:', error);
+                console.error('❌ Error processing jumps:', error);
+                console.error('Error details:', error.message);
+                console.error('Error code:', error.code);
+                if (error.details) console.error('Error details:', error.details);
             } finally {
                 setTransactionPending(false);
             }
         }
     };
-
-    window.addEventListener('message', handleBundledJumps);
-    return () => {
-        window.removeEventListener('message', handleBundledJumps);
-        // Reset states when unmounting
-        setTransactionPending(false);
-        setShowPlayAgain(false);
-    };
-}, [updateScore]);
-
-// Add this function to handle play again
-const handlePlayAgain = useCallback(() => {
-    console.log('🔄 Play Again clicked');
     
-    // Reset all states
+    window.addEventListener('message', handleBundledJumps);
+    return () => window.removeEventListener('message', handleBundledJumps);
+}, [address, walletClient, publicClient]);
+
+// Add a useEffect to track jumps for UI updates
+useEffect(() => {
+    const handleJumpPerformed = (event) => {
+        if (event.data?.type === 'JUMP_PERFORMED') {
+            const jumpCount = event.data.jumpCount;
+            console.log(`🦘 Jump performed: ${jumpCount}`);
+            setCurrentJumps(jumpCount);
+        }
+    };
+    
+    window.addEventListener('message', handleJumpPerformed);
+    
+    return () => {
+        window.removeEventListener('message', handleJumpPerformed);
+    };
+}, []);
+
+  // Update the wallet connection status effect
+  useEffect(() => {
+    // Send wallet connection status to the game iframe
+    const sendWalletStatus = () => {
+        const gameIframe = iframeRef.current;
+            if (gameIframe && gameIframe.contentWindow) {
+                gameIframe.contentWindow.postMessage({
+                type: 'WALLET_CONNECTION_STATUS',
+                connected: !!isConnected && !!address
+                }, '*');
+            console.log('Sent wallet status to game:', !!isConnected && !!address);
+        }
+    };
+    
+    // Send status whenever it changes
+    sendWalletStatus();
+    
+    // Set up listener for connection requests from the game
+    const handleConnectRequest = (event) => {
+        if (event.data?.type === 'CONNECT_WALLET_REQUEST') {
+            console.log('Received connect wallet request from game');
+            if (!isConnected && openConnectModal) {
+                // Trigger wallet connection UI
+                openConnectModal();
+            }
+        }
+    };
+    
+    window.addEventListener('message', handleConnectRequest);
+    
+    return () => {
+        window.removeEventListener('message', handleConnectRequest);
+    };
+}, [isConnected, address, openConnectModal]);
+
+  // Add this function inside your GameComponent before the return statement
+  const handlePlayAgain = useCallback(() => {
+    console.log("🔄 Play Again clicked");
+    
+    // Reset game state
     setCurrentJumps(0);
     setGameScore(0);
     setShowPlayAgain(false);
     setTransactionPending(false);
     
-    // Reset the game iframe
-    if (iframeRef.current) {
-        iframeRef.current.contentWindow.postMessage({ type: 'RESET_GAME' }, '*');
-    }
+    // Force a new game session
+    const newGameId = Date.now();
+    setGameId(newGameId);
     
-    console.log('🎮 Game reset complete');
-}, []);
+    // Force iframe reload - use the existing function
+    forceReloadIframe(iframeRef, newGameId);
+    
+    console.log("🎮 Game reset complete with new session ID:", newGameId);
+  }, [setGameScore]);
 
   if (providerError) {
     return (
@@ -906,19 +1026,12 @@ const handlePlayAgain = useCallback(() => {
         <BackgroundElements />
         <div className="container">
           <h1 className="game-title">Monad Jumper</h1>
-      
+          <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
           
           <div className="character-container">
             <div className="shadow"></div>
             <div className="character"></div>
           </div>
-          
-          <button 
-            className="mint-to-play-button"
-            onClick={handlePlayClick}
-          >
-            PLAY
-          </button>
           
           <div className="wallet-container">
             <div className="card wallet-card">

@@ -215,4 +215,15 @@ export class Player {
         // Always return true so game continues
         return true;
     }
+
+    jump() {
+        if (this.canJump) {
+            // Play jump sound with near-zero latency
+            if (window.audioManager) {
+                window.audioManager.play('jump');
+            }
+            
+            // Rest of your jump code...
+        }
+    }
 }

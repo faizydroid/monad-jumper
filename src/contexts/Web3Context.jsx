@@ -76,30 +76,40 @@ export function Web3Provider({ children }) {
   const [isCheckingNFT, setIsCheckingNFT] = useState(false);
   const [hasNFT, setHasNFT] = useState(false);
 
-  // Initialize provider more safely
+  // Update the provider initialization in Web3Context.jsx
   useEffect(() => {
-    try {
-      // First try to set up Web3 provider as before
-      if (typeof window.ethereum === "undefined") {
-        console.warn("No Web3 provider found. Setting up read-only mode.");
-        setProviderError("No wallet detected. Some features will be limited.");
-        
-        // Set up a read-only provider for Monad testnet
-        const fallbackProvider = new ethers.providers.JsonRpcProvider(
-          "https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5"
-        );
-        setReadOnlyProvider(fallbackProvider);
-        return;
-      }
-      
-      // Only proceed if ethereum exists
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      setProvider(provider);
-    } catch (error) {
-      console.error("Error initializing provider:", error);
-      setProviderError("Error connecting to wallet. Please refresh the page.");
-    }
-  }, []);
+    const initializeProvider = async () => {
+        try {
+            console.log("Initializing Web3 provider...");
+            
+            // Check if window.ethereum exists
+            if (typeof window.ethereum !== 'undefined') {
+                // For ethers v5
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                console.log("Provider initialized successfully");
+                
+                setProvider(provider);
+                
+                // Get signer and chain info
+                try {
+                    const signer = provider.getSigner();
+                    setSigner(signer);
+                    const network = await provider.getNetwork();
+                    setChainId(network.chainId);
+                    console.log("Signer and network info retrieved");
+                } catch (error) {
+                    console.error("Error getting signer:", error);
+                }
+            } else {
+                console.log("No ethereum object found in window");
+            }
+        } catch (error) {
+            console.error("Error initializing provider:", error);
+        }
+    };
+
+    initializeProvider();
+}, []);
 
   useEffect(() => {
     if (isInEdgeFallbackMode) {

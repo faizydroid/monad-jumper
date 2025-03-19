@@ -1,45 +1,12 @@
-# Monad Jumper
+# Doodle-Jump
+This game is built using HTML5 Canvas Element and Object Oriented Programming in JavaScript.
 
-A fun blockchain-powered game built on Monad.
+It makes use of concepts like infinite scrolling of game objects and background. The game gets more difficult to play with the increase in score value. Also uploaded its tutorial on my youTube channel
 
-## Overview
+### Demo Instructions:
+ArrowUp to shoot, ArrowLeft and ArrowRight to move       
 
-Monad Jumper is a game where players jump through platforms while collecting rewards. Each jump is recorded as a micro-transaction on the Monad blockchain.
+Deployment Link: https://m-adil-as.github.io/Doodle-Jump/
 
-## Features
-
-- Fun, casual gameplay
-- Blockchain-powered microtransactions for each jump
-- Leaderboard system
-- User accounts with personalized usernames
-
-## Technologies Used
-
-- React for the frontend
-- Vite for build tooling
-- Wagmi & RainbowKit for wallet connections
-- Supabase for backend storage
-- Monad blockchain for transactions
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- Monad wallet
-
-### Installation
-
-1. Clone the repository
-```bash
-git clone https://github.com/your-username/monad-jumper.git
-cd monad-jumper
-```
-
-2. Install dependencies
-```bash
-npm install
-```
-
-3. Create a `.env` file with your configuration
+Demo Video:   
+https://user-images.githubusercontent.com/115668271/196476702-01ae3e88-3783-45c9-b357-cfc00d015bcf.mp4
