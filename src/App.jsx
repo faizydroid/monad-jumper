@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
-import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
+import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
 import { useAccount, usePublicClient, useWalletClient, useConnect, useDisconnect } from 'wagmi';
 import './App.css';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -21,6 +21,14 @@ import { encodeFunctionData, parseEther } from 'viem';
 import CartoonPopup from './components/CartoonPopup';
 import { createClient } from '@supabase/supabase-js';
 import ErrorBoundary from './components/ErrorBoundary';
+import { 
+  injectedWallet,
+  rainbowWallet,
+  metaMaskWallet, 
+  trustWallet,
+  coinbaseWallet,
+  walletConnectWallet
+} from '@rainbow-me/rainbowkit/wallets';
 
 // Initialize Supabase client
 const supabase = createClient(

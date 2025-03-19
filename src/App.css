@@ -1,4 +1,5 @@
 /* === CARTOON GAME UI === */
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Bubblegum+Sans&family=Fredoka:wght@400;600&family=Chalkboard+SE&family=Short+Stack&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -1196,9 +1197,6 @@ body {
 .admin-login-button:hover {
   background-color: #45a049;
 }
-
-/* Replace any Comic Sans MS fonts with these alternatives */
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Chalkboard+SE&family=Short+Stack&display=swap');
 
 /* Update any Comic Sans instances but keep the Monad Jumper title font unchanged */
 .username-modal h2,
