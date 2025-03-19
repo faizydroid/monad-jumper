@@ -1343,4 +1343,114 @@ iframe.game-frame {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 20px;
   overflow: hidden;
+}
+
+/* Mobile Optimization */
+@media screen and (max-width: 768px) {
+  /* Game container optimization */
+  .game-container {
+    width: 100% !important;
+    max-width: 100%;
+    padding: 0;
+    height: auto;
+    aspect-ratio: 9/16; /* Mobile aspect ratio */
+  }
+  
+  .game-frame {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+  
+  /* Rainbow Kit wallet button adjustments */
+  .wallet-connect {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    transform: scale(0.85);
+    transform-origin: top right;
+  }
+  
+  /* Adjust any headers or title elements */
+  h1.game-title {
+    font-size: 24px;
+    margin: 10px 0;
+  }
+  
+  /* Adjust any control UI elements */
+  .controls-container {
+    max-width: 90%;
+  }
+  
+  /* Move wallet and game info to more accessible positions */
+  .wallet-info, .game-stats {
+    padding: 8px;
+    margin: 5px;
+    font-size: 14px;
+  }
+}
+
+/* Make transaction UI more mobile-friendly */
+@media screen and (max-width: 480px) {
+  .transaction-container {
+    width: 95%;
+    padding: 10px;
+  }
+  
+  .transaction-button {
+    padding: 10px 15px;
+    font-size: 16px;
+  }
+}
+
+/* Mobile wallet styles */
+.wallet-connect.mobile {
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(5px);
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallet-connect.mobile .connect-button {
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 20px;
+  background-color: #FF5A5F;
+  color: white;
+  border: none;
+  font-weight: bold;
+}
+
+.wallet-connect.mobile .wallet-address {
+  font-size: 14px;
+  margin-right: 8px;
+  color: white;
+}
+
+.wallet-connect.mobile .disconnect-button {
+  font-size: 14px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 90, 95, 0.8);
+  color: white;
+  border: none;
+}
+
+/* Override any RainbowKit default styles for mobile */
+@media screen and (max-width: 768px) {
+  /* This targets RainbowKit's modal for better mobile fit */
+  [data-rk] {
+    --rk-radii-modal: 12px;
+    --rk-fonts-body: system-ui, sans-serif;
+    --rk-modal-width: 90vw;
+    --rk-modal-max-width: 360px;
+  }
 } 

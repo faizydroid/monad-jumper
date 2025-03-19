@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
-import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { useAccount, usePublicClient, useWalletClient, useConnect, useDisconnect } from 'wagmi';
 import './App.css';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AdminDashboard from './components/AdminDashboard';
@@ -21,6 +21,7 @@ import { encodeFunctionData, parseEther } from 'viem';
 import CartoonPopup from './components/CartoonPopup';
 import { createClient } from '@supabase/supabase-js';
 import ErrorBoundary from './components/ErrorBoundary';
+import { isMobile } from 'react-device-detect'; // Install with: npm install react-device-detect
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -353,6 +354,33 @@ function forceReloadIframe(iframeRef, newGameId) {
   return newIframe;
 }
 
+// Add this component for mobile-friendly loading display
+function LoadingSpinner({ isMobile }) {
+  const spinnerStyle = isMobile ? {
+    position: 'fixed',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    zIndex: 1000,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: '16px',
+    padding: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    color: 'white'
+  } : {
+    // Desktop styles
+  };
+  
+  return (
+    <div style={spinnerStyle}>
+      <div className="spinner"></div>
+      <div style={{ marginTop: '10px' }}>Processing transaction...</div>
+    </div>
+  );
+}
+
 function GameComponent() {
   const { 
     username: webUsername,
@@ -376,6 +404,9 @@ function GameComponent() {
   const [username, setUsername] = useState(webUsername || null);
   
   const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+  const [isMobileView, setIsMobileView] = useState(false);
   
   const [showModal, setShowModal] = useState(false);
   const [showGame, setShowGame] = useState(false);
@@ -1076,6 +1107,55 @@ useEffect(() => {
     console.log("🎮 Game reset complete with new session ID:", newGameId);
   }, [setGameScore]);
 
+  // Detect mobile view on component mount and window resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileView(window.innerWidth <= 768);
+    };
+    
+    // Check initially
+    checkMobile();
+    
+    // Add resize listener
+    window.addEventListener('resize', checkMobile);
+    
+    // Clean up
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  // Adjust wallet button display for mobile
+  const renderWalletButton = () => {
+    if (!isConnected) {
+      return (
+        <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
+          {connectors.map((connector) => (
+            <button
+              key={connector.id}
+              onClick={() => connect({ connector })}
+              className="connect-button"
+            >
+              {isMobileView ? 'Connect' : 'Connect Wallet'}
+            </button>
+          ))}
+        </div>
+      );
+    }
+    
+    // Connected state UI
+    return (
+      <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
+        <div className="wallet-address">
+          {isMobileView 
+            ? `${address.slice(0, 4)}...${address.slice(-4)}` 
+            : `${address.slice(0, 6)}...${address.slice(-4)}`}
+        </div>
+        <button onClick={() => disconnect()} className="disconnect-button">
+          {isMobileView ? 'X' : 'Disconnect'}
+        </button>
+      </div>
+    );
+  };
+
   if (providerError) {
     return (
       <div className="wallet-error">
@@ -1124,7 +1204,7 @@ useEffect(() => {
               <p style={{marginBottom: '1.5rem', textAlign: 'center', color: '#222222'}}>
                 Connect your wallet to start your jumping adventure
               </p>
-              <ConnectButton />
+              {renderWalletButton()}
             </div>
           </div>
           
@@ -1339,6 +1419,7 @@ useEffect(() => {
       {showUsernameModal && (
         <UsernameModal onSubmit={handleUsernameSubmit} />
       )}
+      {transactionPending && <LoadingSpinner isMobile={isMobileView} />}
     </div>
   );
 }
