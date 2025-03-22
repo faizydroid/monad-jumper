@@ -1501,85 +1501,129 @@ iframe.game-frame {
 
 /* Improved mobile homepage layout */
 @media screen and (max-width: 768px) {
-  /* Enhanced container layout for mobile */
+  /* Prevent horizontal scrolling */
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+  }
+  
+  /* Mobile container */
   .container {
-    padding: 60px 15px 30px;
-    justify-content: flex-start;
-  }
-  
-  /* Bigger title font for mobile */
-  .game-title {
-    font-size: 4.2rem !important; /* Override existing media query */
-    margin-bottom: 0.5rem;
-    line-height: 1.1;
-    text-shadow: 
-      4px 4px 0 var(--purple),
-      8px 8px 0 rgba(0,0,0,0.2);
-  }
-  
-  /* Optimized subtitle/tagline */
-  .game-subtitle {
-    font-size: 1.1rem;
-    margin-bottom: 1.5rem;
-    max-width: 90%;
-  }
-  
-  /* Improved character container sizing */
-  .character-container {
-    margin: 0.75rem auto 1.25rem;
-    transform: scale(0.85);
-    height: 50px;
-  }
-  
-  /* Improved play button placement and sizing */
-  .play-button {
-    font-size: 1.4rem;
-    padding: 1.1rem 2.8rem;
-    margin-bottom: 2rem;
-    transform: scale(1.15);
-  }
-  
-  /* Better spacing for content areas */
-  .content-area {
-    gap: 15px;
-    margin-top: 20px;
-  }
-  
-  /* Improved card styling for mobile */
-  .card {
-    padding: 20px;
-    margin-bottom: 15px;
-  }
-  
-  /* Better fact bubbles layout */
-  .game-facts {
+    padding: 0;
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    margin-top: 15px;
+    justify-content: flex-start;
+    overflow-x: hidden;
+  }
+  
+  /* Mobile header area */
+  .mobile-header {
+    width: 100%;
+    padding: 50px 20px 25px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7), rgba(0,0,0,0.4));
+  }
+  
+  /* Title and subtitle */
+  .game-title {
+    font-size: 3.5rem;
+    line-height: 1;
+    text-align: center;
+    margin: 0 0 10px;
+    text-shadow: 3px 3px 0 var(--purple),
+                 5px 5px 0 rgba(0,0,0,0.2);
+  }
+  
+  .game-subtitle {
+    font-size: 1rem;
+    width: 90%;
+    margin: 0 auto 20px;
+    text-align: center;
+  }
+  
+  /* Character container */
+  .character-container {
+    width: 80%;
+    height: 60px;
+    margin: 10px auto;
+    transform: scale(0.8);
+  }
+  
+  /* Play button */
+  .play-button-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin: 15px 0;
+  }
+  
+  .play-button {
+    padding: 12px 40px;
+    font-size: 1.3rem;
+    border-radius: 30px;
+  }
+  
+  /* Mobile content section */
+  .mobile-content {
+    width: 100%;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  /* Card layout */
+  .card {
+    width: 100%;
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 10px;
+  }
+  
+  .card h2 {
+    font-size: 1.4rem;
+    margin-bottom: 10px;
+  }
+  
+  /* Facts section */
+  .game-facts {
+    flex-direction: column;
+    width: 100%;
+    gap: 15px;
+    margin: 20px 0;
   }
   
   .fact-bubble {
-    width: 90%;
-    justify-content: center;
-    padding: 12px 20px;
+    width: 100%;
+    max-width: none;
+    padding: 15px;
+    border-radius: 15px;
   }
   
-  /* Improved footer spacing */
-  .footer {
-    padding: 15px 0;
-    margin-top: 20px;
-  }
-  
-  /* Optimize wallet connect button placement */
-  .wallet-connect.mobile {
+  /* Bottom action area */
+  .mobile-action-area {
     position: fixed;
-    bottom: 20px;
+    bottom: 0;
     left: 0;
     right: 0;
-    margin: 0 auto;
-    width: 85%;
+    background: rgba(12, 0, 50, 0.9);
+    padding: 15px;
+    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.5);
     z-index: 100;
+    display: flex;
+    justify-content: center;
+  }
+  
+  /* Connect wallet button */
+  .wallet-connect.mobile {
+    width: 90%;
+    margin: 0 auto;
   }
   
   .connect-button {
@@ -1587,32 +1631,52 @@ iframe.game-frame {
     padding: 14px 0;
     font-size: 16px;
     border-radius: 25px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, #763cff, #9900ff);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   }
   
-  /* Improved mint button for mobile */
-  .mint-to-play-button {
-    width: 90%;
-    font-size: 20px;
-    padding: 16px 0;
+  /* Section spacing */
+  .section {
+    margin-bottom: 25px;
+    width: 100%;
   }
   
-  /* Center gameplay instructions */
-  .instructions, .features {
-    min-width: unset;
-    width: 90%;
-  }
-  
-  /* Improved welcome message */
-  .welcome-message {
-    max-width: 90%;
-    padding: 15px;
-  }
-  
-  /* Game frame mobile optimization */
+  /* Game frame */
   .game-container {
     height: calc(100vh - 60px);
+    max-height: none;
+    width: 100%;
     border-radius: 0;
+  }
+  
+  /* Add padding to bottom to account for fixed action area */
+  .mobile-page-bottom-padding {
+    height: 80px;
+    width: 100%;
+  }
+  
+  /* Instructions and features */
+  .instructions, .features {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  /* Welcome message */
+  .welcome-message {
+    width: 90%;
+    padding: 15px;
+    margin: 15px auto;
+    text-align: center;
+  }
+  
+  /* Adjustments for Mint button when applicable */
+  .mint-to-play-button {
+    width: 100%;
+    font-size: 18px;
+    padding: 16px 15px;
+    border-radius: 25px;
   }
 }
 
