@@ -29,10 +29,9 @@ import {
   coinbaseWallet,
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
-import { configureChains, getDefaultWallets } from '@rainbow-me/rainbowkit';
-import { publicProvider } from '@rainbow-me/rainbowkit';
-import { createClient as wagmiCreateClient } from '@wagmi/core';
-import { walletConnectProvider } from 'wagmi/providers/walletConnect';
+import { connectorsForWallets, getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { createConfig } from 'wagmi';
+import { InjectedConnector } from 'wagmi';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -393,6 +392,9 @@ function LoadingSpinner({ isMobile }) {
 }
 
 function GameComponent() {
+  // Import the web3Context correctly at the top of your component
+  const web3Context = useWeb3();
+  
   const { 
     username: webUsername,
     setUserUsername,
@@ -410,7 +412,7 @@ function GameComponent() {
     recordJump,
     providerError,
     signer
-  } = useWeb3();
+  } = web3Context || {};
   
   const [username, setUsername] = useState(webUsername || null);
   
@@ -504,6 +506,7 @@ function GameComponent() {
                 console.log("❌ No username found - showing modal");
                 setUsername(null);
                 setShowModal(true);
+                setShowUsernameModal(true); // Show the username modal
             }
         } catch (error) {
             console.error("🔴 Error checking username:", error);
@@ -554,8 +557,11 @@ function GameComponent() {
                   throw new Error('Invalid final score: ' + finalScore);
                 }
                 
+                // Mark transaction as pending before sending
+                setTransactionPending(true);
+                
                 // Bundle all jumps into one transaction
-                console.log('Sending bundled transaction with jumps:', jumpCount);
+                console.log('Sending bundled transaction with jumps:', jumpCount, 'score:', finalScore);
                 const success = await updateScore(finalScore, jumpCount);
                 
                 if (success) {
@@ -564,15 +570,40 @@ function GameComponent() {
                   setShowPlayAgain(true);
                 } else {
                   console.error('Failed to save score and jumps');
+                  // Show play again even on failed transaction to let the user try again
+                  setShowPlayAgain(true);
                 }
+                
+                // Mark transaction as complete regardless of success
+                setTransactionPending(false);
                 return success;
               } catch (error) {
                 console.error('Error in game over handler:', error);
+                // Mark transaction as complete on error
+                setTransactionPending(false);
+                // Still show play again button
+                setShowPlayAgain(true);
                 return false;
               }
             },
-            // Simplified jump handler - just return true since we're bundling
-            onJump: () => Promise.resolve(true)
+            // Replace the existing onJump handler with this one:
+            onJump: async (platformType) => {
+              console.log('Jump handler called with platform type:', platformType);
+              
+              try {
+                // Increment the local jump counter
+                window.__jumpCount = (window.__jumpCount || 0) + 1;
+                console.log('Updated local jump count:', window.__jumpCount);
+                
+                // Note: We're not calling recordJump here anymore
+                // Instead, we're just tracking jumps locally and will bundle at game over
+                
+                return true; // Always return true to keep the game going
+              } catch (error) {
+                console.error('Error in jump handler:', error);
+                return true; // Return true even on error to keep the game going
+              }
+            }
           });
         }
       } catch (error) {
@@ -639,7 +670,7 @@ function GameComponent() {
         
         // Use upsert instead of delete/insert
       const { error } = await supabase
-            .from('users')
+        .from('users')
             .upsert({ 
                 wallet_address: address.toLowerCase(),
             username: newUsername,
@@ -653,415 +684,13 @@ function GameComponent() {
         // Update local state
         setUsername(newUsername);
         setShowModal(false);
-            setShowUsernameModal(false);
+        setShowUsernameModal(false);
         
-        } catch (error) {
+    } catch (error) {
         console.error("🔴 Error saving username:", error);
         alert("Error saving username. Please try again.");
     }
 };
-
-  // Update the checkUsername function
-  const checkUsername = async () => {
-    if (!isConnected || !address) {
-        console.log("❌ No wallet connected");
-        return;
-    }
-    
-    try {
-        console.log("🔍 Checking username for wallet:", address);
-        
-        // Remove noCache() as it's not a valid method
-        const { data, error } = await supabase
-        .from('users')
-            .select('username')
-            .eq('wallet_address', address.toLowerCase())
-        .single();
-      
-        console.log("📊 Supabase response:", { data, error });
-        
-        if (error) {
-            if (error.code === 'PGRST116') {
-                console.log("❌ No username found - showing modal");
-                setUsername(null);
-                setShowModal(true);
-            } else {
-                console.error("Error checking username:", error);
-            }
-        return;
-      }
-      
-        if (data?.username) {
-            console.log("✅ Found username:", data.username);
-            setUsername(data.username);
-            setShowModal(false);
-      } else {
-            console.log("❌ No username found - showing modal");
-            setUsername(null);
-            setShowModal(true);
-      }
-    } catch (error) {
-        console.error("🔴 Error checking username:", error);
-    }
-  };
-
-  // Update the useEffect to use the extracted checkUsername function
-  useEffect(() => {
-    if (isConnected && address) {
-        checkUsername();
-    } else {
-        setUsername(null);
-        setShowModal(false);
-    }
-}, [isConnected, address]);
-
-  // Clean up all listeners on component mount
-  useEffect(() => {
-    // Remove any existing listeners
-    const cleanupListeners = () => {
-      window.removeEventListener('message', window.__jumpHandler);
-      window.removeEventListener('message', window.__gameOverHandler);
-    };
-    
-    cleanupListeners();
-    return cleanupListeners;
-  }, []);
-
-  // Replace the resetGame function
-  const resetGame = useCallback(() => {
-    console.log("🔄 Resetting game");
-    
-    // Reset game score
-    setGameScore(0);
-    
-    // Reset play again button
-    setShowPlayAgain(false);
-    
-    // Force a new game session
-    const newGameId = Date.now();
-    setGameId(newGameId);
-    
-    // Force iframe reload
-    if (iframeRef.current) {
-      const url = new URL('/original.html', window.location.origin);
-      url.searchParams.set('session', newGameId);
-      url.searchParams.set('t', Date.now());
-      iframeRef.current.src = url.toString();
-      console.log("🔄 Iframe reloaded with new session");
-    }
-  }, [setGameScore]);
-
-  // Update the game over handler with detailed logging
-  useEffect(() => {
-    console.log('📊 Setting up game over handler');
-    
-    const handleGameMessages = async (event) => {
-      // Log all incoming messages for debugging
-      console.log('📊 Received message:', event.data);
-      
-      // Handle game over event
-      if (event.data?.type === 'gameOver') {
-        const { score, jumpCount } = event.data.data;
-        console.log('📊 GAME OVER EVENT RECEIVED');
-        console.log(`📊 Score: ${score}`);
-        console.log(`📊 Jump Count: ${jumpCount}`);
-        
-        try {
-          setTransactionPending(true);
-          console.log('📊 Setting transaction pending state');
-          
-          // Process the transaction with the final jump count
-          console.log('📊 Calling updateScore function');
-          const success = await updateScore(score, jumpCount);
-              
-              if (success) {
-            console.log('✅ Transaction processed successfully');
-            setShowPlayAgain(true);
-      } else {
-            console.error('❌ Transaction failed');
-      }
-          } catch (error) {
-          console.error('🔴 Error in game over handler:', error);
-          console.error('Error details:', error.message);
-    } finally {
-          console.log('📊 Resetting transaction pending state');
-          setTransactionPending(false);
-        }
-      }
-    };
-
-    window.addEventListener('message', handleGameMessages);
-    console.log('📊 Game over handler attached');
-    
-    return () => {
-      window.removeEventListener('message', handleGameMessages);
-      console.log('📊 Game over handler removed');
-    };
-  }, [updateScore]);
-
-  // Update the jump sync effect
-  useEffect(() => {
-    if (!showGame || !iframeRef.current) return;
-    
-    console.log("Setting up jump counter sync");
-    
-    const syncJumpCount = () => {
-      try {
-        if (iframeRef.current?.contentWindow) {
-          const iframeJumpCount = iframeRef.current.contentWindow.__jumpCount || 0;
-          
-          // Only update if the count has changed
-          if (iframeJumpCount !== currentJumps) {
-            console.log(`Sync: Updated jump count from iframe: ${iframeJumpCount}`);
-            setCurrentJumps(iframeJumpCount);
-          }
-        }
-      } catch (err) {
-        console.error("Error syncing jump count:", err);
-      }
-    };
-    
-    // Sync more frequently during gameplay
-    const syncInterval = setInterval(syncJumpCount, 100);
-    
-    // Also sync on jump events
-    const handleJumpEvent = (event) => {
-      if (event.data?.type === 'JUMP_PERFORMED') {
-        syncJumpCount();
-      }
-    };
-    
-    window.addEventListener('message', handleJumpEvent);
-    
-    return () => {
-      clearInterval(syncInterval);
-      window.removeEventListener('message', handleJumpEvent);
-    };
-  }, [showGame, iframeRef, currentJumps]);
-
-  // Add this handlePlayClick function
-  const handlePlayClick = useCallback(() => {
-    console.log("PLAY button clicked - starting new game");
-    window.location.hash = 'game';
-    setShowGame(true);
-    
-    // Reset game state
-    setCurrentJumps(0);
-    setGameScore(0);
-    setShowPlayAgain(false);
-    
-    // Force iframe refresh with new game ID
-    const newGameId = Date.now();
-    setGameId(newGameId);
-    
-    // Force a completely new iframe
-    forceReloadIframe(iframeRef, newGameId);
-    
-    console.log("Game initialized with new session:", newGameId);
-  }, [setGameScore]);
-
-  // Update the bundle jumps handler with Edge-specific fixes
-  useEffect(() => {
-    const handleBundledJumps = async (event) => {
-        if (event.data?.type === 'BUNDLE_JUMPS') {
-            // Extract jump count from the message
-            const jumpCount = event.data.data?.jumpCount || 0;
-            console.log(`🎮 DEBUG: Received bundle request with ${jumpCount} jumps`);
-            
-            if (!jumpCount || jumpCount <= 0) {
-                console.log('⚠️ No jumps to process, skipping transaction');
-                            return;
-                        }
-                        
-        try {
-                setTransactionPending(true);
-                        
-                // Get the active wallet from Rainbow Kit
-                        if (!address) {
-                    throw new Error("No wallet connected. Please connect your wallet first.");
-                }
-                
-                // Use the exact contract address we deployed
-                const contractAddress = "0xc9fc1784df467a22f5edbcc20625a3cf87278547";
-                console.log(`📝 Using MonadJumperGame contract: ${contractAddress}`);
-                console.log(`🔑 Using connected wallet address: ${address}`);
-                
-                // Check if running in Edge browser
-                const isEdgeBrowser = navigator.userAgent.indexOf("Edg") !== -1;
-                console.log(`Browser detection: Edge = ${isEdgeBrowser}`);
-                
-                // Explicitly enforce using wagmi wallet client
-                if (walletClient && publicClient) {
-                    console.log('📤 Using Rainbow Kit wallet to send transaction');
-                    console.log('Connected account:', walletClient.account);
-                    
-                    // Create strongly typed request for record jumps
-                    const { request } = await publicClient.simulateContract({
-                        address: contractAddress,
-                        abi: [
-                            {
-                                name: 'recordJumps',
-                                type: 'function',
-                                stateMutability: 'nonpayable',
-                                inputs: [{ name: '_jumps', type: 'uint256' }],
-                                outputs: []
-                            }
-                        ],
-                        functionName: 'recordJumps',
-                        args: [BigInt(jumpCount)],
-                        account: walletClient.account,
-                    });
-                    
-                    // For Edge browser, add extra wallet enforcement
-                    if (isEdgeBrowser) {
-                        console.log('🔒 Using Edge-specific wallet handling');
-                        
-                        // Force explicit account selection in Edge
-                        const hash = await walletClient.writeContract({
-                            ...request,
-                            account: walletClient.account,
-                        });
-                        console.log('📤 Transaction sent! Hash:', hash);
-                        
-                        // Wait for confirmation with timeout
-                        const receipt = await publicClient.waitForTransactionReceipt({
-                            hash: hash,
-                            timeout: 60_000, // 60 second timeout
-                        });
-                        console.log('✅ Transaction confirmed!', receipt);
-            } else {
-                        // Normal handling for other browsers
-                        const hash = await walletClient.writeContract(request);
-                        console.log('📤 Transaction sent! Hash:', hash);
-                        
-                        const receipt = await publicClient.waitForTransactionReceipt({
-                            hash: hash
-                        });
-                        console.log('✅ Transaction confirmed!', receipt);
-                }
-            } else {
-                    throw new Error("Rainbow Kit wallet not properly connected");
-                }
-                
-                // Normalize wallet address to ensure consistent matching (lowercase)
-                const normalizedAddress = address.toLowerCase();
-
-                console.log(`🔍 Looking for existing record with wallet: ${normalizedAddress}`);
-
-                // Step 1: Get ALL records for this wallet to debug what's happening
-                const { data: allRecords, error: listError } = await supabase
-                    .from('jumps')
-                    .select('*')
-                    .eq('wallet_address', normalizedAddress);
-
-                console.log('DEBUG - All records found:', allRecords);
-                console.log('DEBUG - List error:', listError);
-
-                // Step 2: Get specific record more carefully
-                const { data: existingData, error: fetchError } = await supabase
-                    .from('jumps')
-                    .select('id, count, wallet_address')
-                    .eq('wallet_address', normalizedAddress)
-                    .maybeSingle();
-
-                console.log('DEBUG - Existing data:', existingData);
-                console.log('DEBUG - Fetch error:', fetchError);
-
-                // Step 3: Calculate new total
-                let currentCount = 0;
-                if (existingData?.count) {
-                    currentCount = Number(existingData.count);
-                    console.log(`Found existing record with ID: ${existingData.id} and count: ${currentCount}`);
-            } else {
-                    console.log('No existing record found, will create new');
-                }
-
-                const jumpCountNum = Number(jumpCount);
-                const newTotalCount = currentCount + jumpCountNum;
-
-                console.log(`➕ Adding ${jumpCountNum} jumps to ${currentCount} for a new total of ${newTotalCount}`);
-
-                // Step 4: Use upsert with PRIMARY KEY conflict resolution
-                if (existingData?.id) {
-                    // Update by ID for absolute certainty
-                    console.log(`📝 Updating record with ID: ${existingData.id}`);
-                    const { data: updateData, error: updateError } = await supabase
-                        .from('jumps')
-                        .update({ 
-                            count: newTotalCount 
-                        })
-                        .eq('id', existingData.id)
-                        .select();
-                    
-                    console.log('Update result:', updateData);
-                    console.log('Update error:', updateError);
-                    
-                    if (updateError) {
-                        console.error('❌ Error updating jump count:', updateError);
-                        throw updateError;
-                    }
-                } else {
-                    // Insert new record
-                    console.log(`📝 Creating new record for wallet: ${normalizedAddress}`);
-                    const { data: insertData, error: insertError } = await supabase
-                        .from('jumps')
-                        .insert({ 
-                            wallet_address: normalizedAddress,
-                            count: newTotalCount,
-                            created_at: new Date().toISOString()
-                        })
-                        .select();
-                    
-                    console.log('Insert result:', insertData);
-                    console.log('Insert error:', insertError);
-                    
-                    if (insertError) {
-                        console.error('❌ Error inserting jump count:', insertError);
-                        throw insertError;
-                    }
-                }
-
-                // Step 5: Verify the result
-                const { data: verifyData } = await supabase
-                    .from('jumps')
-                    .select('*')
-                    .eq('wallet_address', normalizedAddress);
-
-                console.log('✅ Final verification - Records in database:', verifyData);
-                
-                // Set play again button after all operations complete
-                setShowPlayAgain(true);
-                
-            } catch (error) {
-                console.error('❌ Error processing jumps:', error);
-                console.error('Error details:', error.message);
-                console.error('Error code:', error.code);
-            } finally {
-                setTransactionPending(false);
-            }
-        }
-    };
-    
-    window.addEventListener('message', handleBundledJumps);
-    return () => window.removeEventListener('message', handleBundledJumps);
-}, [address, walletClient, publicClient, supabase]);
-
-// Add a useEffect to track jumps for UI updates
-useEffect(() => {
-    const handleJumpPerformed = (event) => {
-        if (event.data?.type === 'JUMP_PERFORMED') {
-            const jumpCount = event.data.jumpCount;
-            console.log(`🦘 Jump performed: ${jumpCount}`);
-            setCurrentJumps(jumpCount);
-        }
-    };
-    
-    window.addEventListener('message', handleJumpPerformed);
-    
-    return () => {
-        window.removeEventListener('message', handleJumpPerformed);
-    };
-}, []);
 
   // Update the wallet connection status effect
   useEffect(() => {
@@ -1138,16 +767,16 @@ useEffect(() => {
     if (!isConnected) {
       return (
         <div className="wallet-connect mobile">
-          <button
+        <button 
             onClick={openConnectModal}
             className="connect-button"
-          >
+        >
             Connect
-          </button>
+        </button>
         </div>
       );
     }
-    
+
     // Connected state UI
     return (
       <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
@@ -1156,10 +785,199 @@ useEffect(() => {
         </div>
         <button onClick={() => disconnect()} className="disconnect-button">
           Disconnect
-        </button>
+      </button>
       </div>
     );
   };
+
+  // Add this function inside your GameComponent before the return statement
+  const handlePlayClick = () => {
+    // Set the hash to indicate we're in game mode
+    window.location.hash = 'game';
+    
+    // Show the game iframe
+    setShowGame(true);
+  };
+
+  // Comment out or remove this useEffect that's causing conflicts (around line 626-650)
+  /*
+  useEffect(() => {
+    const handleJumpMessages = (event) => {
+      if (event.data && event.data.type === 'jumpCount') {
+        console.log("Received jump count event:", event.data.count);
+        
+        // If available, track jump in Supabase
+        if (isConnected && address && updateScore) {
+          updateScore(0, event.data.count)
+            .then(() => console.log("Recorded jump in Supabase"))
+            .catch(err => console.error("Failed to record jump:", err));
+        }
+        
+        // Also add to pending jumps for eventual blockchain recording
+        if (updateScore) {
+          updateScore(0, event.data.count)
+            .then(success => {
+              if (success) {
+                console.log("Jump recorded successfully");
+              } else {
+                console.log("Jump recording failed, but gameplay continues");
+              }
+            })
+            .catch(err => {
+              console.error("Failed to record jump:", err);
+            });
+        }
+      }
+    };
+    
+    window.addEventListener('message', handleJumpMessages);
+    return () => window.removeEventListener('message', handleJumpMessages);
+  }, [isConnected, address, updateScore]);
+  */
+
+  useEffect(() => {
+    // Create a global function that the iframe can call
+    window.handleJumpTransaction = async (platformType) => {
+      console.log("Jump transaction request received from game");
+      
+      try {
+        // Don't increment locally - let the game do it
+        // Just return success
+        return true;
+                } catch (error) {
+        console.error("Error in handleJumpTransaction:", error);
+        return false;
+      }
+    };
+    
+    // Also set up a listener for game over events
+    const handleGameOver = (event) => {
+      if (event.data && (event.data.type === 'gameOver' || event.data.type === 'GAME_OVER')) {
+        console.log("Game over event received:", event.data);
+        
+        // Extract the jump count directly from the game over message
+        const finalScore = event.data.score || (event.data.data && event.data.data.finalScore) || 0;
+        const jumpCount = event.data.jumpCount || (event.data.data && event.data.data.jumpCount) || 0;
+        
+        console.log("Processing game over with score:", finalScore, "jumps:", jumpCount);
+        
+        if (jumpCount > 0 && provider && provider.updateScore) {
+          console.log("Sending transaction with jumps:", jumpCount);
+          
+          // Set transaction pending
+          setTransactionPending(true);
+          
+          provider.updateScore(finalScore, jumpCount)
+            .then(success => {
+              console.log("Game over transaction result:", success);
+              setTransactionPending(false);
+              setShowPlayAgain(true);
+            })
+            .catch(err => {
+              console.error("Game over transaction error:", err);
+              setTransactionPending(false);
+              setShowPlayAgain(true);
+            });
+            } else {
+          console.log("No jumps to record or updateScore not available");
+          setShowPlayAgain(true);
+            }
+        }
+    };
+    
+    window.addEventListener('message', handleGameOver);
+    
+    // Cleanup
+    return () => {
+      delete window.handleJumpTransaction;
+      window.removeEventListener('message', handleGameOver);
+    };
+  }, [provider, setTransactionPending, setShowPlayAgain]);
+
+  // Update the message handler in your GameComponent (around line 930-970)
+  useEffect(() => {
+    const handleGameMessages = async (event) => {
+      // Check for bundled jumps message for blockchain transaction
+      if (event.data?.type === 'BUNDLE_JUMPS' && event.data.data) {
+        const { score, jumpCount, saveId } = event.data.data;
+        console.log(`🎮 Bundle request received:`, event.data.data);
+        
+        if (jumpCount > 0) {
+          console.log(`🎮 Bundle includes score: ${score}`);
+          
+          try {
+            // Set transaction as pending
+            setTransactionPending(true);
+            
+            // Direct contract call without relying on web3Context's contract
+            if (window.ethereum) {
+              const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+              const signer = ethersProvider.getSigner();
+              const account = await signer.getAddress();
+              
+              // Contract address - use the known value
+              const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
+              
+              // Minimal ABI for recordJumps function
+              const contractAbi = [
+                "function recordJumps(uint256 _jumps) external",
+                "function getPlayerJumps(address _player) external view returns (uint256)",
+                "function getMyJumps() external view returns (uint256)"
+              ];
+              
+              // Create contract instance
+              const contractInstance = new ethers.Contract(
+                contractAddress,
+                contractAbi,
+                signer
+              );
+              
+              console.log("Direct contract transaction preparation:", {
+                contractAddress,
+                account,
+                jumpCount
+              });
+              
+              // Submit the transaction
+              const tx = await contractInstance.recordJumps(jumpCount, {
+                gasLimit: 300000 // Set appropriate gas limit for Monad
+              });
+              
+              console.log("Transaction submitted:", tx.hash);
+              
+              // Wait for confirmation
+            const receipt = await tx.wait();
+              console.log("Transaction confirmed in block:", receipt.blockNumber);
+              
+              // Complete handling
+              setTransactionPending(false);
+              setShowPlayAgain(true);
+            } else {
+              console.error("No Ethereum provider available");
+              setTransactionPending(false);
+              setShowPlayAgain(true);
+            }
+        } catch (error) {
+            console.error('Transaction error:', error);
+            setTransactionPending(false);
+            setShowPlayAgain(true);
+          }
+        } else {
+          console.log('No jumps to record, skipping transaction');
+          setShowPlayAgain(true);
+        }
+      }
+      
+      // Also handle regular game over messages
+      else if (event.data?.type === 'GAME_OVER' && event.data.data) {
+        const { finalScore, jumpCount } = event.data.data;
+        console.log(`Game over message received with score ${finalScore} and ${jumpCount} jumps`);
+      }
+    };
+    
+    window.addEventListener('message', handleGameMessages);
+    return () => window.removeEventListener('message', handleGameMessages);
+  }, [setTransactionPending, setShowPlayAgain]);
 
   if (providerError) {
     return (
@@ -1482,8 +1300,20 @@ function App() {
   const location = useLocation();
   const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
   
-  // Add this line to access connection state
+  // Access connection state
   const { isConnected } = useAccount();
+  
+  // Import the web3Context and extract needed functions
+  const web3Context = useWeb3();
+  // Extract updateScore from web3Context
+  const { updateScore } = web3Context || {};
+
+  // Reference to the iframe
+  const iframeRef = useRef(null);
+  
+  // Add state variables needed in the listener
+  const [transactionPending, setTransactionPending] = useState(false);
+  const [showPlayAgain, setShowPlayAgain] = useState(false);
 
   useEffect(() => {
     // Fix for Edge browser showing only background
@@ -1500,12 +1330,109 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    // Create a global function that the iframe can call
+    window.handleJumpTransaction = async (platformType) => {
+      console.log("Jump transaction request received from game");
+      
+      try {
+        // Don't increment locally - let the game do it
+        // Just return success
+        return true;
+      } catch (error) {
+        console.error("Error in handleJumpTransaction:", error);
+        return false;
+      }
+    };
+    
+    // Also set up a listener for game over events
+    const handleGameOver = (event) => {
+      if (event.data && (event.data.type === 'gameOver' || event.data.type === 'GAME_OVER')) {
+        console.log("Game over event received:", event.data);
+        
+        // Extract the jump count directly from the game over message
+        const finalScore = event.data.score || (event.data.data && event.data.data.finalScore) || 0;
+        const jumpCount = event.data.jumpCount || (event.data.data && event.data.data.jumpCount) || 0;
+        
+        console.log("Processing game over with score:", finalScore, "jumps:", jumpCount);
+        
+        if (jumpCount > 0 && web3Context && web3Context.updateScore) {
+          console.log("Sending transaction with jumps:", jumpCount);
+          
+          // Set transaction pending
+          setTransactionPending(true);
+          
+          web3Context.updateScore(finalScore, jumpCount)
+            .then(success => {
+              console.log("Game over transaction result:", success);
+              setTransactionPending(false);
+              setShowPlayAgain(true);
+            })
+            .catch(err => {
+              console.error("Game over transaction error:", err);
+              setTransactionPending(false);
+              setShowPlayAgain(true);
+            });
+        } else {
+          console.log("No jumps to record or updateScore not available");
+          setShowPlayAgain(true);
+        }
+      }
+    };
+    
+    window.addEventListener('message', handleGameOver);
+    
+    // Cleanup
+    return () => {
+      delete window.handleJumpTransaction;
+      window.removeEventListener('message', handleGameOver);
+    };
+  }, [web3Context, setTransactionPending, setShowPlayAgain]);
+
+  useEffect(() => {
+    console.log('Path:', location.pathname);
+    console.log('Hash:', window.location.hash);
+    console.log('Is game screen?', isGameScreen);
+  }, [location, isGameScreen]);
+
+  const monadChain = {
+    id: 1284, // or whatever ID Monad uses
+    name: 'Monad Testnet',
+    network: 'monad-testnet',
+    rpcUrls: {
+      default: {
+        http: ["https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"],
+      },
+      public: {
+        http: ["https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"],
+      },
+    },
+    nativeCurrency: {
+      name: 'Monad',
+      symbol: 'MON',
+      decimals: 18,
+    }
+  };
+
+  // Use createConfig instead of createClient
+  const wagmiConfig = createConfig({
+    autoConnect: true,
+    connectors: [
+      new InjectedConnector({
+        chains: [monadChain],
+        options: {
+          name: 'Injected',
+          shimDisconnect: true,
+        },
+      }),
+    ],
+  });
+
   return (
     <Web3Provider>
-      {/* Only show navbar when wallet is connected */}
-      {isConnected ? (
-        isGameScreen ? <GameNavbar /> : <Navbar />
-      ) : null}
+      {/* Only show navbar when wallet is connected, always use the regular Navbar */}
+      {isConnected && <Navbar />}
+      
       <Routes>
         <Route path="/" element={<GameComponent />} />
         <Route path="/admin" element={<AdminAccess />} />
