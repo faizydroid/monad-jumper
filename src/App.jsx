@@ -29,9 +29,10 @@ import {
   coinbaseWallet,
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
-import { connectorsForWallets, getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
-import { InjectedConnector } from 'wagmi';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { createPublicClient, http } from 'viem';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1394,39 +1395,6 @@ function App() {
     console.log('Hash:', window.location.hash);
     console.log('Is game screen?', isGameScreen);
   }, [location, isGameScreen]);
-
-  const monadChain = {
-    id: 1284, // or whatever ID Monad uses
-    name: 'Monad Testnet',
-    network: 'monad-testnet',
-    rpcUrls: {
-      default: {
-        http: ["https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"],
-      },
-      public: {
-        http: ["https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"],
-      },
-    },
-    nativeCurrency: {
-      name: 'Monad',
-      symbol: 'MON',
-      decimals: 18,
-    }
-  };
-
-  // Use createConfig instead of createClient
-  const wagmiConfig = createConfig({
-    autoConnect: true,
-    connectors: [
-      new InjectedConnector({
-        chains: [monadChain],
-        options: {
-          name: 'Injected',
-          shimDisconnect: true,
-        },
-      }),
-    ],
-  });
 
   return (
     <Web3Provider>

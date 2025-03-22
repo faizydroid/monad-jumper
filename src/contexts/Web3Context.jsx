@@ -358,73 +358,70 @@ export function Web3Provider({ children }) {
 
   // Update the recordJump function to handle transaction states properly
   const recordJump = async (platformType) => {
-    if (!address || !provider) {
-      console.warn("No address or provider available for jump transaction");
-      return false;
-    }
-    
     try {
-      console.log(`Recording jump on ${platformType} platform`);
-      
-      // Show "waiting for approval" status immediately
-      window.dispatchEvent(new CustomEvent('transaction-started', { 
-        detail: { type: 'jump', platformType } 
-      }));
-      
-      // Send waiting status to game
-      const gameFrame = document.querySelector('iframe');
-      if (gameFrame && gameFrame.contentWindow) {
-        gameFrame.contentWindow.postMessage({
-          type: 'TX_WAITING',
-          data: { type: 'jump' }
-        }, '*');
-      }
-      
-      // Prepare the transaction
-      const jumpTx = sendTransaction({
-        to: CONTRACT_ADDRESSES.GAME_CONTRACT,
-        value: ethers.utils.parseEther("0.0001")
+      // Add more detailed logging
+      console.log("recordJump called with platform type:", platformType);
+      console.log("Context state:", { 
+        providerExists: !!provider, 
+        contractExists: !!contract, 
+        accountExists: !!account,
+        isConnected: isConnected,
+        address: address
       });
       
-      // Move to processing state
-      if (gameFrame && gameFrame.contentWindow) {
-        gameFrame.contentWindow.postMessage({
-          type: 'TX_PROCESSING',
-          data: { type: 'jump' }
-        }, '*');
-      }
-      
-      // Track the transaction
-      const { success, error } = await trackTransaction(jumpTx, 'jump')
-        .catch(error => ({ success: false, error }));
+      if (!provider || !contract || !account) {
+        console.log("Missing provider, contract, or account in recordJump");
         
-      // Update game with final status
-      if (gameFrame && gameFrame.contentWindow) {
-        gameFrame.contentWindow.postMessage({
-          type: success ? 'TX_SUCCESS' : 'TX_FAILURE',
-          data: { 
-            type: 'jump',
-            error: error ? error.message : null
+        // Try to recover by using window.ethereum directly if available
+        if (window.ethereum && window.ethereum.selectedAddress) {
+          console.log("Attempting to recover using window.ethereum");
+          
+          try {
+            const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+            const signer = ethersProvider.getSigner();
+            const connectedAddress = await signer.getAddress();
+            
+            console.log("Recovered address:", connectedAddress);
+            
+            // Get contract from environment
+            const contractAddress = import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS;
+            const recoveredContract = new ethers.Contract(
+              contractAddress,
+              gameContractABI,
+              signer
+            );
+            
+            // Track jump in Supabase instead of on-chain for now
+            await saveJumpsToSupabase(connectedAddress, 1);
+            return true;
+          } catch (recoveryError) {
+            console.error("Recovery attempt failed:", recoveryError);
           }
-        }, '*');
+        }
+        
+        // Track jump count locally for bundling later
+        setPendingJumps(prev => prev + 1);
+        return false;
       }
+
+      // If we're in a local development environment, we can mock the transaction
+      if (import.meta.env.DEV && import.meta.env.VITE_MOCK_TRANSACTIONS === 'true') {
+        console.log("DEV MODE: Mocking jump transaction");
+        return true;
+      }
+
+      // Increment pending jumps rather than sending individual transactions
+      setPendingJumps(prev => prev + 1);
+      console.log("Jump recorded locally, will be bundled later");
       
-      return success;
+      // Track jump in Supabase as well
+      await saveJumpsToSupabase(account, 1);
+      return true;
     } catch (error) {
-      console.error("Jump transaction error:", error);
-      
-      // Send failure to game
-      const gameFrame = document.querySelector('iframe');
-      if (gameFrame && gameFrame.contentWindow) {
-        gameFrame.contentWindow.postMessage({
-          type: 'TX_FAILURE',
-          data: { 
-            type: 'jump',
-            error: error.message
-          }
-        }, '*');
-      }
-      
+      console.error("Error recording jump:", error);
+      // Track jump count locally even on error
+      setPendingJumps(prev => prev + 1);
+      // Don't throw to prevent game interruption
       return false;
     }
   };
@@ -439,50 +436,46 @@ export function Web3Provider({ children }) {
   }, [jumpTimer]);
 
   const updateScore = async (score, jumpCount) => {
+    console.log(`updateScore called with score: ${score}, jumpCount: ${jumpCount}`);
+    
+    if (!signer || !contract || !account) {
+      console.error("Missing required items for transaction:", { 
+        signer: !!signer, 
+        contract: !!contract, 
+        account: !!account 
+      });
+      return false;
+    }
+
+    if (jumpCount <= 0) {
+      console.log("No jumps to record, skipping transaction");
+      return true; // Return true but don't send a transaction for 0 jumps
+    }
+
     try {
-        console.log('🔄 Starting blockchain transaction for jumps:', jumpCount);
-        
-        if (!provider || !signer) {
-            console.error('❌ No provider or signer available');
-            return false;
-        }
-
-        const contractAddress = "0xc9066283e10e56bbf7aec0c2b82c4bd0dbfacc8c";
-        const abi = [
-            "function recordJumps(uint256 _jumps) external",
-            "function getPlayerJumps(address _player) external view returns (uint256)"
-        ];
-
-        console.log('📝 Creating contract instance:', {
-            address: contractAddress,
-            jumpCount: jumpCount,
-            signerAddress: await signer.getAddress()
-        });
-
-        const contract = new ethers.Contract(contractAddress, abi, signer);
-
-        // Send the transaction
-        console.log('📤 Preparing recordJumps transaction...');
-        const tx = await contract.recordJumps(BigInt(jumpCount), {
-            gasLimit: 200000
-        });
-        console.log('📤 Transaction sent:', tx.hash);
-
-        // Wait for confirmation
-        const receipt = await tx.wait();
-        console.log('✅ Transaction confirmed:', receipt);
-
-        // Save jumps to Supabase
-        await saveJumpsToSupabase(address, jumpCount);
-
-        return true;
+      console.log(`Submitting transaction to record ${jumpCount} jumps on Monad testnet`);
+      console.log("Contract address:", contract.address);
+      console.log("Using account:", account);
+      
+      // Submit the transaction with explicit gasLimit
+      const tx = await contract.recordJumps(jumpCount, {
+        gasLimit: 300000 // Set a specific gas limit for Monad testnet
+      });
+      
+      console.log("Transaction submitted:", tx.hash);
+      
+      // Wait for confirmation
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed in block:", receipt.blockNumber);
+      
+      return true;
     } catch (error) {
-        console.error('❌ Transaction error:', error);
-        if (error.code) console.error('Error code:', error.code);
-        if (error.message) console.error('Error message:', error.message);
-        if (error.transaction) console.error('Transaction:', error.transaction);
-        if (error.receipt) console.error('Receipt:', error.receipt);
-        return false;
+      console.error("Transaction error:", error);
+      // Check for specific errors
+      if (error.message?.includes("insufficient funds")) {
+        console.error("Insufficient funds on Monad testnet");
+      }
+      return false;
     }
   };
 
