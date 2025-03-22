@@ -1666,9 +1666,14 @@ iframe.game-frame {
   /* Welcome message */
   .welcome-message {
     width: 90%;
-    padding: 15px;
-    margin: 15px auto;
+    margin: 30px auto 15px;
+    padding: 25px 20px;
     text-align: center;
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   }
   
   /* Adjustments for Mint button when applicable */
@@ -1789,9 +1794,14 @@ iframe.game-frame {
   
   /* Better wallet connection area */
   .wallet-connect.mobile {
-    width: 90%;
+    width: 85%;
     max-width: 400px;
-    margin: 15px auto;
+    margin: 5px auto 30px;
+    position: relative;
+    bottom: unset;
+    left: unset;
+    right: unset;
+    z-index: 5;
   }
   
   /* Facts section optimization */
