@@ -200,10 +200,14 @@ body {
   color: #FFD700;
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
   font-size: 1.2rem;
-  position: static;
-  display: block;
+  position: relative;
   box-sizing: border-box;
   padding: 0 20px;
+  
+  /* These properties ensure consistent centering across browsers */
+  display: block;
+  left: 0;
+  right: 0;
 }
 
 /* Character Animation */
@@ -1208,6 +1212,7 @@ body {
 }
 
 .error-message,
+.game-subtitle,
 .loading-tips p,
 .fact-bubble p {
   font-family: 'Short Stack', cursive;
@@ -1449,8 +1454,12 @@ iframe.game-frame {
   font-family: 'Chalkboard SE', 'Short Stack', cursive;
   color: #FFD700;
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
-  position: static;
-  display: block;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
   max-width: 100%;
   box-sizing: border-box;
 }
@@ -1486,4 +1495,134 @@ iframe.game-frame {
 .navbar-left {
   display: flex;
   align-items: center;
+}
+
+/* Mobile UI Optimization - Add these styles to the end of your App.css file */
+
+/* Improved mobile homepage layout */
+@media screen and (max-width: 768px) {
+  /* Enhanced container layout for mobile */
+  .container {
+    padding: 60px 15px 30px;
+    justify-content: flex-start;
+  }
+  
+  /* Bigger title font for mobile */
+  .game-title {
+    font-size: 4.2rem !important; /* Override existing media query */
+    margin-bottom: 0.5rem;
+    line-height: 1.1;
+    text-shadow: 
+      4px 4px 0 var(--purple),
+      8px 8px 0 rgba(0,0,0,0.2);
+  }
+  
+  /* Optimized subtitle/tagline */
+  .game-subtitle {
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+    max-width: 90%;
+  }
+  
+  /* Improved character container sizing */
+  .character-container {
+    margin: 0.75rem auto 1.25rem;
+    transform: scale(0.85);
+    height: 50px;
+  }
+  
+  /* Improved play button placement and sizing */
+  .play-button {
+    font-size: 1.4rem;
+    padding: 1.1rem 2.8rem;
+    margin-bottom: 2rem;
+    transform: scale(1.15);
+  }
+  
+  /* Better spacing for content areas */
+  .content-area {
+    gap: 15px;
+    margin-top: 20px;
+  }
+  
+  /* Improved card styling for mobile */
+  .card {
+    padding: 20px;
+    margin-bottom: 15px;
+  }
+  
+  /* Better fact bubbles layout */
+  .game-facts {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 15px;
+  }
+  
+  .fact-bubble {
+    width: 90%;
+    justify-content: center;
+    padding: 12px 20px;
+  }
+  
+  /* Improved footer spacing */
+  .footer {
+    padding: 15px 0;
+    margin-top: 20px;
+  }
+  
+  /* Optimize wallet connect button placement */
+  .wallet-connect.mobile {
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: 85%;
+    z-index: 100;
+  }
+  
+  .connect-button {
+    width: 100%;
+    padding: 14px 0;
+    font-size: 16px;
+    border-radius: 25px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Improved mint button for mobile */
+  .mint-to-play-button {
+    width: 90%;
+    font-size: 20px;
+    padding: 16px 0;
+  }
+  
+  /* Center gameplay instructions */
+  .instructions, .features {
+    min-width: unset;
+    width: 90%;
+  }
+  
+  /* Improved welcome message */
+  .welcome-message {
+    max-width: 90%;
+    padding: 15px;
+  }
+  
+  /* Game frame mobile optimization */
+  .game-container {
+    height: calc(100vh - 60px);
+    border-radius: 0;
+  }
+}
+
+/* Additional improvements for extra small screens */
+@media screen and (max-width: 375px) {
+  .game-title {
+    font-size: 3.8rem !important;
+  }
+  
+  .play-button {
+    padding: 1rem 2.4rem;
+  }
 } 
