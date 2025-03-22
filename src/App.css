@@ -689,7 +689,11 @@ body {
   }
   
   .card {
-    padding: 1.5rem;
+    padding: 25px 30px;
+    width: 85%;
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 15px;
   }
   
   .character-container {
@@ -702,8 +706,10 @@ body {
   }
   
   .welcome-message {
-    padding: 1.2rem;
-    margin-bottom: 1.5rem;
+    padding: 25px 30px;
+    width: 85%;
+    margin-left: auto;
+    margin-right: auto;
   }
   
   .play-button {
@@ -1733,5 +1739,49 @@ iframe.game-frame {
   .play-button, .connect-button {
     font-size: 1.3rem;
     padding: 15px 25px;
+  }
+}
+
+/* Improve card padding in mobile view */
+@media screen and (max-width: 768px) {
+  /* Add horizontal padding to all cards */
+  .card {
+    padding: 25px 30px;
+    width: 85%;
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 15px;
+  }
+  
+  /* Welcome message padding */
+  .welcome-message {
+    padding: 25px 30px;
+    width: 85%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  /* Fact bubbles padding */
+  .fact-bubble {
+    padding: 20px 30px;
+    width: 85%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  /* Content area spacing */
+  .content-area {
+    padding: 0 20px;
+  }
+  
+  /* Mobile content section */
+  .mobile-content {
+    padding: 20px 25px;
+  }
+  
+  /* Instructions and features cards */
+  .instructions, .features {
+    padding: 25px 30px;
+    width: 85%;
   }
 } 
