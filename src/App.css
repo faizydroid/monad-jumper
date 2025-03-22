@@ -1883,4 +1883,78 @@ iframe.game-frame {
     font-size: 1.3rem;
     padding: 15px 25px;
   }
+}
+
+/* Center connect button under the welcome message */
+@media screen and (max-width: 768px) {
+  /* Welcome message styling */
+  .welcome-message {
+    width: 90%;
+    margin: 30px auto 15px;
+    padding: 25px 20px;
+    text-align: center;
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  /* Center the connect button within the card */
+  .wallet-connect.mobile {
+    width: 100%;
+    max-width: 400px;
+    margin: 10px 0 0;
+    display: flex;
+    justify-content: center;
+  }
+  
+  /* Style the connect button */
+  .connect-button {
+    width: 80%;
+    padding: 18px 0;
+    font-size: 1.4rem;
+    border-radius: 30px;
+    background: linear-gradient(135deg, #9a4eff, #7000ff);
+    border: none !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    margin: 0 auto;
+    text-align: center;
+    color: white;
+    font-family: 'Bangers', cursive;
+    letter-spacing: 1px;
+  }
+  
+  /* Remove fixed action area */
+  .mobile-action-area {
+    position: static;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  /* Remove bottom padding since fixed area is gone */
+  .mobile-page-bottom-padding {
+    display: none;
+  }
+  
+  /* Ensure proper content flow */
+  .mobile-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 0 20px 30px;
+  }
+  
+  /* Rearrange section ordering if needed */
+  .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
 } 
