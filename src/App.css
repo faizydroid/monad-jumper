@@ -1910,6 +1910,7 @@ iframe.game-frame {
     margin: 10px 0 0;
     display: flex;
     justify-content: center;
+    align-items: center; /* Ensure vertical centering */
   }
   
   /* Style the connect button */
