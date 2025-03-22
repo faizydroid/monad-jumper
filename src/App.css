@@ -200,14 +200,10 @@ body {
   color: #FFD700;
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
   font-size: 1.2rem;
-  position: relative;
+  position: static;
+  display: block;
   box-sizing: border-box;
   padding: 0 20px;
-  
-  /* These properties ensure consistent centering across browsers */
-  display: block;
-  left: 0;
-  right: 0;
 }
 
 /* Character Animation */
@@ -698,7 +694,7 @@ body {
   }
   
   .game-title {
-    font-size: 2.5rem;
+    font-size: 3.5rem;
   }
   
   .welcome-message {
@@ -1212,7 +1208,6 @@ body {
 }
 
 .error-message,
-.game-subtitle,
 .loading-tips p,
 .fact-bubble p {
   font-family: 'Short Stack', cursive;
@@ -1454,12 +1449,8 @@ iframe.game-frame {
   font-family: 'Chalkboard SE', 'Short Stack', cursive;
   color: #FFD700;
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
-  position: relative;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  position: static;
+  display: block;
   max-width: 100%;
   box-sizing: border-box;
 }
