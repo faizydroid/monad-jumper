@@ -1502,39 +1502,19 @@ iframe.game-frame {
   /* Super visible connect button */
   .welcome-message .connect-button,
   .welcome-message .wallet-connect button {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     width: 100% !important;
-    padding: 0 !important;
-    height: 50px !important;
+    padding: 16px 5px !important;
     font-size: 1.4rem !important;
     text-align: center !important;
-    line-height: 1 !important; /* Prevent extra line height */
     color: white !important;
     background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
     border-radius: 30px !important;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
     margin: 0 auto !important;
     z-index: 1000 !important;
-  }
-  
-  /* Add specific fixes for RainbowKit button internals */
-  .welcome-message .wallet-connect button > div,
-  .mobile-wallet-connect button > div {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 100% !important;
-  }
-  
-  /* Fix text and icon alignment within the button */
-  .welcome-message .wallet-connect button span,
-  .mobile-wallet-connect button span {
-    line-height: 1 !important;
-    vertical-align: middle !important;
-    display: inline-flex !important;
-    align-items: center !important;
   }
   
   /* Hide duplicate buttons */
