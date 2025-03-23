@@ -9,7 +9,10 @@ export default function Navbar() {
   const [showDropdown, setShowDropdown] = useState(false);
   const location = useLocation();
   
-  // Improve the game screen detection logic
+  // Check if we're on the homepage (not game screen or other pages)
+  const isHomepage = location.pathname === '/' && !window.location.hash.includes('game');
+  
+  // Check if we're on the game screen 
   const isGameScreen = window.location.hash === '#game' || 
                       location.pathname.includes('game') ||
                       document.getElementById('game-iframe') !== null;
@@ -19,6 +22,9 @@ export default function Navbar() {
   console.log('Current hash:', window.location.hash);
   console.log('Game iframe exists:', document.getElementById('game-iframe') !== null);
   console.log('Is game screen?', isGameScreen);
+  console.log('Is homepage?', isHomepage);
+  console.log('Account exists?', !!account);
+  console.log('Should show connect button?', isHomepage && !account);
 
   const toggleDropdown = () => {
     setShowDropdown(!showDropdown);
@@ -85,7 +91,14 @@ export default function Navbar() {
             </div>
           )}
           
+          {/* Show connect button only on homepage - FIXED VERSION */}
+          {isHomepage && (
+            <div className="navbar-connect-button-fixed">
+              <ConnectButton />
+            </div>
+          )}
           
+        
         </div>
       </div>
     </nav>

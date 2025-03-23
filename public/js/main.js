@@ -829,9 +829,22 @@ window.addEventListener('load', () => {
                 console.log('🎮 GAME OVER');
                 console.log(`📊 Final Score: ${finalScore}, Total Jumps: ${jumpCount}`);
                 
+                // Ensure we have the final jump count stored
+                this.finalJumpCount = jumpCount;
+                
                 // Only send transaction if there are jumps to record
                 if (jumpCount > 0) {
                     try {
+                        // Send game over message first
+                        window.parent.postMessage({
+                            type: 'GAME_OVER',
+                            data: {
+                                finalScore: finalScore,
+                                jumpCount: jumpCount,
+                                timestamp: Date.now()
+                            }
+                        }, '*');
+                        
                         // Send bundled jumps for blockchain transaction
                         window.parent.postMessage({
                             type: 'BUNDLE_JUMPS',
@@ -842,6 +855,7 @@ window.addEventListener('load', () => {
                                 saveId: Date.now().toString()
                             }
                         }, '*');
+                        
                         console.log(`📤 TRANSACTION: Bundling ${jumpCount} jumps to send to blockchain`);
                     } catch (error) {
                         console.error('❌ Error sending bundle transaction:', error);

@@ -27,6 +27,11 @@ export class Player {
     }
 
     update(inputHandler) {
+        // If game is over, don't process any more jumps
+        if (this.game.gameOver) {
+            return;
+        }
+        
         // If we've been waiting for a jump transaction more than 2 seconds, force continue
         if (this.jumpRequested && Date.now() - this.lastJumpRequestTime > 2000) {
             console.log('Jump transaction taking too long - forcing continuation');
@@ -36,7 +41,7 @@ export class Player {
         // Check if player has fallen off the screen
         if (this.y > this.game.height) {
             console.log('Player fell off screen, triggering game over');
-            if (!this.game.isGameOver) {  // Add check to prevent multiple triggers
+            if (!this.game.gameOver) {  // Add check to prevent multiple triggers
                 this.game.checkGameOver();
             }
             return;
@@ -153,40 +158,52 @@ export class Player {
             new Audio('sound effects/no_jump.mp3').play();
         }
         
-        // Only send transaction if cooldown has elapsed
-        const now = Date.now();
-        if (this.jumpRequested && platformType !== 'brown' && now - this.lastTxTime > this.txCooldown) {
-            this.jumpRequested = false;
-            this.lastTxTime = now;
-            
-            setTimeout(async () => {
-                try {
-                    console.log('Initiating jump transaction');
-                    const txStartTime = performance.now();
-                    const success = await window.parent.handleJumpTransaction();
-                    const txEndTime = performance.now();
-                    
-                    if (success) {
-                        console.log(`Jump transaction completed in ${(txEndTime - txStartTime).toFixed(2)}ms`);
-                        
-                        // Track successful transactions
-                        if (!window.jumpStats) window.jumpStats = { success: 0, failed: 0 };
-                        window.jumpStats.success++;
-                        
-                        // Update UI if you want to show stats
-                        if (window.jumpStats.success % 5 === 0) {
-                            console.log(`Total successful jumps: ${window.jumpStats.success}`);
-                        }
-                    } else {
-                        console.error('Jump transaction failed, but gameplay continues');
-                        if (!window.jumpStats) window.jumpStats = { success: 0, failed: 0 };
-                        window.jumpStats.failed++;
-                    }
-                } catch (error) {
-                    console.error('Error processing jump transaction:', error);
-                }
-            }, 0);
+        // Don't process jumps if the game is over
+        if (this.game.gameOver) {
+            console.log("Game already over, not counting additional jumps");
+            return;
         }
+        
+        // Track jump in parent window
+        if (window.parent && typeof window.parent.handleJumpTransaction === 'function') {
+            try {
+                console.log("Initiating jump transaction");
+                
+                // This ensures the jump is counted in the parent window
+                window.parent.handleJumpTransaction(platformType)
+                    .then(success => {
+                        if (success) {
+                            console.log("Jump transaction successful");
+                        } else {
+                            console.log("Jump transaction failed, but gameplay continues");
+                        }
+                    })
+                    .catch(err => {
+                        console.log("Jump transaction error, but gameplay continues:", err);
+                    });
+            } catch (error) {
+                console.log("Jump transaction failed, but gameplay continues", error);
+            }
+        }
+        
+        // Only increment jump count if the game is not over
+        if (!window.__jumpCount) {
+            window.__jumpCount = 0;
+        }
+        window.__jumpCount++;
+        
+        // Store the jump count so it doesn't change after game over
+        this.game.__finalJumpCount = window.__jumpCount;
+        
+        // Notify parent of the current count
+        if (window.parent) {
+            window.parent.postMessage({ 
+                type: 'JUMP_PERFORMED', 
+                jumpCount: window.__jumpCount 
+            }, '*');
+        }
+        
+        console.log("Local jump count updated to:", window.__jumpCount);
     }
 
     // This is the original method kept for reference but not used directly anymore

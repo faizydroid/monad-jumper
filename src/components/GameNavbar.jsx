@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useWeb3 } from '../contexts/Web3Context';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ethers } from 'ethers';
 import './Navbar.css';
 
 export default function GameNavbar() {
+  console.log('Rendering GameNavbar for game screen');
   const { account, username, playerStats, updateScore, pendingJumps, contract, playerHighScore } = useWeb3();
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -177,19 +178,17 @@ export default function GameNavbar() {
     <nav className="navbar navbar-game">
       <div className="navbar-container">
         <div className="navbar-info">
-          <button 
-            onClick={handleHomeClick} 
-            className="nav-button home-button"
-          >
-            <span role="img" aria-label="home">🏠</span>
-            Home
-          </button>
+          <Link to="/" className="home-button" onClick={handleHomeClick}>
+            <button className="nav-button home-nav-button">
+              🏠 Home
+            </button>
+          </Link>
           
           <div className="high-score">
-          <span role="img" aria-label="trophy">🏆</span>
-          <span className="score-label">Hi-Score:</span>
-          <span className="score-value">{playerHighScore || 0}</span>
-        </div>
+            <span role="img" aria-label="trophy">🏆</span>
+            <span className="score-label">Hi-Score:</span>
+            <span className="score-value">{playerHighScore || 0}</span>
+          </div>
           
           {account && username && (
             <div className="wallet-info game-mode">
@@ -218,9 +217,6 @@ export default function GameNavbar() {
             </div>
           )}
         </div>
-        
-        {/* Restore the original high-score UI design but use playerHighScore */}
-      
       </div>
     </nav>
   );
