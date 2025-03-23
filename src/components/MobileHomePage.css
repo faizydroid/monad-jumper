@@ -46,6 +46,8 @@
   align-items: center;
   margin: 15px auto 15px;
   position: relative;
+  transform: translateY(25px);
+  z-index: 1000;
 }
 
 .mobile-character {
