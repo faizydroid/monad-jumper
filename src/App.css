@@ -1508,4 +1508,38 @@ iframe.game-frame {
   div:not(.welcome-message) > .wallet-connect.mobile {
     display: none !important;
   }
+}
+
+/* Update the welcome message connect button to be centered */
+.welcome-message .wallet-connect {
+  margin: 15px auto 5px;
+  width: 80%;
+  max-width: 300px;
+  display: flex;
+  justify-content: center;
+}
+
+.welcome-message .connect-button {
+  width: 100%;
+  padding: 16px 0;
+  font-size: 1.4rem;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #9a4eff, #7000ff);
+  border: none !important;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  margin: 0 auto;
+  display: block;
+  text-align: center;
+}
+
+/* Ensure mobile styling is consistent */
+@media screen and (max-width: 768px) {
+  .welcome-message .wallet-connect,
+  .welcome-message .wallet-connect.mobile {
+    width: 85%;
+    max-width: 280px;
+    margin: 15px auto 10px;
+    display: flex;
+    justify-content: center;
+  }
 } 
