@@ -34,7 +34,7 @@ import { createConfig } from 'wagmi';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
-import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
+import characterImg from '/images/monad0.png';
 import '@rainbow-me/rainbowkit/styles.css';
 import { configureChains, createClient, WagmiConfig } from 'wagmi';
 import { mainnet, polygon } from 'wagmi/chains'; // Your chains may differ
