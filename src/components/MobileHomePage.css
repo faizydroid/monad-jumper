@@ -56,7 +56,7 @@
   background-position: center;
   filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.3));
   animation: mobile-character-bounce 2s infinite ease-in-out;
-  transform: translateY(5px);
+  transform: translateY(25px);
   z-index: 1000;
 }
 
@@ -101,6 +101,7 @@
   margin: 0 auto !important;
   display: block !important;
   text-align: center !important;
+  
   color: white !important;
   font-family: 'Bangers', cursive !important;
   letter-spacing: 1px !important;
