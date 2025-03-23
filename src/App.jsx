@@ -35,6 +35,10 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
+import '@rainbow-me/rainbowkit/styles.css';
+import { configureChains, createClient, WagmiConfig } from 'wagmi';
+import { mainnet, polygon } from 'wagmi/chains'; // Your chains may differ
+import { publicProvider } from 'wagmi/providers/public';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1017,11 +1021,11 @@ function GameComponent() {
           <MobileHomePage characterImg="/images/monad0.png" />
         ) : (
           <>
-            <BackgroundElements />
-            <div className="container">
+        <BackgroundElements />
+        <div className="container">
               <h1 className="game-title">MONAD JUMPER</h1>
-              <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
-              
+          <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
+          
               <div className="character-container" style={{height: "100px", display: "flex", justifyContent: "center", margin: "20px 0"}}>
                 <img 
                   src="/images/monad0.png" 
@@ -1029,30 +1033,30 @@ function GameComponent() {
                   className="character" 
                   style={{height: "100px", width: "auto"}}
                 />
-              </div>
-              
+          </div>
+          
               <div className="welcome-message">
                 <p>Connect your wallet to start your jumping adventure</p>
                 <div className="wallet-connect mobile">
-                  <ConnectButton />
-                </div>
-              </div>
-              
-              <div className="game-facts">
-                <div className="fact-bubble fact-bubble-1">
-                  <span>🚀</span>
-                  <p>Play & Earn!</p>
-                </div>
-                <div className="fact-bubble fact-bubble-2">
-                  <span>🎮</span>
-                  <p>Fun Gameplay!</p>
-                </div>
-                <div className="fact-bubble fact-bubble-3">
-                  <span>⛓️</span>
-                  <p>Powered by Monad!</p>
-                </div>
-              </div>
+              <ConnectButton />
             </div>
+          </div>
+          
+          <div className="game-facts">
+            <div className="fact-bubble fact-bubble-1">
+              <span>🚀</span>
+              <p>Play & Earn!</p>
+            </div>
+            <div className="fact-bubble fact-bubble-2">
+              <span>🎮</span>
+              <p>Fun Gameplay!</p>
+            </div>
+            <div className="fact-bubble fact-bubble-3">
+              <span>⛓️</span>
+              <p>Powered by Monad!</p>
+            </div>
+          </div>
+        </div>
           </>
         )}
       </>
@@ -1404,6 +1408,13 @@ function App() {
     console.log('Hash:', window.location.hash);
     console.log('Is game screen?', isGameScreen);
   }, [location, isGameScreen]);
+
+  // Add this near the top where you get your WalletConnect projectId
+  // This makes it available globally for the MobileHomePage component
+  useEffect(() => {
+    // Store projectId in window object for access by MobileHomePage
+    window.walletConnectProjectId = "5a6a3d758f242052a2e87e42e2816833"; // Replace with your actual project ID
+  }, []);
 
   return (
     <Web3Provider>
