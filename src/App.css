@@ -1532,19 +1532,17 @@ iframe.game-frame {
   
   /* Title and subtitle */
   .game-title {
-    font-size: 4.5rem;
+    font-size: 6rem !important;
     line-height: 1;
-    text-align: center;
-    margin: 0 0 10px;
-    text-shadow: 3px 3px 0 var(--purple),
-                 5px 5px 0 rgba(0,0,0,0.2);
+    margin-bottom: 10px;
+    text-shadow: 
+      5px 5px 0 var(--purple),
+      8px 8px 0 rgba(0,0,0,0.3);
   }
   
   .game-subtitle {
-    font-size: 1rem;
-    width: 90%;
-    margin: 0 auto 20px;
-    text-align: center;
+    font-size: 1.3rem;
+    margin-bottom: 25px;
   }
   
   /* Character container */
@@ -1717,7 +1715,7 @@ iframe.game-frame {
 /* Additional improvements for extra small screens */
 @media screen and (max-width: 375px) {
   .game-title {
-    font-size: 4rem !important;
+    font-size: 5.2rem !important;
   }
   
   .play-button, .connect-button {
