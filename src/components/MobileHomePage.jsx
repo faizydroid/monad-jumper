@@ -1,8 +1,35 @@
 import React from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import './MobileHomePage.css';
+import { getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { configureChains, createConfig, WagmiConfig } from 'wagmi';
+import { mainnet, polygon } from 'wagmi/chains';
+import { publicProvider } from 'wagmi/providers/public';
 
 const MobileHomePage = ({ characterImg }) => {
+  const mobileWalletSetup = () => {
+    const projectId = window.walletConnectProjectId || "YOUR_PROJECT_ID_SHOULD_BE_SET_IN_ENV";
+    
+    const { chains, publicClient } = configureChains(
+      [mainnet, polygon],
+      [publicProvider()]
+    );
+    
+    const { connectors } = getDefaultWallets({
+      appName: 'Monad Jumper',
+      projectId,
+      chains
+    });
+    
+    return {
+      chains,
+      walletConnectProjectId: projectId,
+      connectors
+    };
+  };
+
+  const mobileWalletConfig = mobileWalletSetup();
+
   return (
     <div className="mobile-container">
       <h1 className="mobile-game-title">MONAD JUMPER</h1>
@@ -21,6 +48,7 @@ const MobileHomePage = ({ characterImg }) => {
             accountStatus="address"
             label="Connect Wallet"
             modalSize="compact"
+            walletConnectProjectId={mobileWalletConfig.walletConnectProjectId}
           />
         </div>
       </div>
