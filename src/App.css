@@ -1352,322 +1352,26 @@ iframe.game-frame {
 
 /* Mobile Optimization */
 @media screen and (max-width: 768px) {
-  /* Game container optimization */
-  .game-container {
-    width: 100% !important;
-    max-width: 100%;
-    padding: 0;
-    height: auto;
-    aspect-ratio: 9/16; /* Mobile aspect ratio */
-  }
-  
-  .game-frame {
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
-  }
-  
-  /* Rainbow Kit wallet button adjustments */
-  .wallet-connect {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 1000;
-    transform: scale(0.85);
-    transform-origin: top right;
-  }
-  
-  /* Adjust any headers or title elements */
-  h1.game-title {
-    font-size: 24px;
-    margin: 10px 0;
-  }
-  
-  /* Adjust any control UI elements */
-  .controls-container {
-    max-width: 90%;
-  }
-  
-  /* Move wallet and game info to more accessible positions */
-  .wallet-info, .game-stats {
-    padding: 8px;
-    margin: 5px;
-    font-size: 14px;
-  }
-}
-
-/* Make transaction UI more mobile-friendly */
-@media screen and (max-width: 480px) {
-  .transaction-container {
-    width: 95%;
-    padding: 10px;
-  }
-  
-  .transaction-button {
-    padding: 10px 15px;
-    font-size: 16px;
-  }
-}
-
-/* Mobile wallet styles */
-.wallet-connect.mobile {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-  width: 100%;
-}
-
-.connect-button {
-  background-color: #FF5A5F;
-  color: white;
-  border: none !important;
-  border-radius: 12px;
-  padding: 12px 24px;
-  font-size: 18px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-.connect-button:hover {
-  background-color: #e04e4e;
-  transform: translateY(-2px);
-}
-
-/* Override any RainbowKit default styles for mobile */
-@media screen and (max-width: 768px) {
-  /* This targets RainbowKit's modal for better mobile fit */
-  [data-rk] {
-    --rk-radii-modal: 12px;
-    --rk-fonts-body: system-ui, sans-serif;
-    --rk-modal-width: 90vw;
-    --rk-modal-max-width: 360px;
-  }
-}
-
-/* Find the tagline styling and update it with these cross-browser compatible rules */
-.tagline {
-  width: 100%;
-  text-align: center;
-  margin: 0 auto;
-  padding: 0 20px;
-  font-family: 'Chalkboard SE', 'Short Stack', cursive;
-  color: #FFD700;
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
-  position: relative;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-/* Add these styles for the home button */
-.home-nav-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-left: 20px;
-}
-
-.home-nav-button:hover {
-  background-color: #45a049;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.home-nav-button i {
-  font-size: 16px;
-}
-
-/* Ensure the navbar has proper layout */
-.navbar-left {
-  display: flex;
-  align-items: center;
-}
-
-/* Mobile UI Optimization - Add these styles to the end of your App.css file */
-
-/* Improved mobile homepage layout */
-@media screen and (max-width: 768px) {
-  /* Prevent horizontal scrolling */
-  html, body {
-    overflow-x: hidden;
-    width: 100%;
-    position: relative;
-  }
-  
-  /* Mobile container */
+  /* Improved container padding */
   .container {
-    padding: 0;
-    min-height: 100vh;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    overflow-x: hidden;
+    padding: 40px 25px; /* Increased horizontal padding */
+    box-sizing: border-box;
   }
   
-  /* Mobile header area */
-  .mobile-header {
-    width: 100%;
-    padding: 50px 20px 25px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.7), rgba(0,0,0,0.4));
-  }
-  
-  /* Title and subtitle */
-  .game-title {
-    font-size: 6rem !important;
-    line-height: 1;
-    margin-bottom: 10px;
-    text-shadow: 
-      5px 5px 0 var(--purple),
-      8px 8px 0 rgba(0,0,0,0.3);
-  }
-  
-  .game-subtitle {
-    font-size: 1.3rem;
-    margin-bottom: 25px;
-  }
-  
-  /* Character container */
-  .character-container {
-    width: 80%;
-    height: 60px;
-    margin: 10px auto;
-    transform: scale(0.8);
-  }
-  
-  /* Play button */
-  .play-button-container {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    margin: 15px 0;
-  }
-  
-  .play-button {
-    padding: 12px 40px;
-    font-size: 1.3rem;
-    border-radius: 30px;
-  }
-  
-  /* Mobile content section */
+  /* Content area padding */
+  .content-area, 
   .mobile-content {
-    width: 100%;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  /* Card layout */
-  .card {
-    width: 100%;
-    margin-bottom: 20px;
-    padding: 15px;
-    border-radius: 10px;
-  }
-  
-  .card h2 {
-    font-size: 1.4rem;
-    margin-bottom: 10px;
-  }
-  
-  /* Facts section */
-  .game-facts {
-    flex-direction: column;
-    width: 100%;
-    gap: 15px;
-    margin: 20px 0;
-  }
-  
-  .fact-bubble {
-    width: 100%;
-    max-width: none;
-    padding: 15px;
-    border-radius: 15px;
-  }
-  
-  /* Bottom action area */
-  .mobile-action-area {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(12, 0, 50, 0.9);
-    padding: 15px;
-    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.5);
-    z-index: 100;
-    display: flex;
-    justify-content: center;
-  }
-  
-  /* Connect wallet button */
-  .wallet-connect.mobile {
-    width: 90%;
-    margin: 0 auto;
-    text-align: center;
-  }
-  
-  .connect-button {
-    width: 100%;
-    padding: 14px 0;
-    font-size: 16px;
-    border-radius: 25px;
-    vertical-align: center;
-    background: linear-gradient(135deg, #763cff, #9900ff);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-  }
-  
-  /* Section spacing */
-  .section {
-    margin-bottom: 25px;
+    padding-left: 20px;
+    padding-right: 20px;
+    box-sizing: border-box;
     width: 100%;
   }
   
-  /* Game frame */
-  .game-container {
-    height: calc(100vh - 60px);
-    max-height: none;
-    width: 100%;
-    border-radius: 0;
-  }
-  
-  /* Add padding to bottom to account for fixed action area */
-  .mobile-page-bottom-padding {
-    height: 80px;
-    width: 100%;
-  }
-  
-  /* Instructions and features */
-  .instructions, .features {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  /* Welcome message */
+  /* Improved welcome message with connect button below text */
   .welcome-message {
-    width: 90%;
-    margin: 30px auto 0;
-    padding: 25px 20px 20px;
+    width: 85%;
+    margin: 25px auto 30px;
+    padding: 30px 25px;
     text-align: center;
     border-radius: 15px;
     background: rgba(60, 8, 117, 0.3);
@@ -1676,20 +1380,28 @@ iframe.game-frame {
     display: flex;
     flex-direction: column;
     align-items: center;
-    position: relative;
+    box-sizing: border-box;
   }
   
-  /* Position wallet connect inside welcome message */
+  /* Message text */
+  .welcome-message p {
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+    color: #FFD700;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  }
+  
+  /* Position connect button inside welcome message */
   .welcome-message .wallet-connect,
   .welcome-message .wallet-connect.mobile {
-    width: 80%;
-    max-width: 320px;
-    margin: 20px auto 15px;
+    width: 90%;
+    max-width: 300px;
+    margin: 5px auto 10px;
     position: relative;
-    z-index: 5;
+    z-index: 10;
   }
   
-  /* Style the connect button */
+  /* Connect button styling */
   .welcome-message .connect-button {
     width: 100%;
     padding: 16px 0;
@@ -1706,8 +1418,32 @@ iframe.game-frame {
     letter-spacing: 1px;
   }
   
+  /* Cards with proper padding */
+  .card {
+    width: 85%;
+    padding: 25px;
+    margin: 15px auto;
+    box-sizing: border-box;
+  }
+  
+  /* Facts section padding */
+  .game-facts {
+    width: 85%;
+    padding: 0;
+    margin: 15px auto;
+  }
+  
+  /* Fact bubbles with proper padding */
+  .fact-bubble {
+    width: 100%;
+    padding: 20px 25px;
+    box-sizing: border-box;
+    margin: 10px 0;
+  }
+  
   /* Hide any duplicate connect buttons outside welcome message */
-  .wallet-connect:not(.welcome-message .wallet-connect) {
+  .wallet-connect:not(.welcome-message .wallet-connect),
+  .mobile-connect-area .wallet-connect {
     display: none;
   }
 }
