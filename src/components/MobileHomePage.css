@@ -90,7 +90,7 @@
 /* Style the connect button */
 .mobile-wallet-connect button {
   width: 100% !important;
-  padding: 16px 0 !important;
+  padding: 16px !important;
   font-size: 1.4rem !important;
   border-radius: 30px !important;
   background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
