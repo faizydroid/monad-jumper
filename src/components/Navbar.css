@@ -10,6 +10,13 @@
   z-index: 1000;
   transition: all 0.3s ease;
   border: none !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 60px;
+  background-color: rgba(25, 0, 51, 0.9);
+  border-bottom: 2px solid var(--purple);
 }
 
 /* Add this new style for game screen */
@@ -107,8 +114,6 @@
   letter-spacing: 1px;
   text-shadow: 2px 2px 0 var(--purple);
 }
-
-
 
 .wallet-address {
   font-family: 'Fredoka', sans-serif;
@@ -494,4 +499,124 @@ span[role="img"] {
 /* Show default cursor on the iframe when loading */
 .game-frame[style*="hidden"] {
   cursor: default;
+}
+
+/* Connect button in navbar */
+.navbar-connect-button {
+  margin-left: 15px;
+  display: block !important; /* Force display */
+  border: 2px solid #8a2be2; /* Purple border to debug visibility */
+  padding: 5px;
+  border-radius: 12px;
+  order: 5; /* Make sure it appears last */
+}
+
+/* Username display */
+.username {
+  font-family: 'Bangers', cursive;
+  color: #FFD700;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+}
+
+/* Mobile adjustments */
+@media screen and (max-width: 768px) {
+  .navbar-connect-button {
+    margin: 10px auto;
+    width: auto;
+    transform: scale(1); /* Don't scale down */
+    order: 999; /* Ensure it's at the end */
+  }
+  
+  .username {
+    font-size: 0.9rem;
+  }
+  
+  /* Make sure the container can hold the button */
+  .navbar-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-right: 10px;
+  }
+}
+
+/* Super visible connect button styles - guaranteed to show */
+.navbar-connect-button-fixed,
+.navbar-connect-button-fallback {
+  display: block !important;
+  position: relative !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  margin: 0 0 0 15px !important;
+  z-index: 9999 !important;
+  padding: 3px !important;
+  border-radius: 12px !important;
+}
+
+/* Override any potential issues with the parent containers */
+.navbar-right {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  min-height: 60px !important;
+  flex-wrap: wrap !important;
+}
+
+/* Make sure the RainbowKit component itself is visible */
+.navbar-connect-button-fixed [role="button"],
+.navbar-connect-button-fallback [role="button"],
+.navbar-connect-button-fixed button,
+.navbar-connect-button-fallback button {
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* Fix wallet connect button sizing and alignment */
+.navbar-connect-button-fixed {
+  display: flex !important;
+  align-items: center !important;
+  height: 38px !important; /* Match username height */
+  padding: 0 !important;
+  margin-left: 15px !important;
+  border-radius: 12px !important;
+}
+
+/* Ensure RainbowKit components maintain proper sizing */
+.navbar-connect-button-fixed [data-testid="rk-account-button"],
+.navbar-connect-button-fixed [data-testid="rk-wallet-button"],
+.navbar-connect-button-fixed [role="button"] {
+  height: 38px !important;
+  padding: 0 15px !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  max-height: 38px !important;
+  overflow: hidden !important;
+}
+
+/* Ensure text stays on one line */
+.navbar-connect-button-fixed span {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Keep the same mobile styling */
+@media screen and (max-width: 768px) {
+  .navbar-connect-button-fixed {
+    height: 32px !important;
+  }
+  
+  .navbar-connect-button-fixed [data-testid="rk-account-button"],
+  .navbar-connect-button-fixed [data-testid="rk-wallet-button"],
+  .navbar-connect-button-fixed [role="button"] {
+    height: 32px !important;
+    padding: 0 12px !important;
+    font-size: 13px !important;
+  }
 } 
