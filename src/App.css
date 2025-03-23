@@ -689,11 +689,7 @@ body {
   }
   
   .card {
-    padding: 25px 30px;
-    width: 85%;
-    margin-left: auto;
-    margin-right: auto;
-    border-radius: 15px;
+    padding: 1.5rem;
   }
   
   .character-container {
@@ -706,10 +702,8 @@ body {
   }
   
   .welcome-message {
-    padding: 25px 30px;
-    width: 85%;
-    margin-left: auto;
-    margin-right: auto;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
   }
   
   .play-button {
@@ -1538,7 +1532,7 @@ iframe.game-frame {
   
   /* Title and subtitle */
   .game-title {
-    font-size: 3.5rem;
+    font-size: 4.5rem;
     line-height: 1;
     text-align: center;
     margin: 0 0 10px;
@@ -1674,8 +1668,8 @@ iframe.game-frame {
   /* Welcome message */
   .welcome-message {
     width: 90%;
-    margin: 20px auto;
-    padding: 25px 20px;
+    margin: 30px auto 0;
+    padding: 25px 20px 20px;
     text-align: center;
     border-radius: 15px;
     background: rgba(60, 8, 117, 0.3);
@@ -1684,49 +1678,39 @@ iframe.game-frame {
     display: flex;
     flex-direction: column;
     align-items: center;
+    position: relative;
   }
   
-  /* Connect button container - reset any hiding styles */
-  .wallet-connect {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    position: static !important;
-    width: 85% !important;
-    max-width: 320px !important;
-    margin: 20px auto !important;
+  /* Position wallet connect inside welcome message */
+  .welcome-message .wallet-connect,
+  .welcome-message .wallet-connect.mobile {
+    width: 80%;
+    max-width: 320px;
+    margin: 20px auto 15px;
+    position: relative;
+    z-index: 5;
   }
   
-  /* Extra specificity to override any hiding */
-  .welcome-message + .wallet-connect,
-  .welcome-message ~ .wallet-connect,
-  .wallet-connect.mobile {
-    display: block !important;
-    visibility: visible !important;
-    margin: 20px auto !important;
-  }
-  
-  /* Style the connect button to be prominent */
-  .connect-button {
-    width: 100% !important;
-    padding: 16px 0 !important;
-    font-size: 1.4rem !important;
-    border-radius: 30px !important;
-    background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
+  /* Style the connect button */
+  .welcome-message .connect-button {
+    width: 100%;
+    padding: 16px 0;
+    font-size: 1.4rem;
+    border-radius: 30px;
+    background: linear-gradient(135deg, #9a4eff, #7000ff);
     border: none !important;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
-    margin: 0 auto !important;
-    display: block !important;
-    text-align: center !important;
-    color: white !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    margin: 0 auto;
+    display: block;
+    text-align: center;
+    color: white;
+    font-family: 'Bangers', cursive;
+    letter-spacing: 1px;
   }
   
-  /* Ensure the wallet connect is visible regardless of parent */
-  #root .wallet-connect,
-  .app .wallet-connect,
-  .container .wallet-connect {
-    display: block !important;
-    visibility: visible !important;
+  /* Hide any duplicate connect buttons outside welcome message */
+  .wallet-connect:not(.welcome-message .wallet-connect) {
+    display: none;
   }
 }
 
@@ -1739,49 +1723,5 @@ iframe.game-frame {
   .play-button, .connect-button {
     font-size: 1.3rem;
     padding: 15px 25px;
-  }
-}
-
-/* Improve card padding in mobile view */
-@media screen and (max-width: 768px) {
-  /* Add horizontal padding to all cards */
-  .card {
-    padding: 25px 30px;
-    width: 85%;
-    margin-left: auto;
-    margin-right: auto;
-    border-radius: 15px;
-  }
-  
-  /* Welcome message padding */
-  .welcome-message {
-    padding: 25px 30px;
-    width: 85%;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  
-  /* Fact bubbles padding */
-  .fact-bubble {
-    padding: 20px 30px;
-    width: 85%;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  
-  /* Content area spacing */
-  .content-area {
-    padding: 0 20px;
-  }
-  
-  /* Mobile content section */
-  .mobile-content {
-    padding: 20px 25px;
-  }
-  
-  /* Instructions and features cards */
-  .instructions, .features {
-    padding: 25px 30px;
-    width: 85%;
   }
 } 
