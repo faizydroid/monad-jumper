@@ -77,8 +77,7 @@
 .mobile-welcome-message p {
   margin-bottom: 20px;
   font-size: 1.2rem;
-  color: #FFD700;
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  color: #000000;
   font-family: 'Chalkboard SE', 'Short Stack', cursive;
 }
 

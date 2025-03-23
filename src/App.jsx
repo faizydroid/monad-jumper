@@ -1014,28 +1014,31 @@ function GameComponent() {
     return (
       <>
         {isMobileView ? (
-          // Render mobile homepage
-          <MobileHomePage characterImg={characterImg} />
+          // Use the mobile homepage for mobile devices
+          <MobileHomePage characterImg="/images/monad0.png" />
         ) : (
-          // Desktop homepage (your existing code)
+          // ORIGINAL desktop homepage (reverted to original state)
           <>
             <BackgroundElements />
             <div className="container">
-              <h1 className="game-title">Monad Jumper</h1>
+              <h1 className="game-title">MONAD JUMPER</h1>
               <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
               
+              <div className="character-container">
+                <img src="/images/monad0.png" alt="Game Character" className="character" />
+              </div>
+              
+              {/* Revert to your original welcome message structure */}
               <div className="welcome-message">
                 <p>Connect your wallet to start your jumping adventure</p>
-                <div className="wallet-connect mobile">
-                  <ConnectButton />
-                </div>
               </div>
               
-              <div className="character-container">
-                <div className="shadow"></div>
-                <div className="character"></div>
+              {/* Original wallet connect position */}
+              <div className="wallet-connect mobile">
+                <ConnectButton />
               </div>
               
+              {/* Facts section */}
               <div className="game-facts">
                 <div className="fact-bubble fact-bubble-1">
                   <span>🚀</span>
