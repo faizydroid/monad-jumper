@@ -175,6 +175,8 @@ body {
   min-height: 100vh;
   position: relative;
   z-index: 10;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 /* Game Title */
@@ -216,20 +218,21 @@ body {
   width: 170px;
   height: 60px;
   margin: 1rem auto 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .character {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   width: 100px;
   height: 120px;
-  background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzk1IiBoZWlnaHQ9IjQ4OCIgdmlld0JveD0iMCAwIDM5NSA0ODgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTI5Ni4yMjMgMTgxLjcyMUMyOTYuMjIzIDE0MC45OSAyNjIuNzMzIDEwNy41IDIyMiAxMDcuNUgxNzNDMTMyLjI2NyAxMDcuNSA5OC43NzcxIDE0MC45OSA5OC43NzcxIDE4MS43MjNMMTAzLjI3NyAzMDAuNUg2OS4wMDAxQzQ2Ljc0MjYgMzAwLjUgMjcuMDk3NiAzMjkuMDE5IDQ5LjA5NzYgMzQyLjAxOUwxNzIuNzc3IDQyMy4wMTlDMTkwLjY1MSA0MzQuNzk2IDIxMy4wMjcgNDM0Ljc5NiAyMzAuOTAxIDQyMy4wMTlMMzU0LjU4MSAzNDIuMDE5QzM3Ni41ODEgMzI5LjAxOSAzNTYuOTM1IDMwMC41IDMzNC42NzcgMzAwLjVIMjkyLjcyNUwyOTYuMjIzIDE4MS43MjFaIiBmaWxsPSIjMDBDMjVBIi8+PHBhdGggZD0iTTEwMy4yNzcgMzAzLjVMOTguNzc3MSAxODEuNzIzQzk4Ljc3NzEgMTQwLjk5IDEzMi4yNjcgMTA3LjUgMTczIDEwNy41SDIyMkMyNjIuNzMzIDEwNy41IDI5Ni4yMjMgMTQwLjk5IDI5Ni4yMjMgMTgxLjcyMUwyOTIuNzI1IDMwMy41IiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjE1Ii8+PHBhdGggZD0iTTI5Mi43MjUgMzAzLjVIMzM0LjY3N0MzNTYuOTM0IDMwMy41IDM3Ni41ODEgMzMyLjAxOSAzNTQuNTgxIDM0NS4wMTlMMjMwLjkwMSA0MjYuMDE5QzIxMy4wMjcgNDM3Ljc5NiAxOTAuNjUxIDQzNy43OTYgMTcyLjc3NyA0MjYuMDE5TDQ5LjA5NzYgMzQ1LjAxOUMyNy4wOTc2IDMzMi4wMTkgNDYuNzQyNSAzMDMuNSA2OS4wMDAxIDMwMy41SDEwMy4yNzciIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMTUiLz48Y2lyY2xlIGN4PSIxNDUuNSIgY3k9IjIwMy41IiByPSIyMS41IiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIxMCIvPjxjaXJjbGUgY3g9IjI0OS41IiBjeT0iMjAzLjUiIHI9IjIxLjUiIGZpbGw9IndoaXRlIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjEwIi8+PGNpcmNsZSBjeD0iMTQ1LjUiIGN5PSIyMDMuNSIgcj0iOCIgZmlsbD0iYmxhY2siLz48Y2lyY2xlIGN4PSIyNDkuNSIgY3k9IjIwMy41IiByPSI4IiBmaWxsPSJibGFjayIvPjxwYXRoIGQ9Ik0xNjggMjY5LjVDMTY4IDI2OS41IDE5NyAyODQuNSAyMjcgMjY5LjUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMTAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==');
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  animation: character-bounce 2s ease-in-out infinite;
-  z-index: 1;
 }
 
 .shadow {
@@ -359,12 +362,16 @@ body {
   backdrop-filter: blur(5px);
   border-radius: 16px;
   padding: 1.5rem;
-  margin-bottom: 2rem;
+  margin: 0 auto 2rem;
   text-align: center;
   max-width: 600px;
+  width: 90%;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   border: 2px solid rgba(255, 255, 255, 0.1);
-  animation: bounce-in 0.5s ease-out;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .welcome-message h2 {
@@ -719,7 +726,9 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 20px;
-  margin-top: 30px;
+  margin: 30px auto;
+  width: 100%;
+  max-width: 800px;
 }
 
 .fact-bubble {
