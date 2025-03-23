@@ -1,0 +1,188 @@
+/* Mobile-specific styles */
+.mobile-container {
+  min-height: 100vh;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: var(--dark-bg);
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Large title optimized for mobile */
+.mobile-game-title {
+  font-size: 6rem;
+  font-family: 'Bangers', cursive;
+  color: #FFD700;
+  text-align: center;
+  margin: 40px 0 15px;
+  text-shadow: 
+    5px 5px 0 #9900FF,
+    8px 8px 0 rgba(0, 0, 0, 0.3);
+  letter-spacing: 2px;
+  line-height: 0.9;
+  transform: rotate(-2deg);
+  animation: bounce-in 1s ease-out;
+}
+
+/* Subtitle */
+.mobile-game-subtitle {
+  font-size: 1.3rem;
+  text-align: center;
+  margin: 0 auto 25px;
+  font-family: 'Chalkboard SE', 'Short Stack', cursive;
+  color: #FFD700;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  width: 100%;
+}
+
+/* Character display */
+.mobile-character-container {
+  width: 100%;
+  height: 130px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 15px auto 25px;
+  position: relative;
+}
+
+.mobile-character {
+  width: 100px;
+  height: 100px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.3));
+  animation: mobile-character-bounce 2s infinite ease-in-out;
+}
+
+/* Welcome message with connect wallet button */
+.mobile-welcome-message {
+  width: 90%;
+  margin: 15px auto 30px;
+  padding: 25px 20px;
+  text-align: center;
+  border-radius: 18px;
+  background: rgba(60, 8, 117, 0.3);
+  border: 2px solid rgba(122, 54, 255, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.mobile-welcome-message p {
+  margin-bottom: 20px;
+  font-size: 1.2rem;
+  color: #FFD700;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  font-family: 'Chalkboard SE', 'Short Stack', cursive;
+}
+
+.mobile-wallet-connect {
+  width: 85%;
+  max-width: 300px;
+  margin: 5px auto 10px;
+}
+
+/* Style the connect button */
+.mobile-wallet-connect button {
+  width: 100% !important;
+  padding: 16px 0 !important;
+  font-size: 1.4rem !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
+  border: none !important;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
+  margin: 0 auto !important;
+  display: block !important;
+  text-align: center !important;
+  color: white !important;
+  font-family: 'Bangers', cursive !important;
+  letter-spacing: 1px !important;
+}
+
+/* Facts bubbles */
+.mobile-game-facts {
+  width: 90%;
+  margin: 10px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.mobile-fact-bubble {
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transform: scale(0.95);
+  animation: bubble-appear 0.5s forwards;
+}
+
+.mobile-fact-bubble span {
+  font-size: 24px;
+}
+
+.mobile-fact-bubble-1 {
+  animation-delay: 0.1s;
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.2), rgba(255, 82, 82, 0.1));
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.mobile-fact-bubble-2 {
+  animation-delay: 0.2s;
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(69, 160, 73, 0.1));
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.mobile-fact-bubble-3 {
+  animation-delay: 0.3s;
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.2), rgba(30, 136, 229, 0.1));
+  border: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+/* Animations */
+@keyframes mobile-character-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+}
+
+@keyframes bubble-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Extra small devices */
+@media screen and (max-width: 375px) {
+  .mobile-game-title {
+    font-size: 5.2rem;
+  }
+  
+  .mobile-game-subtitle {
+    font-size: 1.1rem;
+  }
+  
+  .mobile-wallet-connect button {
+    font-size: 1.2rem !important;
+    padding: 14px 0 !important;
+  }
+} 

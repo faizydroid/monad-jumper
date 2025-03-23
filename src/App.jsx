@@ -33,6 +33,7 @@ import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
+import MobileHomePage from './components/MobileHomePage';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1011,41 +1012,46 @@ function GameComponent() {
   if (!isConnected) {
     return (
       <>
-        <BackgroundElements />
-        <div className="container">
-          <h1 className="game-title">Monad Jumper</h1>
-          <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
-          
-          <div className="character-container">
-            <div className="shadow"></div>
-            <div className="character"></div>
-          </div>
-          
-          <div className="wallet-container">
-            <div className="card wallet-card">
-              <h2 className="card-title">Connect Your Wallet</h2>
-              <p style={{marginBottom: '1.5rem', textAlign: 'center', color: '#222222'}}>
-                Connect your wallet to start your jumping adventure
-              </p>
-              {renderWalletButton()}
+        {isMobileView ? (
+          // Render mobile homepage
+          <MobileHomePage />
+        ) : (
+          // Desktop homepage (your existing code)
+          <>
+            <BackgroundElements />
+            <div className="container">
+              <h1 className="game-title">Monad Jumper</h1>
+              <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
+              
+              <div className="welcome-message">
+                <p>Connect your wallet to start your jumping adventure</p>
+                <div className="wallet-connect mobile">
+                  <ConnectButton />
+                </div>
+              </div>
+              
+              <div className="character-container">
+                <div className="shadow"></div>
+                <div className="character"></div>
+              </div>
+              
+              <div className="game-facts">
+                <div className="fact-bubble fact-bubble-1">
+                  <span>🚀</span>
+                  <p>Play & Earn!</p>
+                </div>
+                <div className="fact-bubble fact-bubble-2">
+                  <span>🎮</span>
+                  <p>Fun Gameplay!</p>
+                </div>
+                <div className="fact-bubble fact-bubble-3">
+                  <span>⛓️</span>
+                  <p>Powered by Monad!</p>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          <div className="game-facts">
-            <div className="fact-bubble fact-bubble-1">
-              <span>🚀</span>
-              <p>Play & Earn!</p>
-            </div>
-            <div className="fact-bubble fact-bubble-2">
-              <span>🎮</span>
-              <p>Fun Gameplay!</p>
-            </div>
-            <div className="fact-bubble fact-bubble-3">
-              <span>⛓️</span>
-              <p>Powered by Monad!</p>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
       </>
     );
   }
