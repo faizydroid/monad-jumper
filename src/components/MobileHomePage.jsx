@@ -1,9 +1,8 @@
 import React from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import './MobileHomePage.css';
-import character from '../assets/character.png'; // Adjust path as needed
 
-const MobileHomePage = () => {
+const MobileHomePage = ({ characterImg }) => {
   return (
     <div className="mobile-container">
       <div className="mobile-header">
@@ -12,7 +11,7 @@ const MobileHomePage = () => {
       </div>
       
       <div className="mobile-character-container">
-        <img src={character} alt="Game Character" className="mobile-character" />
+        <img src={characterImg} alt="Game Character" className="mobile-character" />
       </div>
       
       <div className="mobile-welcome-message">

@@ -34,6 +34,7 @@ import { createConfig } from 'wagmi';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
+import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1014,7 +1015,7 @@ function GameComponent() {
       <>
         {isMobileView ? (
           // Render mobile homepage
-          <MobileHomePage />
+          <MobileHomePage characterImg={characterImg} />
         ) : (
           // Desktop homepage (your existing code)
           <>
