@@ -1432,7 +1432,7 @@ function App() {
 
   const { connectors } = getDefaultWallets({
     appName: 'Monad Jumper',
-    projectId, // Pass the project ID here
+    projectId: '5a6a3d758f242052a2e87e42e2816833', // Pass the project ID here
     chains
   });
 
