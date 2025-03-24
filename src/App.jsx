@@ -40,7 +40,7 @@ import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { configureChains, createClient, WagmiConfig } from 'wagmi';
 import { mainnet, polygon } from 'wagmi/chains'; // Add chains you support
 import { publicProvider } from 'wagmi/providers/public';
-import { walletConnectProvider } from 'wagmi/providers/walletConnect';
+import { walletConnectProvider } from '@wagmi/core/providers/walletConnect';
 
 // Initialize Supabase client
 const supabase = createClient(
