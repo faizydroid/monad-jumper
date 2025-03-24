@@ -1,8 +1,24 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ characterImg }) => {
+  // Force mobile wallet detection when component mounts
+  useEffect(() => {
+    // Add a mobile class to document to help with detection
+    document.documentElement.classList.add('mobile-wallet-view');
+    
+    // Mobile-specific metadata
+    const metaViewport = document.querySelector('meta[name=viewport]');
+    if (metaViewport) {
+      metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    }
+    
+    return () => {
+      document.documentElement.classList.remove('mobile-wallet-view');
+    };
+  }, []);
+
   return (
     <div className="mobile-container">
       <div className="mobile-header">
@@ -17,12 +33,66 @@ const MobileHomePage = ({ characterImg }) => {
       <div className="mobile-welcome-message">
         <p>Connect your wallet to start your jumping adventure</p>
         <div className="mobile-wallet-connect">
-          <ConnectButton 
-            showBalance={false}
-            chainStatus="none"
-            accountStatus="address"
-            label="Connect Wallet"
-          />
+          <ConnectButton.Custom>
+            {({
+              account,
+              chain,
+              openAccountModal,
+              openConnectModal,
+              authenticationStatus,
+              mounted,
+            }) => {
+              // Note: If your app doesn't use authentication, you
+              // can remove all 'authenticationStatus' checks
+              const ready = mounted && authenticationStatus !== 'loading';
+              const connected =
+                ready &&
+                account &&
+                chain &&
+                (!authenticationStatus ||
+                  authenticationStatus === 'authenticated');
+
+              return (
+                <div
+                  {...(!ready && {
+                    'aria-hidden': true,
+                    'style': {
+                      opacity: 0,
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                    },
+                  })}
+                >
+                  {(() => {
+                    if (!connected) {
+                      return (
+                        <button 
+                          onClick={openConnectModal} 
+                          className="mobile-connect-wallet-button"
+                          type="button"
+                          data-mobile="true"
+                        >
+                          Connect Wallet
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <button
+                          onClick={openAccountModal}
+                          type="button"
+                          className="mobile-account-button"
+                        >
+                          {account.displayName}
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            }}
+          </ConnectButton.Custom>
         </div>
       </div>
       
