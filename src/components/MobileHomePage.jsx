@@ -5,8 +5,10 @@ import './MobileHomePage.css';
 const MobileHomePage = ({ characterImg }) => {
   return (
     <div className="mobile-container">
-      <h1 className="mobile-game-title">MONAD JUMPER</h1>
-      <p className="mobile-game-subtitle">Jump through the blockchain one block at a time!</p>
+      <div className="mobile-header">
+        <h1 className="mobile-game-title">MONAD JUMPER</h1>
+        <p className="mobile-game-subtitle">Jump through the blockchain one block at a time!</p>
+      </div>
       
       <div className="mobile-character-container">
         <img src={characterImg} alt="Game Character" className="mobile-character" />
@@ -20,7 +22,6 @@ const MobileHomePage = ({ characterImg }) => {
             chainStatus="none"
             accountStatus="address"
             label="Connect Wallet"
-            modalSize="compact"
           />
         </div>
       </div>
