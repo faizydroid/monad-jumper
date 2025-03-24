@@ -35,12 +35,6 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import '@rainbow-me/rainbowkit/styles.css';
-import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
-import { configureChains, createClient, WagmiConfig } from 'wagmi';
-import { mainnet, polygon } from 'wagmi/chains'; // Add chains you support
-import { publicProvider } from 'wagmi/providers/public';
-import { walletConnectProvider } from '@wagmi/core/providers/walletConnect';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1411,52 +1405,17 @@ function App() {
     console.log('Is game screen?', isGameScreen);
   }, [location, isGameScreen]);
 
-  // Add this near the top where you get your WalletConnect projectId
-  // This makes it available globally for the MobileHomePage component
-  useEffect(() => {
-    // Store projectId in window object for access by MobileHomePage
-    window.walletConnectProjectId = "5a6a3d758f242052a2e87e42e2816833"; // Replace with your actual project ID
-  }, []);
-
-  // The critical part - get a WalletConnect project ID
-  // Sign up at https://cloud.walletconnect.com/sign-in if you don't have one
-  const projectId = '5a6a3d758f242052a2e87e42e2816833'; // Your WalletConnect project ID
-
-  const { chains, provider } = configureChains(
-    [mainnet, polygon], // Add chains you support
-    [
-      walletConnectProvider({ projectId }), 
-      publicProvider()
-    ]
-  );
-
-  const { connectors } = getDefaultWallets({
-    appName: 'Monad Jumper',
-    projectId: '5a6a3d758f242052a2e87e42e2816833', // Pass the project ID here
-    chains
-  });
-
-  const wagmiClient = createClient({
-    autoConnect: true,
-    connectors,
-    provider,
-  });
-
   return (
-    <WagmiConfig client={wagmiClient}>
-      <RainbowKitProvider chains={chains}>
-        <Web3Provider>
-          {/* Only show navbar when wallet is connected, always use the regular Navbar */}
-          {isConnected && <Navbar />}
-          
-          <Routes>
-            <Route path="/" element={<GameComponent />} />
-            <Route path="/admin" element={<AdminAccess />} />
-          </Routes>
-          <TransactionNotifications />
-        </Web3Provider>
-      </RainbowKitProvider>
-    </WagmiConfig>
+    <Web3Provider>
+      {/* Only show navbar when wallet is connected, always use the regular Navbar */}
+      {isConnected && <Navbar />}
+      
+      <Routes>
+        <Route path="/" element={<GameComponent />} />
+        <Route path="/admin" element={<AdminAccess />} />
+      </Routes>
+      <TransactionNotifications />
+    </Web3Provider>
   );
 }
 
