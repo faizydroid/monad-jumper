@@ -1,14 +1,20 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount, useContractRead } from 'wagmi';
 import './MobileHomePage.css';
 
-const MobileHomePage = ({ characterImg }) => {
-  // Force mobile wallet detection when component mounts
+const MobileHomePage = ({ 
+  characterImg, 
+  onPlay, 
+  onMint,
+  hasMintedNft,
+  isNftLoading 
+}) => {
+  const { address, isConnected } = useAccount();
+
+  // Mobile optimization on component mount
   useEffect(() => {
-    // Add a mobile class to document to help with detection
     document.documentElement.classList.add('mobile-wallet-view');
-    
-    // Mobile-specific metadata
     const metaViewport = document.querySelector('meta[name=viewport]');
     if (metaViewport) {
       metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
@@ -31,69 +37,44 @@ const MobileHomePage = ({ characterImg }) => {
       </div>
       
       <div className="mobile-welcome-message">
-        <p>Connect your wallet to start your jumping adventure</p>
-        <div className="mobile-wallet-connect">
-          <ConnectButton.Custom>
-            {({
-              account,
-              chain,
-              openAccountModal,
-              openConnectModal,
-              authenticationStatus,
-              mounted,
-            }) => {
-              // Note: If your app doesn't use authentication, you
-              // can remove all 'authenticationStatus' checks
-              const ready = mounted && authenticationStatus !== 'loading';
-              const connected =
-                ready &&
-                account &&
-                chain &&
-                (!authenticationStatus ||
-                  authenticationStatus === 'authenticated');
-
-              return (
-                <div
-                  {...(!ready && {
-                    'aria-hidden': true,
-                    'style': {
-                      opacity: 0,
-                      pointerEvents: 'none',
-                      userSelect: 'none',
-                    },
-                  })}
-                >
-                  {(() => {
-                    if (!connected) {
-                      return (
-                        <button 
-                          onClick={openConnectModal} 
-                          className="mobile-connect-wallet-button"
-                          type="button"
-                          data-mobile="true"
-                        >
-                          Connect Wallet
-                        </button>
-                      );
-                    }
-
-                    return (
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <button
-                          onClick={openAccountModal}
-                          type="button"
-                          className="mobile-account-button"
-                        >
-                          {account.displayName}
-                        </button>
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-            }}
-          </ConnectButton.Custom>
-        </div>
+        {!isConnected ? (
+          <>
+            <p>Connect your wallet to start your jumping adventure</p>
+            <div className="mobile-wallet-connect">
+              <ConnectButton 
+                showBalance={false}
+                chainStatus="none" 
+              />
+            </div>
+          </>
+        ) : isNftLoading ? (
+          <>
+            <p>Checking NFT ownership...</p>
+            <div className="mobile-loading-indicator"></div>
+          </>
+        ) : hasMintedNft ? (
+          <>
+            <p>You're ready to jump!</p>
+            <button 
+              onClick={onPlay} 
+              className="mobile-play-button"
+              type="button"
+            >
+              Play Now
+            </button>
+          </>
+        ) : (
+          <>
+            <p>Mint an NFT to start playing</p>
+            <button 
+              onClick={onMint} 
+              className="mobile-mint-button"
+              type="button"
+            >
+              Mint to Play
+            </button>
+          </>
+        )}
       </div>
       
       <div className="mobile-game-facts">
