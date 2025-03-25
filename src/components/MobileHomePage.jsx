@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
+import { useAccount, useContractRead } from 'wagmi';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
@@ -11,6 +11,19 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
+
+  // Mobile optimization on component mount
+  useEffect(() => {
+    document.documentElement.classList.add('mobile-wallet-view');
+    const metaViewport = document.querySelector('meta[name=viewport]');
+    if (metaViewport) {
+      metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    }
+    
+    return () => {
+      document.documentElement.classList.remove('mobile-wallet-view');
+    };
+  }, []);
 
   return (
     <div className="mobile-container">
@@ -28,27 +41,10 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <ConnectButton.Custom>
-                {({
-                  account,
-                  chain,
-                  openConnectModal,
-                  mounted,
-                }) => {
-                  const ready = mounted;
-                  if (!ready) return null;
-                  
-                  return (
-                    <button
-                      onClick={openConnectModal}
-                      type="button"
-                      className="mobile-connect-button"
-                    >
-                      Connect Wallet
-                    </button>
-                  );
-                }}
-              </ConnectButton.Custom>
+              <ConnectButton 
+                showBalance={false}
+                chainStatus="none" 
+              />
             </div>
           </>
         ) : isNftLoading ? (
@@ -62,6 +58,7 @@ const MobileHomePage = ({
             <button 
               onClick={onPlay} 
               className="mobile-play-button"
+              type="button"
             >
               Play Now
             </button>
@@ -72,6 +69,7 @@ const MobileHomePage = ({
             <button 
               onClick={onMint} 
               className="mobile-mint-button"
+              type="button"
             >
               Mint to Play
             </button>
