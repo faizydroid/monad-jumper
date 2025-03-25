@@ -41,6 +41,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './config/wagmi';
 import { rainbowKitTheme } from './config/rainbowKit';
 import { walletConnectors } from './config/rainbowKit';
+import { BrowserRouter as Router } from 'react-router-dom';
+import { isMobile } from 'react-device-detect';
 
 // Initialize Supabase client
 const supabase = createClient(
