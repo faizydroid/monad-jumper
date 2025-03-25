@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
-import { AppKit } from '@reown/appkit';
-import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
+import React from 'react';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
-import { monadTestnet } from '../config/chains'; // Import the chain config
+import { monadTestnet } from '../config/chains';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
@@ -13,53 +12,6 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
-  const [appKit, setAppKit] = React.useState(null);
-
-  useEffect(() => {
-    // Initialize AppKit with WagmiAdapter using monadTestnet config
-    const initAppKit = async () => {
-      const appKit = new AppKit({
-        projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-        adapter: new WagmiAdapter({
-          chains: [monadTestnet], // Use the imported chain config
-          defaultChain: monadTestnet,
-          rpcMap: {
-            [monadTestnet.id]: monadTestnet.rpcUrls.default.http[0]
-          }
-        }),
-        // Mobile-specific options
-        mobileOptions: {
-          themeMode: 'dark',
-          showQrModal: true,
-          enableExplorer: true,
-          explorerRecommendedWalletIds: [
-            'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
-            '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0'  // Trust Wallet
-          ]
-        }
-      });
-
-      await appKit.init();
-      setAppKit(appKit);
-    };
-
-    initAppKit().catch(console.error);
-
-    return () => {
-      if (appKit) {
-        appKit.destroy();
-      }
-    };
-  }, []);
-
-  const handleConnect = async () => {
-    try {
-      if (!appKit) return;
-      await appKit.connect();
-    } catch (error) {
-      console.error('Connection error:', error);
-    }
-  };
 
   return (
     <div className="mobile-container">
@@ -77,13 +29,27 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <button 
-                onClick={handleConnect}
-                className="reown-connect-button"
-                type="button"
-              >
-                Connect Wallet
-              </button>
+              <ConnectButton.Custom>
+                {({
+                  account,
+                  chain,
+                  openConnectModal,
+                  mounted,
+                }) => {
+                  const ready = mounted;
+                  if (!ready) return null;
+                  
+                  return (
+                    <button
+                      onClick={openConnectModal}
+                      type="button"
+                      className="mobile-connect-button"
+                    >
+                      Connect Wallet
+                    </button>
+                  );
+                }}
+              </ConnectButton.Custom>
             </div>
           </>
         ) : isNftLoading ? (
