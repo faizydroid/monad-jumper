@@ -14,41 +14,59 @@ const MobileHomePage = ({
 }) => {
   const { address, isConnected } = useAccount();
   const [appKit, setAppKit] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     const initAppKit = async () => {
-      const kit = new AppKit({
-        adapter: new WagmiAdapter(),
-        projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-        chains: [monadTestnet],
-        rpcMapping: {
-          [monadTestnet.id]: monadTestnet.rpcUrls.default.http[0]
-        },
-        mobileOptions: {
-          themeMode: 'dark',
-          qrModalVisible: true,
-          recommendedWalletIds: [
-            'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
-            '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0'  // Trust Wallet
-          ]
+      try {
+        const kit = new AppKit({
+          adapter: new WagmiAdapter(),
+          projectId: import.meta.env.VITE_PROJECT_ID,
+          chains: [monadTestnet],
+          rpcMapping: {
+            [monadTestnet.id]: monadTestnet.rpcUrls.default.http[0]
+          },
+          mobileOptions: {
+            themeMode: 'dark',
+            qrModalVisible: true,
+            recommendedWalletIds: [
+              'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
+              '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0'  // Trust Wallet
+            ]
+          }
+        });
+
+        if (mounted) {
+          setAppKit(kit);
+          setIsInitializing(false);
         }
-      });
-      
-      setAppKit(kit);
+      } catch (error) {
+        console.error('AppKit initialization error:', error);
+        setIsInitializing(false);
+      }
     };
 
     initAppKit();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleConnect = async () => {
     try {
-      if (appKit) {
-        await appKit.connect();
-      }
+      if (!appKit) return;
+      await appKit.connect();
     } catch (error) {
       console.error('Connection error:', error);
     }
   };
+
+  if (isInitializing) {
+    return <div className="mobile-loading-indicator">Loading...</div>;
+  }
 
   return (
     <div className="mobile-container">
