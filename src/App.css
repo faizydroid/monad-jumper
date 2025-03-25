@@ -388,20 +388,21 @@ body {
 /* Buttons */
 .play-button {
   font-family: 'Bangers', cursive;
-  font-size: 1.2rem;
-  letter-spacing: 2px;
+  font-size: 2.5rem;
+  letter-spacing: 2.8px;
   background: var(--primary);
   color: white;
   border: none;
-  padding: 1rem 2.5rem;
+  padding: 1rem 2rem;
   border-radius: var(--border-radius);
   cursor: pointer;
   box-shadow: var(--btn-shadow);
   transition: all 0.2s ease;
+  width: 180px;
   position: relative;
   overflow: hidden;
   transform: scale(1.1);
-  border-bottom: 8px solid var(--primary-dark);
+  border-bottom: 4px solid var(--primary-dark);
   margin-bottom: 2.5rem;
 }
 
@@ -939,7 +940,7 @@ body {
   background: linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%);
   color: white;
   font-family: 'Fredoka', cursive;
-  font-size: 24px; /* Increased from 20px */
+  font-size: 44px; /* Increased from 20px */
   font-weight: bold;
   padding: 18px 42px; /* Increased from 14px 32px */
   border: none;
@@ -951,7 +952,7 @@ body {
   letter-spacing: 1.5px; /* Increased letter spacing */
   position: relative;
   overflow: hidden;
-  min-width: 240px; /* Added minimum width */
+  min-width: 340px; /* Added minimum width */
   transform-origin: center bottom;
 }
 
