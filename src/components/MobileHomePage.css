@@ -310,50 +310,8 @@
   to { transform: rotate(360deg); }
 }
 
-/* Reown Connect Button Styles */
-.reown-connect-button {
-  width: 100%;
-  max-width: 300px;
-  height: 50px;
-  font-size: 1.4rem;
-  font-family: 'Bangers', cursive;
-  letter-spacing: 1px;
-  border-radius: 30px;
-  background: linear-gradient(135deg, #9a4eff, #7000ff);
-  color: white;
-  border: none;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 15px auto;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.reown-connect-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
-}
-
-.reown-connect-button:active {
-  transform: translateY(1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
 /* Mobile-specific adjustments */
 @media screen and (max-width: 480px) {
-  .reown-connect-button {
-    font-size: 1.2rem;
-    height: 45px;
-  }
-}
-
-.mobile-connect-button:active {
-  transform: scale(0.98);
-}
-
-@media (max-width: 480px) {
   .mobile-connect-button {
     font-size: 14px !important;
     padding: 10px 20px !important;
