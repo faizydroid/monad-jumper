@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useContractRead } from 'wagmi';
+import React, { useEffect } from 'react';
+import { AppKit } from '@reown/appkit';
+import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
+import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
@@ -11,19 +12,53 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
+  const [appKit, setAppKit] = React.useState(null);
 
-  // Mobile optimization on component mount
   useEffect(() => {
-    document.documentElement.classList.add('mobile-wallet-view');
-    const metaViewport = document.querySelector('meta[name=viewport]');
-    if (metaViewport) {
-      metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-    }
-    
+    // Initialize AppKit with WagmiAdapter
+    const initAppKit = async () => {
+      const appKit = new AppKit({
+        projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
+        adapter: new WagmiAdapter({
+          chains: ['monad:231'], // Monad testnet
+          defaultChain: 'monad:231',
+          rpcMap: {
+            'monad:231': 'https://rpc.monad.xyz/testnet'
+          }
+        }),
+        // Mobile-specific options
+        mobileOptions: {
+          themeMode: 'dark',
+          showQrModal: true,
+          enableExplorer: true,
+          explorerRecommendedWalletIds: [
+            'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
+            '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0'  // Trust Wallet
+          ]
+        }
+      });
+
+      await appKit.init();
+      setAppKit(appKit);
+    };
+
+    initAppKit().catch(console.error);
+
     return () => {
-      document.documentElement.classList.remove('mobile-wallet-view');
+      if (appKit) {
+        appKit.destroy();
+      }
     };
   }, []);
+
+  const handleConnect = async () => {
+    try {
+      if (!appKit) return;
+      await appKit.connect();
+    } catch (error) {
+      console.error('Connection error:', error);
+    }
+  };
 
   return (
     <div className="mobile-container">
@@ -41,10 +76,13 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <ConnectButton 
-                showBalance={false}
-                chainStatus="none" 
-              />
+              <button 
+                onClick={handleConnect}
+                className="reown-connect-button"
+                type="button"
+              >
+                Connect Wallet
+              </button>
             </div>
           </>
         ) : isNftLoading ? (

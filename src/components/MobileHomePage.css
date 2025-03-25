@@ -198,4 +198,133 @@
     font-size: 1.2rem !important;
     padding: 14px 0 !important;
   }
+}
+
+/* Custom connect button styling */
+.mobile-connect-wallet-button {
+  width: 100% !important;
+  height: 50px !important;
+  font-size: 1.4rem !important;
+  font-family: 'Bangers', cursive !important;
+  letter-spacing: 1px !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.mobile-account-button {
+  width: 100% !important;
+  height: 50px !important;
+  font-size: 1.2rem !important;
+  font-family: 'Bangers', cursive !important;
+  letter-spacing: 1px !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Add styles for Play and Mint buttons */
+.mobile-play-button {
+  width: 100% !important;
+  height: 50px !important;
+  font-size: 1.4rem !important;
+  font-family: 'Bangers', cursive !important;
+  letter-spacing: 1px !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, #4eff9a, #00ff7f) !important; /* Green for Play */
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 15px auto 5px !important;
+  max-width: 300px !important;
+}
+
+.mobile-mint-button {
+  width: 100% !important;
+  height: 50px !important;
+  font-size: 1.4rem !important;
+  font-family: 'Bangers', cursive !important;
+  letter-spacing: 1px !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, #ff9a4e, #ff7f00) !important; /* Orange for Mint */
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 15px auto 25px !important;
+  max-width: 300px !important;
+}
+
+.mobile-mint-container {
+  width: 90%;
+  margin: 0 auto;
+}
+
+/* Add loading indicator for NFT checks */
+.mobile-loading-indicator {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(153, 0, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #9900ff;
+  animation: spin 1s ease-in-out infinite;
+  margin: 15px auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Reown Connect Button Styles */
+.reown-connect-button {
+  width: 100%;
+  max-width: 300px;
+  height: 50px;
+  font-size: 1.4rem;
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #9a4eff, #7000ff);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 15px auto;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.reown-connect-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+}
+
+.reown-connect-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Mobile-specific adjustments */
+@media screen and (max-width: 480px) {
+  .reown-connect-button {
+    font-size: 1.2rem;
+    height: 45px;
+  }
 } 
