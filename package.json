@@ -24,8 +24,8 @@
     "react-device-detect": "^2.2.3",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.3",
-    "viem": "^1.0.0",
-    "wagmi": "^1.0.0",
+    "viem": "^2.23.10",
+    "wagmi": "^2.14.15",
     "@reown/appkit": "^0.1.0",
     "@reown/appkit-adapter-wagmi": "^0.1.0"
   },
