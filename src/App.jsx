@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Routes, Route, Navigate, useLocation, BrowserRouter as Router } from 'react-router-dom';
+import { isMobile } from 'react-device-detect';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
-import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
+import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { useAccount, usePublicClient, useWalletClient, useConnect, useDisconnect, useContractRead } from 'wagmi';
 import './App.css';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AdminDashboard from './components/AdminDashboard';
 import './components/AdminDashboard.css';
 import Navbar from './components/Navbar';
@@ -31,7 +32,6 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
@@ -41,8 +41,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './config/wagmi';
 import { rainbowKitTheme } from './config/rainbowKit';
 import { walletConnectors } from './config/rainbowKit';
-import { BrowserRouter as Router } from 'react-router-dom';
-import { isMobile } from 'react-device-detect';
 
 // Initialize Supabase client
 const supabase = createClient(
