@@ -62,7 +62,6 @@ const MobileHomePage = ({
             <button 
               onClick={onPlay} 
               className="mobile-play-button"
-              type="button"
             >
               Play Now
             </button>
@@ -73,7 +72,6 @@ const MobileHomePage = ({
             <button 
               onClick={onMint} 
               className="mobile-mint-button"
-              type="button"
             >
               Mint to Play
             </button>
