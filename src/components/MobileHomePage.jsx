@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { AppKit } from '@reown/appkit';
-import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
+import React from 'react';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
-import { monadTestnet } from '../config/chains';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
@@ -13,60 +11,6 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
-  const [appKit, setAppKit] = useState(null);
-  const [isInitializing, setIsInitializing] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const initAppKit = async () => {
-      try {
-        const kit = new AppKit({
-          adapter: new WagmiAdapter(),
-          projectId: import.meta.env.VITE_PROJECT_ID,
-          chains: [monadTestnet],
-          rpcMapping: {
-            [monadTestnet.id]: monadTestnet.rpcUrls.default.http[0]
-          },
-          mobileOptions: {
-            themeMode: 'dark',
-            qrModalVisible: true,
-            recommendedWalletIds: [
-              'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
-              '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0'  // Trust Wallet
-            ]
-          }
-        });
-
-        if (mounted) {
-          setAppKit(kit);
-          setIsInitializing(false);
-        }
-      } catch (error) {
-        console.error('AppKit initialization error:', error);
-        setIsInitializing(false);
-      }
-    };
-
-    initAppKit();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const handleConnect = async () => {
-    try {
-      if (!appKit) return;
-      await appKit.connect();
-    } catch (error) {
-      console.error('Connection error:', error);
-    }
-  };
-
-  if (isInitializing) {
-    return <div className="mobile-loading-indicator">Loading...</div>;
-  }
 
   return (
     <div className="mobile-container">
@@ -84,13 +28,27 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <button
-                onClick={handleConnect}
-                type="button"
-                className="mobile-connect-button"
-              >
-                Connect Wallet
-              </button>
+              <ConnectButton.Custom>
+                {({
+                  account,
+                  chain,
+                  openConnectModal,
+                  mounted,
+                }) => {
+                  const ready = mounted;
+                  if (!ready) return null;
+                  
+                  return (
+                    <button
+                      onClick={openConnectModal}
+                      type="button"
+                      className="mobile-connect-button"
+                    >
+                      Connect Wallet
+                    </button>
+                  );
+                }}
+              </ConnectButton.Custom>
             </div>
           </>
         ) : isNftLoading ? (
