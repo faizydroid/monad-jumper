@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { AppKit } from '@reown/appkit';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import { useAccount } from 'wagmi';
+import { monadTestnet } from '../config/chains'; // Import the chain config
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
@@ -15,15 +16,15 @@ const MobileHomePage = ({
   const [appKit, setAppKit] = React.useState(null);
 
   useEffect(() => {
-    // Initialize AppKit with WagmiAdapter
+    // Initialize AppKit with WagmiAdapter using monadTestnet config
     const initAppKit = async () => {
       const appKit = new AppKit({
         projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
         adapter: new WagmiAdapter({
-          chains: ['monad:231'], // Monad testnet
-          defaultChain: 'monad:231',
+          chains: [monadTestnet], // Use the imported chain config
+          defaultChain: monadTestnet,
           rpcMap: {
-            'monad:231': 'https://rpc.monad.xyz/testnet'
+            [monadTestnet.id]: monadTestnet.rpcUrls.default.http[0]
           }
         }),
         // Mobile-specific options
