@@ -1,5 +1,6 @@
-import React from 'react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import React, { useEffect, useState } from 'react';
+import { AppKit } from '@reown/appkit';
+import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import { useAccount } from 'wagmi';
 import { monadTestnet } from '../config/chains';
 import './MobileHomePage.css';
@@ -12,6 +13,42 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
+  const [appKit, setAppKit] = useState(null);
+
+  useEffect(() => {
+    const initAppKit = async () => {
+      const kit = new AppKit({
+        adapter: new WagmiAdapter(),
+        projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
+        chains: [monadTestnet],
+        rpcMapping: {
+          [monadTestnet.id]: monadTestnet.rpcUrls.default.http[0]
+        },
+        mobileOptions: {
+          themeMode: 'dark',
+          qrModalVisible: true,
+          recommendedWalletIds: [
+            'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
+            '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0'  // Trust Wallet
+          ]
+        }
+      });
+      
+      setAppKit(kit);
+    };
+
+    initAppKit();
+  }, []);
+
+  const handleConnect = async () => {
+    try {
+      if (appKit) {
+        await appKit.connect();
+      }
+    } catch (error) {
+      console.error('Connection error:', error);
+    }
+  };
 
   return (
     <div className="mobile-container">
@@ -29,27 +66,13 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <ConnectButton.Custom>
-                {({
-                  account,
-                  chain,
-                  openConnectModal,
-                  mounted,
-                }) => {
-                  const ready = mounted;
-                  if (!ready) return null;
-                  
-                  return (
-                    <button
-                      onClick={openConnectModal}
-                      type="button"
-                      className="mobile-connect-button"
-                    >
-                      Connect Wallet
-                    </button>
-                  );
-                }}
-              </ConnectButton.Custom>
+              <button
+                onClick={handleConnect}
+                type="button"
+                className="mobile-connect-button"
+              >
+                Connect Wallet
+              </button>
             </div>
           </>
         ) : isNftLoading ? (
