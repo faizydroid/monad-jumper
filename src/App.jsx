@@ -30,15 +30,11 @@ import {
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
-import { createConfig, WagmiConfig } from 'wagmi';
-import { getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { createConfig } from 'wagmi';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { monadTestnet } from './config/chains';
-import '@rainbow-me/rainbowkit/styles.css';
-import { setupEdgeBrowserCompatibility, isEdgeBrowser } from './utils/browserUtils';
-import { useWalletPersistence } from './hooks/useWalletPersistence';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -848,15 +844,13 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   
   // Adjust wallet button display for mobile
   const renderWalletButton = () => {
+    // Get connect function from the hook 
+    const { connect } = useConnect();
+    
     if (!isConnected) {
       return (
         <div className="wallet-connect mobile">
-        <button 
-            onClick={openConnectModal}
-            className="connect-button"
-        >
-            Connect
-        </button>
+          <ConnectButton /> {/* Use RainbowKit's ConnectButton instead of custom button */}
         </div>
       );
     }
@@ -869,23 +863,23 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         </div>
         <button onClick={() => disconnect()} className="disconnect-button">
           Disconnect
-      </button>
+        </button>
       </div>
     );
   };
 
   // Add this function inside your GameComponent before the return statement
-  const handlePlayClick = async () => {
-    // Check connection before proceeding
-    if (!isConnected) {
-      console.error("Wallet disconnected - cannot start game");
-      return;
-    }
-
-    // Rest of your play logic
-    setShowGame(true);
+  const handlePlayClick = useCallback(() => {
+    // Set the hash to indicate we're in game mode
     window.location.hash = 'game';
-  };
+    
+    // Important: Don't use regular navigation which would cause a page reload
+    // and lose wallet connection
+    console.log('Setting showGame to true while preserving wallet connection');
+    
+    // Show the game iframe without unmounting parent components
+    setShowGame(true);
+  }, []);
 
   // Comment out or remove this useEffect that's causing conflicts (around line 626-650)
   /*
@@ -1154,32 +1148,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
   }, [onGameOver]);
 
-  // Around line 177, add this useEffect to maintain connection state
-  useEffect(() => {
-    // Store connection state when it changes
-    if (isConnected) {
-      localStorage.setItem('previouslyConnected', 'true');
-      localStorage.setItem('lastConnectedAddress', address);
-    }
-    
-    // Listen for visibility changes (when user switches tabs or apps)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isConnected && 
-          localStorage.getItem('previouslyConnected') === 'true') {
-        // Attempt to reconnect when returning to the app
-        if (wagmiConfig) {
-          console.log("Attempting to reconnect wallet on visibility change");
-          // The reconnect is handled automatically by wagmi in v2
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isConnected, address]);
-
   if (providerError) {
     return (
       <div className="wallet-error">
@@ -1214,8 +1182,17 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         {isMobileView ? (
           <MobileHomePage 
             characterImg="/images/monad0.png" 
-            onPlay={handlePlayClick}
-            onMint={() => setShowMintModal(true)}
+            onPlay={() => {
+              // Preserve wallet connection by updating state without page navigation
+              console.log("Play clicked from mobile, setting showGame via state update");
+              window.location.hash = 'game';
+              setShowGame(true);
+            }}
+            onMint={() => {
+              // Use a state update instead of a function that might cause re-rendering
+              console.log("Mint clicked from mobile, showing modal via state update");
+              setShowMintModal(true);
+            }}
             hasMintedNft={hasMintedNft}
             isNftLoading={isNftLoading}
           />
@@ -1435,7 +1412,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       {showMintModal && (
         <NFTMintModal 
           isOpen={showMintModal} 
-          onClose={() => setShowMintModal(false)} 
+          onClose={() => {
+            console.log("Closing mint modal while preserving connection");
+            setShowMintModal(false);
+          }} 
         />
       )}
       {mintError && (
@@ -1579,172 +1559,38 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Step 2-4: Setup wagmi with the proper v2 API
-  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '5a6a3d758f242052a2e87e42e2816833';
-  const chains = [monadTestnet];
+  // Rest of existing useEffects...
 
-  const { wallets } = getDefaultWallets();
-
-  const wagmiConfig = createConfig({
-    chains,
-    transports: {
-      [monadTestnet.id]: http(),
-    },
-    connectors: getDefaultWallets({
-      appName: 'Monad Jumper',
-      projectId,
-      chains,
-    }).connectors,
-  });
-
-  // Add the Edge-specific fallback detection
-  useEffect(() => {
-    if (isEdgeBrowser()) {
-      console.log("Edge browser detected, using compatibility mode");
-      window.__EDGE_COMPATIBILITY_MODE__ = true;
-      
-      // Set up EventEmitter compatibility fixes
-      setupEdgeBrowserCompatibility();
-      
-      // Existing Edge browser script injection
-      const script = document.createElement('script');
-      script.textContent = `
-        // Prevent deep recursion in Edge
-        if (window.ethereum) {
-          Object.defineProperty(window.ethereum, '__shimmed', { value: true });
-          const originalGet = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').get;
-          Object.defineProperty(Object.prototype, '__proto__', {
-            get: function() {
-              if (this === window.ethereum || this.__shimmed) {
-                return null;
-              }
-              return originalGet.call(this);
-            },
-            configurable: true
-          });
-        }
-      `;
-      document.head.appendChild(script);
-    }
-  }, []);
-
-  // Add persistent connection effect
-  useEffect(() => {
-    // Store connection state when connected
-    if (isConnected && address) {
-      localStorage.setItem('walletConnected', 'true');
-      localStorage.setItem('lastConnectedAddress', address);
-      console.log("Wallet connection stored in localStorage");
-    }
-    
-    // Add reconnection logic on visibility change
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && 
-          !isConnected && 
-          localStorage.getItem('walletConnected') === 'true') {
-        console.log("Page became visible - attempting to reconnect wallet");
-        // Find a suitable connector and connect
-        const availableConnector = connectors.find(c => c.ready);
-        if (availableConnector) {
-          connect({ connector: availableConnector });
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Try to reconnect on initial load if previously connected
-    if (!isConnected && localStorage.getItem('walletConnected') === 'true') {
-      console.log("App mounted - attempting to reconnect from localStorage");
-      const availableConnector = connectors.find(c => c.ready);
-      if (availableConnector) {
-        connect({ connector: availableConnector });
-      }
-    }
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isConnected, address, connect, connectors]);
-  
-  // Wrap your handlers to ensure connection is maintained
-  const ensureWalletConnected = useCallback(async (callback) => {
-    if (isConnected && address) {
-      return callback();
-    } else if (localStorage.getItem('walletConnected') === 'true') {
-      // Try to reconnect first
-      console.log("Wallet appears disconnected - attempting to reconnect");
-      try {
-        const availableConnector = connectors.find(c => c.ready);
-        if (availableConnector) {
-          await connect({ connector: availableConnector });
-          // If we got here, connection succeeded
-          return callback();
-        }
-      } catch (err) {
-        console.error("Failed to reconnect wallet:", err);
-      }
-    }
-    // If we reach here, we couldn't ensure connection
-    console.error("Cannot perform action - wallet not connected");
-    return null;
-  }, [isConnected, address, connect, connectors]);
-  
-  // Update your handler functions to use the ensureWalletConnected wrapper
-  const handlePlayClick = useCallback(() => {
-    return ensureWalletConnected(() => {
-      console.log("Starting game with connected wallet");
-      setShowGame(true);
-      window.location.hash = 'game';
-    });
-  }, [ensureWalletConnected]);
-  
-  const handleMintModalOpen = useCallback(() => {
-    return ensureWalletConnected(() => {
-      console.log("Opening mint modal with connected wallet");
-      setShowMintModal(true);
-    });
-  }, [ensureWalletConnected]);
-  
-  // Use the hook at the beginning of your component
-  useWalletPersistence();
-  
   return (
-    <WagmiConfig config={wagmiConfig}>
-      <RainbowKitProvider 
-        chains={chains}
-        theme={lightTheme({
-          accentColor: '#9900FF',
-          borderRadius: 'medium'
-        })}
-        modalSize="compact"
-      >
-        <Web3Provider>
-          {/* Only show navbar when wallet is connected */}
-          {isConnected && <Navbar />}
-          
-          <Routes>
-            {/* Pass NFT status to GameComponent */}
-            <Route path="/" element={
-              <GameComponent 
-                hasMintedNft={hasMintedNft} 
-                isNftLoading={isNftBalanceLoading}
-                onOpenMintModal={handleMintModalOpen}
-              />
-            } />
-            <Route path="/admin" element={<AdminAccess />} />
-          </Routes>
-          <TransactionNotifications />
-
-          {showMintModal && (
-            <NFTMintModal 
-              isOpen={showMintModal} 
-              onClose={() => setShowMintModal(false)} 
+    <Web3Provider>
+      {/* Only show navbar when wallet is connected */}
+      {isConnected && <Navbar />}
+      
+      <Routes>
+        {/* Pass NFT status to GameComponent */}
+        <Route path="/" element={
+          <ErrorBoundary>
+            <GameComponent 
+              hasMintedNft={hasMintedNft} 
+              isNftLoading={isNftBalanceLoading}
+              onOpenMintModal={() => setShowMintModal(true)}
             />
-          )}
-        </Web3Provider>
-      </RainbowKitProvider>
-    </WagmiConfig>
+          </ErrorBoundary>
+        } />
+        <Route path="/admin" element={<AdminAccess />} />
+      </Routes>
+      <TransactionNotifications />
+
+      {showMintModal && (
+        <NFTMintModal 
+          isOpen={showMintModal} 
+          onClose={() => {
+            console.log("Closing mint modal while preserving connection");
+            setShowMintModal(false);
+          }} 
+        />
+      )}
+    </Web3Provider>
   );
 }
 
