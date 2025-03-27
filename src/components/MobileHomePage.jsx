@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
+import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
-import MobileWalletConnect from './MobileWalletConnect';
 
 const MobileHomePage = ({ 
   characterImg, 
@@ -11,36 +11,39 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
+  const { openConnectModal } = useConnectModal();
 
-  // Button action handler
+  // Consolidated event handler for both buttons
   const handleAction = (action, e) => {
     e.preventDefault();
     e.stopPropagation();
     setTimeout(() => action === 'play' ? onPlay?.() : onMint?.(), 100);
   };
 
-  // Mobile viewport optimization
+  // Enhanced mobile optimization
   useEffect(() => {
+    // Basic mobile viewport setup
     document.documentElement.classList.add('mobile-wallet-view');
-    
-    // Set optimal viewport for wallet interactions
     const metaViewport = document.querySelector('meta[name=viewport]');
-    if (metaViewport) {
-      metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-    }
+    if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     
-    // Fix iOS height issues
-    const fixIOSHeight = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
-    };
+    // WalletConnect mobile detection optimization
+    window.localStorage.setItem('WALLETCONNECT_DEEPLINK_CHOICE', 'native');
     
-    fixIOSHeight();
-    window.addEventListener('resize', fixIOSHeight);
+    // Add these mobile flags that RainbowKit checks for
+    document.documentElement.setAttribute('data-rk-platform', 'mobile');
+    document.documentElement.setAttribute('data-rk-is-mobile', 'true');
     
+    // Create a global flag that can be checked by RainbowKit
+    window.__RAINBOWKIT_MOBILE_MODE = true;
+    
+    // Clean up function
     return () => {
       document.documentElement.classList.remove('mobile-wallet-view');
-      window.removeEventListener('resize', fixIOSHeight);
+      document.documentElement.removeAttribute('data-rk-platform');
+      document.documentElement.removeAttribute('data-rk-is-mobile');
+      window.localStorage.removeItem('WALLETCONNECT_DEEPLINK_CHOICE');
+      delete window.__RAINBOWKIT_MOBILE_MODE;
     };
   }, []);
 
@@ -60,7 +63,15 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <MobileWalletConnect />
+              {/* This approach is better for mobile wallet detection */}
+              <button 
+                onClick={openConnectModal} 
+                className="mobile-connect-wallet-button"
+                type="button"
+                data-rk-is-mobile="true"
+              >
+                Connect Wallet
+              </button>
             </div>
           </>
         ) : isNftLoading ? (
