@@ -12,44 +12,20 @@ const MobileHomePage = ({
 }) => {
   const { address, isConnected } = useAccount();
 
-  // Mobile optimization on component mount
+  // Consolidated event handler for both buttons
+  const handleAction = (action, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setTimeout(() => action === 'play' ? onPlay?.() : onMint?.(), 100);
+  };
+
+  // Mobile optimization - cleaned up
   useEffect(() => {
     document.documentElement.classList.add('mobile-wallet-view');
     const metaViewport = document.querySelector('meta[name=viewport]');
-    if (metaViewport) {
-      metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-    }
-    
-    return () => {
-      document.documentElement.classList.remove('mobile-wallet-view');
-    };
+    if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    return () => document.documentElement.classList.remove('mobile-wallet-view');
   }, []);
-
-  // Important: Log connection status for debugging
-  useEffect(() => {
-    console.log('Mobile wallet connection status:', { isConnected, address });
-  }, [isConnected, address]);
-
-  // Update the button click handlers
-  const handlePlayClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Delay the action slightly to prevent issues with state updates
-    setTimeout(() => {
-      console.log('Play button clicked');
-      onPlay && onPlay();
-    }, 100);
-  };
-  
-  const handleMintClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Delay the action slightly to prevent issues with state updates
-    setTimeout(() => {
-      console.log('Mint button clicked');
-      onMint && onMint();
-    }, 100);
-  };
 
   return (
     <div className="mobile-container">
@@ -83,7 +59,7 @@ const MobileHomePage = ({
           <>
             <p>You're ready to jump!</p>
             <button 
-              onClick={handlePlayClick}
+              onClick={(e) => handleAction('play', e)}
               className="mobile-play-button"
               type="button"
             >
@@ -94,7 +70,7 @@ const MobileHomePage = ({
           <>
             <p>Mint an NFT to start playing</p>
             <button 
-              onClick={handleMintClick}
+              onClick={(e) => handleAction('mint', e)}
               className="mobile-mint-button"
               type="button"
             >
@@ -104,10 +80,12 @@ const MobileHomePage = ({
         )}
       </div>
       
-      {/* Add a persistent connection status display for debugging */}
-      <div className="connection-status" style={{position: 'fixed', bottom: 5, left: 5, fontSize: '10px', opacity: 0.7}}>
-        {isConnected ? `Connected: ${address?.slice(0,6)}...${address?.slice(-4)}` : 'Not connected'}
-      </div>
+      {/* Only show debug info in development */}
+      {process.env.NODE_ENV !== 'production' && address && (
+        <div className="connection-status">
+          {isConnected ? `Connected: ${address?.slice(0,6)}...${address?.slice(-4)}` : 'Not connected'}
+        </div>
+      )}
       
       <div className="mobile-game-facts">
         <div className="mobile-fact-bubble mobile-fact-bubble-1">

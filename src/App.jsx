@@ -634,75 +634,29 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }
   }, [showGame]);
 
-  // Replace the checkIfUserHasMinted function with this more robust version
-  const checkIfUserHasMinted = useCallback(async (userAddress) => {
-    if (!userAddress) return false;
+  // REMOVE duplicate NFT checking functions, use only this consolidated version:
+  const checkNFTOwnership = useCallback(async (userAddress) => {
+    if (!userAddress || !publicClient) return false;
     
     try {
-      // First try using wagmi's publicClient which is more reliable
-      if (publicClient) {
-        console.log("Checking NFT ownership using wagmi publicClient");
-        try {
-          const nftContract = import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS;
-          const hasMintedResponse = await publicClient.readContract({
-            address: nftContract,
-            abi: [
-              "function hasMinted(address) view returns (bool)",
-              "function balanceOf(address) view returns (uint256)"
-            ],
-            functionName: "balanceOf",
-            args: [userAddress],
-          });
-          
-          console.log("NFT balance response:", hasMintedResponse);
-          return hasMintedResponse > 0;
-        } catch (err) {
-          console.log("Error with wagmi check, trying fallback:", err);
-        }
-      }
+      // Single NFT check using publicClient
+      const balance = await publicClient.readContract({
+        address: import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS,
+        abi: [{
+          "inputs": [{"internalType": "address", "name": "owner", "type": "address"}],
+          "name": "balanceOf",
+          "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+          "stateMutability": "view",
+          "type": "function"
+        }],
+        functionName: "balanceOf",
+        args: [userAddress],
+      });
       
-      // Fallback to ethers if wagmi fails
-      if (window.ethereum) {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-        await provider.ready; // Wait for provider to be ready
-        
-        // Get the network to ensure we're connected
-        await provider.getNetwork();
-        
-      const contract = new ethers.Contract(
-        import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS,
-          [
-            "function hasMinted(address) view returns (bool)",
-            "function balanceOf(address) view returns (uint256)"
-          ],
-        provider
-      );
-      
-        try {
-          // Try balanceOf first (more standard)
-      const balance = await contract.balanceOf(userAddress);
-          console.log("NFT balance:", balance.toString());
-      return balance.gt(0);
-        } catch (balanceError) {
-          console.log("balanceOf check failed, trying hasMinted:", balanceError);
-          
-          try {
-            // Fall back to hasMinted if available
-            const minted = await contract.hasMinted(userAddress);
-            console.log("hasMinted result:", minted);
-            return minted;
-          } catch (mintedError) {
-            console.error("All NFT checks failed:", mintedError);
-      return false;
-    }
-        }
-      }
-      
-      // Return false as a safe default when everything fails
-      return false;
+      return Number(balance) > 0;
     } catch (error) {
       console.error("Error checking NFT:", error);
-      return false; // Default to not minted on error
+      return false;
     }
   }, [publicClient]);
 
@@ -720,7 +674,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           
           // Race between the actual check and the timeout
           const result = await Promise.race([
-            checkIfUserHasMinted(address),
+            checkNFTOwnership(address),
             timeoutPromise
           ]);
           
@@ -739,7 +693,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
 
     checkMintStatus();
-  }, [isConnected, address, checkIfUserHasMinted]);
+  }, [isConnected, address, checkNFTOwnership]);
 
   // Update the handleUsernameSubmit function
   const handleUsernameSubmit = async (newUsername) => {
@@ -842,28 +796,27 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Adjust wallet button display for mobile
-  const renderWalletButton = () => {
-    // Get connect function from the hook 
-    const { connect } = useConnect();
-    
+  // Remove all duplicates and just keep this version
+  const renderWalletStatus = () => {
     if (!isConnected) {
       return (
-        <div className="wallet-connect mobile">
-          <ConnectButton /> {/* Use RainbowKit's ConnectButton instead of custom button */}
+        <div className="wallet-connect">
+          <ConnectButton 
+            showBalance={false}
+            chainStatus="none"
+            accountStatus="address"
+          />
         </div>
       );
     }
 
-    // Connected state UI
       return (
-      <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
-        <div className="wallet-address">
-          {address.slice(0, 4)}...{address.slice(-4)}
-        </div>
-        <button onClick={() => disconnect()} className="disconnect-button">
-          Disconnect
-        </button>
+      <div className="wallet-info">
+        {address && (
+          <div className="wallet-address">
+            {`${address.substring(0, 6)}...${address.substring(address.length - 4)}`}
+          </div>
+        )}
       </div>
     );
   };
@@ -1519,11 +1472,8 @@ function App() {
   const [isMobileView, setIsMobileView] = useState(false);
   const [showMintModal, setShowMintModal] = useState(false);
   
-  // Use wagmi's reliable contract reading hook
-  const { 
-    data: nftBalanceData,
-    isLoading: isNftBalanceLoading
-  } = useContractRead({
+  // NFT ownership check - consolidated to one query
+  const { data: nftBalanceData, isLoading: isNftBalanceLoading } = useContractRead({
     address: '0xd6f96a88e8abd4da0eab43ec1d044caba3ee9f37',
     abi: [
       {
@@ -1539,7 +1489,7 @@ function App() {
     enabled: isConnected && !!address,
   });
 
-  // Calculate NFT ownership status
+  // Calculate NFT ownership
   const hasMintedNft = useMemo(() => {
     if (!nftBalanceData) return false;
     const balanceNum = typeof nftBalanceData === 'bigint' ? 
@@ -1559,7 +1509,12 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Rest of existing useEffects...
+  // Only log in development
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('NFT ownership status:', { hasMintedNft, isNftBalanceLoading, address });
+    }
+  }, [hasMintedNft, isNftBalanceLoading, address]);
 
   return (
     <Web3Provider>
@@ -1584,10 +1539,7 @@ function App() {
       {showMintModal && (
         <NFTMintModal 
           isOpen={showMintModal} 
-          onClose={() => {
-            console.log("Closing mint modal while preserving connection");
-            setShowMintModal(false);
-          }} 
+          onClose={() => setShowMintModal(false)}
         />
       )}
     </Web3Provider>
