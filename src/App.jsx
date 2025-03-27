@@ -38,6 +38,7 @@ import characterImg from '/images/monad0.png'; // correct path with leading slas
 import { monadTestnet } from './config/chains';
 import '@rainbow-me/rainbowkit/styles.css';
 import { setupEdgeBrowserCompatibility, isEdgeBrowser } from './utils/browserUtils';
+import { useWalletPersistence } from './hooks/useWalletPersistence';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1627,6 +1628,87 @@ function App() {
     }
   }, []);
 
+  // Add persistent connection effect
+  useEffect(() => {
+    // Store connection state when connected
+    if (isConnected && address) {
+      localStorage.setItem('walletConnected', 'true');
+      localStorage.setItem('lastConnectedAddress', address);
+      console.log("Wallet connection stored in localStorage");
+    }
+    
+    // Add reconnection logic on visibility change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && 
+          !isConnected && 
+          localStorage.getItem('walletConnected') === 'true') {
+        console.log("Page became visible - attempting to reconnect wallet");
+        // Find a suitable connector and connect
+        const availableConnector = connectors.find(c => c.ready);
+        if (availableConnector) {
+          connect({ connector: availableConnector });
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Try to reconnect on initial load if previously connected
+    if (!isConnected && localStorage.getItem('walletConnected') === 'true') {
+      console.log("App mounted - attempting to reconnect from localStorage");
+      const availableConnector = connectors.find(c => c.ready);
+      if (availableConnector) {
+        connect({ connector: availableConnector });
+      }
+    }
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isConnected, address, connect, connectors]);
+  
+  // Wrap your handlers to ensure connection is maintained
+  const ensureWalletConnected = useCallback(async (callback) => {
+    if (isConnected && address) {
+      return callback();
+    } else if (localStorage.getItem('walletConnected') === 'true') {
+      // Try to reconnect first
+      console.log("Wallet appears disconnected - attempting to reconnect");
+      try {
+        const availableConnector = connectors.find(c => c.ready);
+        if (availableConnector) {
+          await connect({ connector: availableConnector });
+          // If we got here, connection succeeded
+          return callback();
+        }
+      } catch (err) {
+        console.error("Failed to reconnect wallet:", err);
+      }
+    }
+    // If we reach here, we couldn't ensure connection
+    console.error("Cannot perform action - wallet not connected");
+    return null;
+  }, [isConnected, address, connect, connectors]);
+  
+  // Update your handler functions to use the ensureWalletConnected wrapper
+  const handlePlayClick = useCallback(() => {
+    return ensureWalletConnected(() => {
+      console.log("Starting game with connected wallet");
+      setShowGame(true);
+      window.location.hash = 'game';
+    });
+  }, [ensureWalletConnected]);
+  
+  const handleMintModalOpen = useCallback(() => {
+    return ensureWalletConnected(() => {
+      console.log("Opening mint modal with connected wallet");
+      setShowMintModal(true);
+    });
+  }, [ensureWalletConnected]);
+  
+  // Use the hook at the beginning of your component
+  useWalletPersistence();
+  
   return (
     <WagmiConfig config={wagmiConfig}>
       <RainbowKitProvider 
@@ -1647,7 +1729,7 @@ function App() {
               <GameComponent 
                 hasMintedNft={hasMintedNft} 
                 isNftLoading={isNftBalanceLoading}
-                onOpenMintModal={() => setShowMintModal(true)}
+                onOpenMintModal={handleMintModalOpen}
               />
             } />
             <Route path="/admin" element={<AdminAccess />} />

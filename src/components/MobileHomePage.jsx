@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useConnect } from 'wagmi';
 import './MobileHomePage.css';
@@ -11,52 +11,64 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
+  const { connect, connectors } = useConnect();
+  const [localConnected, setLocalConnected] = useState(false);
 
-  // Handle button clicks with connection persistence
+  // Sync connection status with local state
+  useEffect(() => {
+    if (isConnected && address) {
+      setLocalConnected(true);
+      // Store connection in localStorage for persistence
+      localStorage.setItem('walletConnected', 'true');
+      localStorage.setItem('lastConnectedAddress', address);
+    }
+  }, [isConnected, address]);
+  
+  // Add a function to ensure connection before actions
+  const ensureConnection = useCallback(async (callback) => {
+    if (isConnected && address) {
+      return callback();
+    }
+    
+    // Not connected but we have stored connection
+    if (localStorage.getItem('walletConnected') === 'true') {
+      try {
+        console.log("Trying to reconnect wallet before action");
+        const activeConnector = connectors.find(c => c.ready);
+        if (activeConnector) {
+          await connect({ connector: activeConnector });
+          
+          // Wait a short time for connection to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          if (isConnected) {
+            return callback();
+          }
+        }
+      } catch (err) {
+        console.error("Failed to reconnect before action:", err);
+      }
+    }
+    
+    console.error("Cannot perform action - wallet not connected");
+    return null;
+  }, [isConnected, address, connect, connectors]);
+  
+  // Wrap your click handlers to ensure connection
   const handlePlayClick = async (e) => {
     e.preventDefault();
-    
-    // Make sure connection is maintained
-    if (isConnected && address) {
-      // Call the play handler
+    await ensureConnection(() => {
+      console.log("Play action with connected wallet");
       onPlay && onPlay();
-    } else {
-      console.error("Wallet disconnected before play action");
-      
-      // Try to reconnect if possible
-      try {
-        const activeConnector = connectors.find(c => c.ready);
-        if (activeConnector) {
-          await connectAsync({ connector: activeConnector });
-        }
-      } catch (err) {
-        console.error("Failed to reconnect wallet:", err);
-      }
-    }
+    });
   };
   
-  // Similar pattern for mint
   const handleMintClick = async (e) => {
     e.preventDefault();
-    
-    // Make sure connection is maintained
-    if (isConnected && address) {
-      // Call the mint handler
+    await ensureConnection(() => {
+      console.log("Mint action with connected wallet");
       onMint && onMint();
-    } else {
-      console.error("Wallet disconnected before mint action");
-      
-      // Try to reconnect if possible
-      try {
-        const activeConnector = connectors.find(c => c.ready);
-        if (activeConnector) {
-          await connectAsync({ connector: activeConnector });
-        }
-      } catch (err) {
-        console.error("Failed to reconnect wallet:", err);
-      }
-    }
+    });
   };
 
   // Mobile optimization on component mount
@@ -76,7 +88,7 @@ const MobileHomePage = ({
         try {
           const activeConnector = connectors.find(c => c.ready);
           if (activeConnector) {
-            await connectAsync({ connector: activeConnector });
+            await connect({ connector: activeConnector });
           }
         } catch (err) {
           console.log("Auto reconnect failed:", err);
@@ -95,7 +107,7 @@ const MobileHomePage = ({
         localStorage.setItem('previouslyConnected', 'true');
       }
     };
-  }, [isConnected, connectAsync, connectors]);
+  }, [isConnected, connect, connectors]);
 
   return (
     <div className="mobile-container">
