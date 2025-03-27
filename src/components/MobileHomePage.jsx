@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
+import MobileWalletConnect from './MobileWalletConnect';
 
 const MobileHomePage = ({ 
   characterImg, 
@@ -12,38 +12,35 @@ const MobileHomePage = ({
 }) => {
   const { address, isConnected } = useAccount();
 
-  // Consolidated event handler for both buttons
+  // Button action handler
   const handleAction = (action, e) => {
     e.preventDefault();
     e.stopPropagation();
     setTimeout(() => action === 'play' ? onPlay?.() : onMint?.(), 100);
   };
 
-  // Mobile optimization - cleaned up
+  // Mobile viewport optimization
   useEffect(() => {
     document.documentElement.classList.add('mobile-wallet-view');
-    const metaViewport = document.querySelector('meta[name=viewport]');
-    if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     
-    // Force mobile wallet detection
-    const forceMobileWalletDetection = () => {
-      // Add a tag to help RainbowKit detect mobile properly
-      const mobileTag = document.createElement('meta');
-      mobileTag.name = 'rainbow-kit-ui-mode';
-      mobileTag.content = 'mobile';
-      document.head.appendChild(mobileTag);
-      
-      // Add a data attribute to force mobile detection
-      document.documentElement.setAttribute('data-rk-platform', 'mobile');
+    // Set optimal viewport for wallet interactions
+    const metaViewport = document.querySelector('meta[name=viewport]');
+    if (metaViewport) {
+      metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    }
+    
+    // Fix iOS height issues
+    const fixIOSHeight = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
     };
     
-    forceMobileWalletDetection();
+    fixIOSHeight();
+    window.addEventListener('resize', fixIOSHeight);
     
     return () => {
       document.documentElement.classList.remove('mobile-wallet-view');
-      const mobileTag = document.querySelector('meta[name="rainbow-kit-ui-mode"]');
-      if (mobileTag) mobileTag.remove();
-      document.documentElement.removeAttribute('data-rk-platform');
+      window.removeEventListener('resize', fixIOSHeight);
     };
   }, []);
 
@@ -63,50 +60,7 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <ConnectButton.Custom>
-                {({
-                  account,
-                  chain,
-                  openAccountModal,
-                  openChainModal,
-                  openConnectModal,
-                  authenticationStatus,
-                  mounted,
-                }) => {
-                  const ready = mounted && authenticationStatus !== 'loading';
-                  const connected =
-                    ready &&
-                    account &&
-                    chain &&
-                    (!authenticationStatus ||
-                      authenticationStatus === 'authenticated');
-
-                  if (!connected) {
-                    return (
-                      <button 
-                        className="mobile-connect-wallet-button"
-                        type="button"
-                        onClick={openConnectModal}
-                        data-rk-is-mobile="true"
-                      >
-                        Connect Wallet
-                      </button>
-                    );
-                  }
-
-                  return (
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <button
-                        onClick={openAccountModal}
-                        type="button"
-                        className="mobile-account-button"
-                      >
-                        {account.displayName}
-                      </button>
-                    </div>
-                  );
-                }}
-              </ConnectButton.Custom>
+              <MobileWalletConnect />
             </div>
           </>
         ) : isNftLoading ? (

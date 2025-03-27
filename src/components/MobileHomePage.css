@@ -27,37 +27,59 @@
 .connection-status{position:fixed;bottom:5px;left:5px;font-size:10px;opacity:0.7}
 
 /* Connect wallet button styling */
-.mobile-connect-wallet-button {
-  width: 100% !important;
-  height: 50px !important;
-  font-size: 1.4rem !important;
-  font-family: 'Bangers', cursive !important;
-  letter-spacing: 1px !important;
-  border-radius: 30px !important;
-  background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin: 15px auto 5px !important;
-  max-width: 300px !important;
+.mobile-connect-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.mobile-connect-button {
+  width: 85%;
+  height: 50px;
+  font-size: 1.4rem;
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #9a4eff, #7000ff);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 15px auto 5px;
+  max-width: 300px;
+  position: relative;
+  z-index: 100;
 }
 
 .mobile-account-button {
-  width: 100% !important;
-  height: 50px !important;
-  font-size: 1.2rem !important;
-  font-family: 'Bangers', cursive !important;
-  letter-spacing: 1px !important;
-  border-radius: 30px !important;
-  background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 0 20px !important;
+  width: 100%;
+  height: 50px;
+  padding: 0 15px;
+  font-size: 1.2rem;
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #9a4eff, #7000ff);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-connected-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* iOS height fix */
+.mobile-container {
+  min-height: 100vh; /* Fallback */
+  min-height: calc(var(--vh, 1vh) * 100);
 } 
