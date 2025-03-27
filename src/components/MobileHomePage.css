@@ -86,8 +86,8 @@
 }
 
 .mobile-wallet-connect {
-  width: 85%;
-  max-width: 300px;
+  width: 100%;
+  max-width: 320px;
   margin: 5px auto 10px;
 }
 
@@ -201,40 +201,20 @@
 }
 
 /* Custom connect button styling */
-.mobile-connect-button {
-  background: linear-gradient(135deg, #646cff 0%, #4851d5 100%) !important;
-  padding: 12px 24px !important;
-  border-radius: 12px !important;
-  border: none !important;
-  color: white !important;
-  font-size: 16px !important;
-  font-weight: bold !important;
+.mobile-connect-wallet-button {
   width: 100% !important;
-  max-width: 300px !important;
-  margin-top: 16px !important;
-  cursor: pointer !important;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
-  transition: transform 0.2s ease !important;
-  -webkit-tap-highlight-color: transparent !important;
-}
-
-.mobile-connect-button:active {
-  transform: scale(0.98) !important;
-}
-
-/* Improve modal display on mobile */
-@media (max-width: 480px) {
-  .mobile-connect-button {
-    font-size: 14px !important;
-    padding: 10px 20px !important;
-  }
-  
-  .mobile-wallet-connect {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    padding: 0 16px;
-  }
+  height: 50px !important;
+  font-size: 1.4rem !important;
+  font-family: 'Bangers', cursive !important;
+  letter-spacing: 1px !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .mobile-account-button {
@@ -308,19 +288,4 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-/* Mobile-specific adjustments */
-@media screen and (max-width: 480px) {
-  .mobile-connect-button {
-    font-size: 14px !important;
-    padding: 10px 20px !important;
-  }
-  
-  .mobile-wallet-connect {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    padding: 0 16px;
-  }
 } 
