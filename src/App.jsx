@@ -30,11 +30,13 @@ import {
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
-import { createConfig } from 'wagmi';
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { createConfig, WagmiConfig } from 'wagmi';
+import { getDefaultWallets } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
+import { monadTestnet } from './config/chains';
+import '@rainbow-me/rainbowkit/styles.css';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1543,70 +1545,60 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Rest of existing useEffects...
+  // Step 2-4: Setup wagmi with the proper v2 API
+  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '5a6a3d758f242052a2e87e42e2816833';
+  const chains = [monadTestnet];
 
-  // Add this near the top of your file, before your App component (around line 50-60)
-  // This is critical for mobile wallet support
-  const projectId = import.meta.env.VITE_PROJECT_ID || '5a6a3d758f242052a2e87e42e2816833';
+  const { wallets } = getDefaultWallets();
 
-  // Configure wallets for both mobile and desktop
-  const walletGroups = [
-    {
-      groupName: 'Recommended',
-      wallets: [
-        injectedWallet({ chains: [1, 8453, 59144] }), // Default injected wallets
-        metaMaskWallet({ projectId, chains: [1, 8453, 59144] }), // MetaMask
-        coinbaseWallet({ appName: 'Monad Jumper', chains: [1, 8453, 59144] }), // Coinbase Wallet
-        walletConnectWallet({ projectId, chains: [1, 8453, 59144] }), // WalletConnect v2
-      ],
+  const wagmiConfig = createConfig({
+    chains,
+    transports: {
+      [monadTestnet.id]: http(),
     },
-    {
-      groupName: 'Other Wallets',
-      wallets: [
-        trustWallet({ projectId, chains: [1, 8453, 59144] }), // Trust Wallet
-        rainbowWallet({ projectId, chains: [1, 8453, 59144] }), // Rainbow
-      ],
-    },
-  ];
-
-  // Create connectors from wallet groups
-  const connectors = connectorsForWallets(walletGroups);
-
-  // Create wagmi config with RainbowKit
-  const wagmiConfig = createConfig(
-    getDefaultConfig({
+    connectors: getDefaultWallets({
       appName: 'Monad Jumper',
-      projectId: projectId, // WalletConnect v2 Project ID
-      chains: [1, 8453, 59144], // Ethereum, Base, Monad
-      connectors,
-    })
-  );
+      projectId,
+      chains,
+    }).connectors,
+  });
 
   return (
-    <Web3Provider>
-      {/* Only show navbar when wallet is connected */}
-      {isConnected && <Navbar />}
-      
-      <Routes>
-        {/* Pass NFT status to GameComponent */}
-        <Route path="/" element={
-          <GameComponent 
-            hasMintedNft={hasMintedNft} 
-            isNftLoading={isNftBalanceLoading}
-            onOpenMintModal={() => setShowMintModal(true)}
-          />
-        } />
-        <Route path="/admin" element={<AdminAccess />} />
-      </Routes>
-      <TransactionNotifications />
+    <WagmiConfig config={wagmiConfig}>
+      <RainbowKitProvider 
+        chains={chains}
+        theme={lightTheme({
+          accentColor: '#9900FF',
+          borderRadius: 'medium'
+        })}
+        modalSize="compact"
+      >
+        <Web3Provider>
+          {/* Only show navbar when wallet is connected */}
+          {isConnected && <Navbar />}
+          
+          <Routes>
+            {/* Pass NFT status to GameComponent */}
+            <Route path="/" element={
+              <GameComponent 
+                hasMintedNft={hasMintedNft} 
+                isNftLoading={isNftBalanceLoading}
+                onOpenMintModal={() => setShowMintModal(true)}
+              />
+            } />
+            <Route path="/admin" element={<AdminAccess />} />
+          </Routes>
+          <TransactionNotifications />
 
-      {showMintModal && (
-        <NFTMintModal 
-          isOpen={showMintModal} 
-          onClose={() => setShowMintModal(false)} 
-        />
-      )}
-    </Web3Provider>
+          {showMintModal && (
+            <NFTMintModal 
+              isOpen={showMintModal} 
+              onClose={() => setShowMintModal(false)} 
+            />
+          )}
+        </Web3Provider>
+      </RainbowKitProvider>
+    </WagmiConfig>
   );
 }
 
