@@ -86,8 +86,8 @@
 }
 
 .mobile-wallet-connect {
-  width: 100%;
-  max-width: 320px;
+  width: 85%;
+  max-width: 300px;
   margin: 5px auto 10px;
 }
 
@@ -288,4 +288,30 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.mobile-connect-button {
+  background: linear-gradient(135deg, #9a4eff, #7000ff);
+  color: white;
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1px;
+  padding: 16px 30px;
+  font-size: 1.4rem;
+  border-radius: 30px;
+  border: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  width: 100%;
+}
+
+.mobile-connected-button {
+  background: linear-gradient(135deg, #4e9aff, #0070ff);
+  color: white;
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1px;
+  padding: 16px 30px;
+  font-size: 1.2rem;
+  border-radius: 30px;
+  border: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  width: 100%;
 } 

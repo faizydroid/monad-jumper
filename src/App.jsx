@@ -35,6 +35,8 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
+import { configureChains, publicProvider } from '@rainbow-me/rainbowkit';
+import { monadTestnet } from '@rainbow-me/rainbowkit';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1559,7 +1561,32 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Rest of existing useEffects...
+  // First, ensure WalletConnect Project ID is properly set and imported
+  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || import.meta.env.VITE_PROJECT_ID;
+
+  // Then update the connector configuration to explicitly include mobile wallets
+  const { chains, publicClient } = configureChains(
+    [monadTestnet],
+    [
+      publicProvider(),
+    ]
+  );
+
+  const connectors = [
+    // Make sure to include these wallet connectors
+    injectedWallet({ chains }),
+    rainbowWallet({ chains, projectId }),
+    metaMaskWallet({ chains, projectId }),
+    coinbaseWallet({ chains, appName: 'Monad Jumper' }),
+    walletConnectWallet({ chains, projectId }),
+    // More wallet options as needed
+  ];
+
+  const wagmiConfig = createConfig({
+    autoConnect: true,
+    connectors,
+    publicClient,
+  });
 
   return (
     <Web3Provider>

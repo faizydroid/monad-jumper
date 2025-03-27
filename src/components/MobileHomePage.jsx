@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
+import { useAccount, useConnect } from 'wagmi';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
@@ -11,6 +11,7 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
+  const { connectors } = useConnect();
 
   // Mobile optimization on component mount
   useEffect(() => {
@@ -29,6 +30,12 @@ const MobileHomePage = ({
   useEffect(() => {
     console.log('Mobile wallet connection status:', { isConnected, address });
   }, [isConnected, address]);
+
+  // Log available connectors to debug
+  useEffect(() => {
+    console.log("Available wallet connectors:", 
+      connectors.map(c => c.name || c.id));
+  }, [connectors]);
 
   // Update the button click handlers
   const handlePlayClick = (e) => {
@@ -67,11 +74,46 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <ConnectButton 
-                showBalance={false}
-                chainStatus="none"
-                accountStatus="address"
-              />
+              <ConnectButton.Custom>
+                {({
+                  account,
+                  chain,
+                  openAccountModal,
+                  openChainModal,
+                  openConnectModal,
+                  mounted,
+                }) => {
+                  return (
+                    <div
+                      {...(!mounted && {
+                        'aria-hidden': true,
+                      })}
+                    >
+                      {(() => {
+                        if (!mounted || !account || !chain) {
+                          return (
+                            <button onClick={openConnectModal} type="button" className="mobile-connect-button">
+                              Connect Wallet
+                            </button>
+                          );
+                        }
+                        return (
+                          <div style={{ display: 'flex', gap: 12 }}>
+                            <button
+                              onClick={openAccountModal}
+                              type="button"
+                              className="mobile-connected-button"
+                            >
+                              {account.displayName}
+                              {account.displayBalance ? ` (${account.displayBalance})` : ''}
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  );
+                }}
+              </ConnectButton.Custom>
             </div>
           </>
         ) : isNftLoading ? (
