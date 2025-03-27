@@ -31,12 +31,10 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
-import { getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { configureChains, publicProvider } from 'wagmi/config';
-import { getDefaultWallets } from '@rainbow-me/rainbowkit';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -473,7 +471,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       console.log("Creating fallback provider for offline mode");
       try {
         // For ethers v6
-        const offlineProvider = new ethers.providers.JsonRpcProvider(
+        const offlineProvider = new ethers.JsonRpcProvider(
           "https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"
         );
         
@@ -843,7 +841,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-  
+
   // Adjust wallet button display for mobile
   const renderWalletButton = () => {
     // Get connect function from the hook 
@@ -858,7 +856,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }
 
     // Connected state UI
-    return (
+      return (
       <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
         <div className="wallet-address">
           {address.slice(0, 4)}...{address.slice(-4)}
@@ -1561,45 +1559,7 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // First, ensure WalletConnect Project ID is properly set and imported
-  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || import.meta.env.VITE_PROJECT_ID;
-
-  // Then update the connector configuration to explicitly include mobile wallets
-  const { chains, publicClient } = configureChains(
-    [
-      {
-        id: 10143,
-        name: 'Monad Testnet',
-        network: 'monad-testnet',
-        nativeCurrency: {
-          decimals: 18,
-          name: 'Monad',
-          symbol: 'MON',
-        },
-        rpcUrls: {
-          public: { http: ['https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5'] },
-          default: { http: ['https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5'] },
-        },
-        blockExplorers: {
-          default: { name: 'Monad Explorer', url: 'https://explorer.monad.xyz' },
-        },
-        testnet: true,
-      }
-    ],
-    [publicProvider()]
-  );
-
-  const { connectors } = getDefaultWallets({
-    appName: 'Monad Jumper',
-    projectId: projectId,
-    chains
-  });
-
-  const wagmiConfig = createConfig({
-    autoConnect: true,
-    connectors,
-    publicClient,
-  });
+  // Rest of existing useEffects...
 
   return (
     <Web3Provider>
