@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useContractRead } from 'wagmi';
+import { useAccount, useConnect } from 'wagmi';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
@@ -11,6 +11,53 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
+  const { connectAsync, connectors } = useConnect();
+
+  // Handle button clicks with connection persistence
+  const handlePlayClick = async (e) => {
+    e.preventDefault();
+    
+    // Make sure connection is maintained
+    if (isConnected && address) {
+      // Call the play handler
+      onPlay && onPlay();
+    } else {
+      console.error("Wallet disconnected before play action");
+      
+      // Try to reconnect if possible
+      try {
+        const activeConnector = connectors.find(c => c.ready);
+        if (activeConnector) {
+          await connectAsync({ connector: activeConnector });
+        }
+      } catch (err) {
+        console.error("Failed to reconnect wallet:", err);
+      }
+    }
+  };
+  
+  // Similar pattern for mint
+  const handleMintClick = async (e) => {
+    e.preventDefault();
+    
+    // Make sure connection is maintained
+    if (isConnected && address) {
+      // Call the mint handler
+      onMint && onMint();
+    } else {
+      console.error("Wallet disconnected before mint action");
+      
+      // Try to reconnect if possible
+      try {
+        const activeConnector = connectors.find(c => c.ready);
+        if (activeConnector) {
+          await connectAsync({ connector: activeConnector });
+        }
+      } catch (err) {
+        console.error("Failed to reconnect wallet:", err);
+      }
+    }
+  };
 
   // Mobile optimization on component mount
   useEffect(() => {
@@ -20,10 +67,35 @@ const MobileHomePage = ({
       metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     }
     
+    // Ensure wallet detection is properly initialized
+    document.documentElement.dataset.rainbowkitIsMobile = 'true';
+    
+    // Reconnect wallet if we have a previously connected wallet
+    const reconnectWallet = async () => {
+      if (!isConnected && localStorage.getItem('previouslyConnected') === 'true') {
+        try {
+          const activeConnector = connectors.find(c => c.ready);
+          if (activeConnector) {
+            await connectAsync({ connector: activeConnector });
+          }
+        } catch (err) {
+          console.log("Auto reconnect failed:", err);
+        }
+      }
+    };
+    
+    reconnectWallet();
+    
     return () => {
       document.documentElement.classList.remove('mobile-wallet-view');
+      delete document.documentElement.dataset.rainbowkitIsMobile;
+      
+      // Store connection state when component unmounts
+      if (isConnected) {
+        localStorage.setItem('previouslyConnected', 'true');
+      }
     };
-  }, []);
+  }, [isConnected, connectAsync, connectors]);
 
   return (
     <div className="mobile-container">
@@ -42,8 +114,10 @@ const MobileHomePage = ({
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
               <ConnectButton 
+                accountStatus="address"
+                chainStatus="none"
                 showBalance={false}
-                chainStatus="none" 
+                label="Connect Wallet"
               />
             </div>
           </>
@@ -56,7 +130,7 @@ const MobileHomePage = ({
           <>
             <p>You're ready to jump!</p>
             <button 
-              onClick={onPlay} 
+              onClick={handlePlayClick}
               className="mobile-play-button"
               type="button"
             >
@@ -67,7 +141,7 @@ const MobileHomePage = ({
           <>
             <p>Mint an NFT to start playing</p>
             <button 
-              onClick={onMint} 
+              onClick={handleMintClick}
               className="mobile-mint-button"
               type="button"
             >

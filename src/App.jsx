@@ -37,6 +37,7 @@ import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 import { monadTestnet } from './config/chains';
 import '@rainbow-me/rainbowkit/styles.css';
+import { setupEdgeBrowserCompatibility, isEdgeBrowser } from './utils/browserUtils';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -873,12 +874,16 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   };
 
   // Add this function inside your GameComponent before the return statement
-  const handlePlayClick = () => {
-    // Set the hash to indicate we're in game mode
-    window.location.hash = 'game';
-    
-    // Show the game iframe
+  const handlePlayClick = async () => {
+    // Check connection before proceeding
+    if (!isConnected) {
+      console.error("Wallet disconnected - cannot start game");
+      return;
+    }
+
+    // Rest of your play logic
     setShowGame(true);
+    window.location.hash = 'game';
   };
 
   // Comment out or remove this useEffect that's causing conflicts (around line 626-650)
@@ -1147,6 +1152,32 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       window.removeEventListener('message', handleIframeMessage);
     };
   }, [onGameOver]);
+
+  // Around line 177, add this useEffect to maintain connection state
+  useEffect(() => {
+    // Store connection state when it changes
+    if (isConnected) {
+      localStorage.setItem('previouslyConnected', 'true');
+      localStorage.setItem('lastConnectedAddress', address);
+    }
+    
+    // Listen for visibility changes (when user switches tabs or apps)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isConnected && 
+          localStorage.getItem('previouslyConnected') === 'true') {
+        // Attempt to reconnect when returning to the app
+        if (wagmiConfig) {
+          console.log("Attempting to reconnect wallet on visibility change");
+          // The reconnect is handled automatically by wagmi in v2
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isConnected, address]);
 
   if (providerError) {
     return (
@@ -1488,79 +1519,6 @@ function AdminAccessCheck() {
   );
 }
 
-// Add this helper function at the top of your file (after imports)
-function safelyAccessProvider() {
-  // Edge browser compatibility fix
-  if (navigator.userAgent.indexOf("Edg") !== -1) {
-    try {
-      // Use a simplified approach for Edge browser
-      if (window.ethereum) {
-        // Create a simplified version of the provider
-        const simpleProvider = {
-          request: window.ethereum.request.bind(window.ethereum),
-          on: window.ethereum.on.bind(window.ethereum),
-          removeListener: window.ethereum.removeListener.bind(window.ethereum),
-          isMetaMask: !!window.ethereum.isMetaMask,
-          isConnected: () => !!window.ethereum.selectedAddress,
-          // Avoid deep property access that might cause recursion
-          selectedAddress: window.ethereum.selectedAddress
-        };
-        return simpleProvider;
-      }
-      return null;
-    } catch (err) {
-      console.error("Edge browser provider access error:", err);
-      return null;
-    }
-  }
-  
-  // For other browsers, return the normal provider
-  return window.ethereum;
-}
-
-function setupEdgeBrowserCompatibility() {
-  // Only apply to Edge browser
-  if (navigator.userAgent.indexOf("Edg") === -1) return;
-  
-  console.log("Setting up Edge browser compatibility for EventEmitter");
-  
-  // Modify provider behavior for Edge
-  if (window.ethereum) {
-    try {
-      // Increase max listeners on provider
-      if (window.ethereum.setMaxListeners) {
-        window.ethereum.setMaxListeners(25);
-      } else if (window.ethereum._events) {
-        // Workaround for providers that don't expose setMaxListeners directly
-        window.ethereum._maxListeners = 25;
-      }
-      
-      // Patch provider event handling for Edge
-      const originalOn = window.ethereum.on;
-      const activeListeners = new Map();
-      
-      // Override 'on' method to track and manage listeners
-      window.ethereum.on = function(eventName, listener) {
-        // Remove existing listener for this event if present
-        if (activeListeners.has(eventName)) {
-          const oldListener = activeListeners.get(eventName);
-          if (typeof window.ethereum.removeListener === 'function') {
-            window.ethereum.removeListener(eventName, oldListener);
-          }
-        }
-        
-        // Add new listener and track it
-        activeListeners.set(eventName, listener);
-        return originalOn.call(this, eventName, listener);
-      };
-      
-      console.log("Edge browser EventEmitter patching complete");
-    } catch (err) {
-      console.error("Error patching Edge provider:", err);
-    }
-  }
-}
-
 function App() {
   const location = useLocation();
   const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
@@ -1640,8 +1598,7 @@ function App() {
 
   // Add the Edge-specific fallback detection
   useEffect(() => {
-    // Check if running in Edge browser and add a flag
-    if (navigator.userAgent.indexOf("Edg") !== -1) {
+    if (isEdgeBrowser()) {
       console.log("Edge browser detected, using compatibility mode");
       window.__EDGE_COMPATIBILITY_MODE__ = true;
       
