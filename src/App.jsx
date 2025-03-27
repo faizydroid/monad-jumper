@@ -402,7 +402,7 @@ function LoadingSpinner({ isMobile }) {
   );
 }
 
-function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal }) {
+function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver }) {
   // Import the web3Context correctly at the top of your component
   const web3Context = useWeb3();
   
@@ -1024,8 +1024,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal }) {
               });
               
               console.log("Transaction submitted:", tx.hash);
-              
-              // Wait for confirmation
+            
+            // Wait for confirmation
             const receipt = await tx.wait();
               console.log("Transaction confirmed in block:", receipt.blockNumber);
               
@@ -1058,6 +1058,93 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal }) {
     window.addEventListener('message', handleGameMessages);
     return () => window.removeEventListener('message', handleGameMessages);
   }, [setTransactionPending, setShowPlayAgain]);
+
+  // Add a function to handle game over transactions
+  const handleGameOver = useCallback(async (score) => {
+    if (!address || !walletClient) return;
+    
+    try {
+      console.log("Sending game over transaction with score:", score);
+      
+      // Use the contract address from your environment
+      const gameAddress = import.meta.env.VITE_GAME_CONTRACT_ADDRESS || import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS;
+      
+      // Prepare the transaction - adjust this to match your original functionality
+      const hash = await walletClient.writeContract({
+        address: gameAddress,
+        abi: [
+          {
+            name: "recordScore",
+            type: "function",
+            stateMutability: "nonpayable",
+            inputs: [
+              { name: "score", type: "uint256" }
+            ],
+            outputs: [],
+          }
+        ],
+        functionName: "recordScore",
+        args: [BigInt(score)]
+      });
+      
+      console.log("Game over transaction sent:", hash);
+      
+      // Wait for confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      console.log("Game over transaction confirmed:", receipt);
+      
+      // Show success notification or update UI
+      // ...
+      
+    } catch (err) {
+      console.error("Game over transaction error:", err);
+      // Handle error appropriately
+    }
+  }, [address, walletClient, publicClient]);
+  
+  // Add this function to your component
+  const handleMessageFromGame = useCallback((event) => {
+    if (event.data && typeof event.data === 'object') {
+      if (event.data.type === 'gameOver') {
+        const { score } = event.data;
+        console.log("Game over received with score:", score);
+        handleGameOver(score);
+      }
+      // Handle other message types...
+    }
+  }, [handleGameOver]);
+  
+  // Update your event listener useEffect
+  useEffect(() => {
+    window.addEventListener('message', handleMessageFromGame);
+    return () => {
+      window.removeEventListener('message', handleMessageFromGame);
+    };
+  }, [handleMessageFromGame]);
+
+  // In your useEffect where you listen for messages from the iframe
+  useEffect(() => {
+    const handleIframeMessage = (event) => {
+      // Validate message origin if needed
+      // if (event.origin !== expectedOrigin) return;
+      
+      const data = event.data;
+      
+      if (data && typeof data === 'object') {
+        if (data.type === 'gameOver') {
+          console.log('Game Over with score:', data.score);
+          // Call the handler from props or context
+          onGameOver && onGameOver(data.score);
+        }
+        // Handle other message types...
+      }
+    };
+    
+    window.addEventListener('message', handleIframeMessage);
+    return () => {
+      window.removeEventListener('message', handleIframeMessage);
+    };
+  }, [onGameOver]);
 
   if (providerError) {
     return (
@@ -1203,7 +1290,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal }) {
               <div className="loading-spinner"></div>
             </div>
           ) : hasMintedNft ? (
-            // Show Play button for users who have minted
+            // This is the green PLAY button for users who already have an NFT
             <button 
               className="play-button"
               onClick={handlePlayClick}
@@ -1211,7 +1298,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal }) {
               PLAY
             </button>
           ) : (
-            // Show Mint button for users who need to mint
+            // This is the red MINT TO PLAY button we want to keep
             <button 
               className="mint-to-play-button"
               onClick={onOpenMintModal}
@@ -1292,12 +1379,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal }) {
               <div className="shadow"></div>
               <div className="character"></div>
             </div>
-            <button 
-              className="mint-to-play-button"
-              onClick={handlePlayClick}
-            >
-              PLAY
-            </button>
           </div>
         )}
         
@@ -1463,6 +1544,43 @@ function App() {
   }, []);
 
   // Rest of existing useEffects...
+
+  // Add this near the top of your file, before your App component (around line 50-60)
+  // This is critical for mobile wallet support
+  const projectId = import.meta.env.VITE_PROJECT_ID || '5a6a3d758f242052a2e87e42e2816833';
+
+  // Configure wallets for both mobile and desktop
+  const walletGroups = [
+    {
+      groupName: 'Recommended',
+      wallets: [
+        injectedWallet({ chains: [1, 8453, 59144] }), // Default injected wallets
+        metaMaskWallet({ projectId, chains: [1, 8453, 59144] }), // MetaMask
+        coinbaseWallet({ appName: 'Monad Jumper', chains: [1, 8453, 59144] }), // Coinbase Wallet
+        walletConnectWallet({ projectId, chains: [1, 8453, 59144] }), // WalletConnect v2
+      ],
+    },
+    {
+      groupName: 'Other Wallets',
+      wallets: [
+        trustWallet({ projectId, chains: [1, 8453, 59144] }), // Trust Wallet
+        rainbowWallet({ projectId, chains: [1, 8453, 59144] }), // Rainbow
+      ],
+    },
+  ];
+
+  // Create connectors from wallet groups
+  const connectors = connectorsForWallets(walletGroups);
+
+  // Create wagmi config with RainbowKit
+  const wagmiConfig = createConfig(
+    getDefaultConfig({
+      appName: 'Monad Jumper',
+      projectId: projectId, // WalletConnect v2 Project ID
+      chains: [1, 8453, 59144], // Ethereum, Base, Monad
+      connectors,
+    })
+  );
 
   return (
     <Web3Provider>
