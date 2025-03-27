@@ -31,12 +31,12 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { getDefaultWallets } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { configureChains, publicProvider } from '@rainbow-me/rainbowkit';
-import { monadTestnet } from '@rainbow-me/rainbowkit';
+import { configureChains, publicProvider } from 'wagmi/config';
+import { getDefaultWallets } from '@rainbow-me/rainbowkit';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -473,7 +473,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       console.log("Creating fallback provider for offline mode");
       try {
         // For ethers v6
-        const offlineProvider = new ethers.JsonRpcProvider(
+        const offlineProvider = new ethers.providers.JsonRpcProvider(
           "https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"
         );
         
@@ -1566,21 +1566,34 @@ function App() {
 
   // Then update the connector configuration to explicitly include mobile wallets
   const { chains, publicClient } = configureChains(
-    [monadTestnet],
     [
-      publicProvider(),
-    ]
+      {
+        id: 10143,
+        name: 'Monad Testnet',
+        network: 'monad-testnet',
+        nativeCurrency: {
+          decimals: 18,
+          name: 'Monad',
+          symbol: 'MON',
+        },
+        rpcUrls: {
+          public: { http: ['https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5'] },
+          default: { http: ['https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5'] },
+        },
+        blockExplorers: {
+          default: { name: 'Monad Explorer', url: 'https://explorer.monad.xyz' },
+        },
+        testnet: true,
+      }
+    ],
+    [publicProvider()]
   );
 
-  const connectors = [
-    // Make sure to include these wallet connectors
-    injectedWallet({ chains }),
-    rainbowWallet({ chains, projectId }),
-    metaMaskWallet({ chains, projectId }),
-    coinbaseWallet({ chains, appName: 'Monad Jumper' }),
-    walletConnectWallet({ chains, projectId }),
-    // More wallet options as needed
-  ];
+  const { connectors } = getDefaultWallets({
+    appName: 'Monad Jumper',
+    projectId: projectId,
+    chains
+  });
 
   const wagmiConfig = createConfig({
     autoConnect: true,
