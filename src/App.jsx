@@ -31,12 +31,14 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
-import { getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { configureChains, mainnet, monadTestnet, publicProvider } from '@rainbow-me/rainbowkit';
-import { WagmiConfig } from 'wagmi';
+import { configureChains } from 'wagmi';
+import { mainnet } from 'wagmi/chains';
+import { publicProvider } from 'wagmi/providers/public';
+import { monadTestnet } from './config/chains';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -473,7 +475,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       console.log("Creating fallback provider for offline mode");
       try {
         // For ethers v6
-        const offlineProvider = new ethers.JsonRpcProvider(
+        const offlineProvider = new ethers.providers.JsonRpcProvider(
           "https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"
         );
         
@@ -1518,76 +1520,33 @@ function App() {
     }
   }, [hasMintedNft, isNftBalanceLoading, address]);
 
-  // In your configuration part:
-  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
-
-  // Define available chains
-  const { chains, publicClient } = configureChains(
-    [mainnet, monadTestnet], // Make sure monadTestnet is defined
-    [publicProvider()]
-  );
-
-  // Configure wallets with better mobile support
-  const connectors = connectorsForWallets([
-    {
-      groupName: 'Recommended',
-      wallets: [
-        metaMaskWallet({ projectId, chains }),
-        trustWallet({ projectId, chains }),
-        coinbaseWallet({ appName: 'Monad Jumper', chains }),
-        rainbowWallet({ projectId, chains }),
-        walletConnectWallet({ projectId, chains }),
-        injectedWallet({ chains })
-      ],
-    }
-  ]);
-
-  const wagmiConfig = createConfig({
-    autoConnect: true,
-    connectors,
-    publicClient
-  });
-
   return (
-    <WagmiConfig config={wagmiConfig}>
-      <RainbowKitProvider 
-        chains={chains} 
-        modalSize="compact"
-        initialChain={monadTestnet}
-        showRecentTransactions={true}
-        appInfo={{
-          appName: 'Monad Jumper',
-          learnMoreUrl: 'https://monadjumper.com/about',
-        }}
-      >
-        <Web3Provider>
-          {/* Only show navbar when wallet is connected */}
-          {isConnected && <Navbar />}
-          
-          <Routes>
-            {/* Pass NFT status to GameComponent */}
-            <Route path="/" element={
-              <ErrorBoundary>
-                <GameComponent 
-                  hasMintedNft={hasMintedNft} 
-                  isNftLoading={isNftBalanceLoading}
-                  onOpenMintModal={() => setShowMintModal(true)}
-                />
-              </ErrorBoundary>
-            } />
-            <Route path="/admin" element={<AdminAccess />} />
-          </Routes>
-          <TransactionNotifications />
-
-          {showMintModal && (
-            <NFTMintModal 
-              isOpen={showMintModal} 
-              onClose={() => setShowMintModal(false)}
+    <Web3Provider>
+      {/* Only show navbar when wallet is connected */}
+      {isConnected && <Navbar />}
+      
+      <Routes>
+        {/* Pass NFT status to GameComponent */}
+        <Route path="/" element={
+          <ErrorBoundary>
+            <GameComponent 
+              hasMintedNft={hasMintedNft} 
+              isNftLoading={isNftBalanceLoading}
+              onOpenMintModal={() => setShowMintModal(true)}
             />
-          )}
-        </Web3Provider>
-      </RainbowKitProvider>
-    </WagmiConfig>
+          </ErrorBoundary>
+        } />
+        <Route path="/admin" element={<AdminAccess />} />
+      </Routes>
+      <TransactionNotifications />
+
+      {showMintModal && (
+        <NFTMintModal 
+          isOpen={showMintModal} 
+          onClose={() => setShowMintModal(false)}
+        />
+      )}
+    </Web3Provider>
   );
 }
 
