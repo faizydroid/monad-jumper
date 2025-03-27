@@ -29,10 +29,10 @@ import {
   coinbaseWallet,
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
-import { connectorsForWallets } from '@rainbow-me/rainbowkit';
-import { createConfig } from 'wagmi';
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { createPublicClient, http } from 'viem';
+import { connectorsForWallets, wallet } from '@rainbow-me/rainbowkit';
+import { configureChains, createConfig, WagmiConfig } from 'wagmi';
+import { monadTestnet } from './config/chains';
+import { publicProvider } from 'wagmi/providers/public';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 
@@ -1516,33 +1516,79 @@ function App() {
     }
   }, [hasMintedNft, isNftBalanceLoading, address]);
 
-  return (
-    <Web3Provider>
-      {/* Only show navbar when wallet is connected */}
-      {isConnected && <Navbar />}
-      
-      <Routes>
-        {/* Pass NFT status to GameComponent */}
-        <Route path="/" element={
-          <ErrorBoundary>
-            <GameComponent 
-              hasMintedNft={hasMintedNft} 
-              isNftLoading={isNftBalanceLoading}
-              onOpenMintModal={() => setShowMintModal(true)}
-            />
-          </ErrorBoundary>
-        } />
-        <Route path="/admin" element={<AdminAccess />} />
-      </Routes>
-      <TransactionNotifications />
+  // Define a provider
+  // Get chainId from env or use a default
+  const CHAIN_ID = parseInt(import.meta.env.VITE_REACT_APP_MONAD_CHAIN_ID || '10143');
 
-      {showMintModal && (
-        <NFTMintModal 
-          isOpen={showMintModal} 
-          onClose={() => setShowMintModal(false)}
-        />
-      )}
-    </Web3Provider>
+  // Make sure you have the project ID (this is critical for mobile)
+  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
+
+  // Configure chains
+  const { chains, publicClient } = configureChains(
+    [monadTestnet], 
+    [publicProvider()]
+  );
+
+  // Set up wallet connectors with explicit inclusion of mobile options
+  const { connectors } = connectorsForWallets([
+    {
+      groupName: 'Recommended',
+      wallets: [
+        wallet.metaMask({ projectId, chains }),
+        wallet.walletConnect({ projectId, chains }),
+        wallet.rainbow({ projectId, chains }),
+        wallet.trust({ projectId, chains }),
+        wallet.coinbase({ chains, appName: 'Monad Jumper' }),
+        // Add any other wallets you want to support
+      ],
+    },
+  ]);
+
+  // Create wagmi config with our connectors
+  const wagmiConfig = createConfig({
+    autoConnect: true,
+    connectors,
+    publicClient,
+  });
+
+  return (
+    <WagmiConfig config={wagmiConfig}>
+      <RainbowKitProvider 
+        chains={chains}
+        modalSize="compact"
+        appInfo={{
+          appName: 'Monad Jumper',
+          learnMoreUrl: 'https://monadjumper.com',
+        }}
+      >
+        <Web3Provider>
+          {/* Only show navbar when wallet is connected */}
+          {isConnected && <Navbar />}
+          
+          <Routes>
+            {/* Pass NFT status to GameComponent */}
+            <Route path="/" element={
+              <ErrorBoundary>
+                <GameComponent 
+                  hasMintedNft={hasMintedNft} 
+                  isNftLoading={isNftBalanceLoading}
+                  onOpenMintModal={() => setShowMintModal(true)}
+                />
+              </ErrorBoundary>
+            } />
+            <Route path="/admin" element={<AdminAccess />} />
+          </Routes>
+          <TransactionNotifications />
+
+          {showMintModal && (
+            <NFTMintModal 
+              isOpen={showMintModal} 
+              onClose={() => setShowMintModal(false)}
+            />
+          )}
+        </Web3Provider>
+      </RainbowKitProvider>
+    </WagmiConfig>
   );
 }
 
