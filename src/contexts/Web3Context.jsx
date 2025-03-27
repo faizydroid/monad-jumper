@@ -78,38 +78,67 @@ export function Web3Provider({ children }) {
 
   // Update the provider initialization in Web3Context.jsx
   useEffect(() => {
-    const initializeProvider = async () => {
-        try {
-            console.log("Initializing Web3 provider...");
-            
-            // Check if window.ethereum exists
-            if (typeof window.ethereum !== 'undefined') {
-                // For ethers v5
-                const provider = new ethers.providers.Web3Provider(window.ethereum);
-                console.log("Provider initialized successfully");
-                
-                setProvider(provider);
-                
-                // Get signer and chain info
-                try {
-                    const signer = provider.getSigner();
-                    setSigner(signer);
-                    const network = await provider.getNetwork();
-                    setChainId(network.chainId);
-                    console.log("Signer and network info retrieved");
-                } catch (error) {
-                    console.error("Error getting signer:", error);
-                }
-            } else {
-                console.log("No ethereum object found in window");
-            }
-        } catch (error) {
-            console.error("Error initializing provider:", error);
+    const initProvider = async () => {
+      try {
+        // Use the safe provider accessor for Edge compatibility
+        const provider = navigator.userAgent.indexOf("Edg") !== -1
+          ? safelyAccessProvider()
+          : window.ethereum;
+          
+        if (!provider) {
+          setProviderError('No Ethereum wallet detected. Please install MetaMask.');
+          return;
         }
-    };
+        
+        // Increase max listeners limit to prevent warnings
+        if (provider.setMaxListeners) {
+          provider.setMaxListeners(20);
+        }
+        
+        // For ethers v5
+        const providerInstance = new ethers.providers.Web3Provider(provider);
+        console.log("Provider initialized successfully");
+        
+        setProvider(providerInstance);
+        
+        // Get signer and chain info
+        try {
+          const signer = providerInstance.getSigner();
+          setSigner(signer);
+          const network = await providerInstance.getNetwork();
+          setChainId(network.chainId);
+          console.log("Signer and network info retrieved");
+        } catch (error) {
+          console.error("Error getting signer:", error);
+        }
 
-    initializeProvider();
-}, []);
+        // For Edge browser, use limited event listeners
+        if (navigator.userAgent.indexOf("Edg") !== -1) {
+          const setupListeners = () => {
+            // Remove any existing listeners first
+            provider.removeAllListeners && provider.removeAllListeners('accountsChanged');
+            provider.removeAllListeners && provider.removeAllListeners('chainChanged');
+            provider.removeAllListeners && provider.removeAllListeners('connect');
+            provider.removeAllListeners && provider.removeAllListeners('disconnect');
+            
+            // Add only necessary listeners
+            provider.on('accountsChanged', handleAccountsChanged);
+            provider.on('chainChanged', handleChainChanged);
+          };
+          
+          setupListeners();
+        } else {
+          // Normal listener setup for other browsers
+          // ...existing code
+        }
+      } catch (error) {
+        console.error('Provider initialization error:', error);
+        setProviderError('Failed to connect to wallet: ' + error.message);
+      }
+    };
+    
+    initProvider();
+  }, []);
 
   useEffect(() => {
     if (isInEdgeFallbackMode) {

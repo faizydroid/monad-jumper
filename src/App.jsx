@@ -1488,6 +1488,79 @@ function AdminAccessCheck() {
   );
 }
 
+// Add this helper function at the top of your file (after imports)
+function safelyAccessProvider() {
+  // Edge browser compatibility fix
+  if (navigator.userAgent.indexOf("Edg") !== -1) {
+    try {
+      // Use a simplified approach for Edge browser
+      if (window.ethereum) {
+        // Create a simplified version of the provider
+        const simpleProvider = {
+          request: window.ethereum.request.bind(window.ethereum),
+          on: window.ethereum.on.bind(window.ethereum),
+          removeListener: window.ethereum.removeListener.bind(window.ethereum),
+          isMetaMask: !!window.ethereum.isMetaMask,
+          isConnected: () => !!window.ethereum.selectedAddress,
+          // Avoid deep property access that might cause recursion
+          selectedAddress: window.ethereum.selectedAddress
+        };
+        return simpleProvider;
+      }
+      return null;
+    } catch (err) {
+      console.error("Edge browser provider access error:", err);
+      return null;
+    }
+  }
+  
+  // For other browsers, return the normal provider
+  return window.ethereum;
+}
+
+function setupEdgeBrowserCompatibility() {
+  // Only apply to Edge browser
+  if (navigator.userAgent.indexOf("Edg") === -1) return;
+  
+  console.log("Setting up Edge browser compatibility for EventEmitter");
+  
+  // Modify provider behavior for Edge
+  if (window.ethereum) {
+    try {
+      // Increase max listeners on provider
+      if (window.ethereum.setMaxListeners) {
+        window.ethereum.setMaxListeners(25);
+      } else if (window.ethereum._events) {
+        // Workaround for providers that don't expose setMaxListeners directly
+        window.ethereum._maxListeners = 25;
+      }
+      
+      // Patch provider event handling for Edge
+      const originalOn = window.ethereum.on;
+      const activeListeners = new Map();
+      
+      // Override 'on' method to track and manage listeners
+      window.ethereum.on = function(eventName, listener) {
+        // Remove existing listener for this event if present
+        if (activeListeners.has(eventName)) {
+          const oldListener = activeListeners.get(eventName);
+          if (typeof window.ethereum.removeListener === 'function') {
+            window.ethereum.removeListener(eventName, oldListener);
+          }
+        }
+        
+        // Add new listener and track it
+        activeListeners.set(eventName, listener);
+        return originalOn.call(this, eventName, listener);
+      };
+      
+      console.log("Edge browser EventEmitter patching complete");
+    } catch (err) {
+      console.error("Error patching Edge provider:", err);
+    }
+  }
+}
+
 function App() {
   const location = useLocation();
   const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
@@ -1564,6 +1637,38 @@ function App() {
       chains,
     }).connectors,
   });
+
+  // Add the Edge-specific fallback detection
+  useEffect(() => {
+    // Check if running in Edge browser and add a flag
+    if (navigator.userAgent.indexOf("Edg") !== -1) {
+      console.log("Edge browser detected, using compatibility mode");
+      window.__EDGE_COMPATIBILITY_MODE__ = true;
+      
+      // Set up EventEmitter compatibility fixes
+      setupEdgeBrowserCompatibility();
+      
+      // Existing Edge browser script injection
+      const script = document.createElement('script');
+      script.textContent = `
+        // Prevent deep recursion in Edge
+        if (window.ethereum) {
+          Object.defineProperty(window.ethereum, '__shimmed', { value: true });
+          const originalGet = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').get;
+          Object.defineProperty(Object.prototype, '__proto__', {
+            get: function() {
+              if (this === window.ethereum || this.__shimmed) {
+                return null;
+              }
+              return originalGet.call(this);
+            },
+            configurable: true
+          });
+        }
+      `;
+      document.head.appendChild(script);
+    }
+  }, []);
 
   return (
     <WagmiConfig config={wagmiConfig}>
