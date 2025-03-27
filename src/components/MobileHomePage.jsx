@@ -24,7 +24,27 @@ const MobileHomePage = ({
     document.documentElement.classList.add('mobile-wallet-view');
     const metaViewport = document.querySelector('meta[name=viewport]');
     if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-    return () => document.documentElement.classList.remove('mobile-wallet-view');
+    
+    // Force mobile wallet detection
+    const forceMobileWalletDetection = () => {
+      // Add a tag to help RainbowKit detect mobile properly
+      const mobileTag = document.createElement('meta');
+      mobileTag.name = 'rainbow-kit-ui-mode';
+      mobileTag.content = 'mobile';
+      document.head.appendChild(mobileTag);
+      
+      // Add a data attribute to force mobile detection
+      document.documentElement.setAttribute('data-rk-platform', 'mobile');
+    };
+    
+    forceMobileWalletDetection();
+    
+    return () => {
+      document.documentElement.classList.remove('mobile-wallet-view');
+      const mobileTag = document.querySelector('meta[name="rainbow-kit-ui-mode"]');
+      if (mobileTag) mobileTag.remove();
+      document.documentElement.removeAttribute('data-rk-platform');
+    };
   }, []);
 
   return (
@@ -43,11 +63,50 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              <ConnectButton 
-                showBalance={false}
-                chainStatus="none"
-                accountStatus="address"
-              />
+              <ConnectButton.Custom>
+                {({
+                  account,
+                  chain,
+                  openAccountModal,
+                  openChainModal,
+                  openConnectModal,
+                  authenticationStatus,
+                  mounted,
+                }) => {
+                  const ready = mounted && authenticationStatus !== 'loading';
+                  const connected =
+                    ready &&
+                    account &&
+                    chain &&
+                    (!authenticationStatus ||
+                      authenticationStatus === 'authenticated');
+
+                  if (!connected) {
+                    return (
+                      <button 
+                        className="mobile-connect-wallet-button"
+                        type="button"
+                        onClick={openConnectModal}
+                        data-rk-is-mobile="true"
+                      >
+                        Connect Wallet
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <button
+                        onClick={openAccountModal}
+                        type="button"
+                        className="mobile-account-button"
+                      >
+                        {account.displayName}
+                      </button>
+                    </div>
+                  );
+                }}
+              </ConnectButton.Custom>
             </div>
           </>
         ) : isNftLoading ? (
