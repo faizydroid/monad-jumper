@@ -1184,6 +1184,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             characterImg="/images/monad0.png" 
             onPlay={handlePlayClick}
             onMint={() => setShowMintModal(true)}
+            hasMintedNft={hasMintedNft}
+            isNftLoading={isNftLoading}
           />
         ) : (
           <>
