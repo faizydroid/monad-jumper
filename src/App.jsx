@@ -29,12 +29,14 @@ import {
   coinbaseWallet,
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
-import { connectorsForWallets, wallet } from '@rainbow-me/rainbowkit';
-import { configureChains, createConfig, WagmiConfig } from 'wagmi';
-import { monadTestnet } from './config/chains';
-import { publicProvider } from 'wagmi/core/providers/public';
+import { connectorsForWallets } from '@rainbow-me/rainbowkit';
+import { createConfig } from 'wagmi';
+import { getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
+import { configureChains, mainnet, monadTestnet, publicProvider } from '@rainbow-me/rainbowkit';
+import { WagmiConfig } from 'wagmi';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1516,49 +1518,46 @@ function App() {
     }
   }, [hasMintedNft, isNftBalanceLoading, address]);
 
-  // Define a provider
-  // Get chainId from env or use a default
-  const CHAIN_ID = parseInt(import.meta.env.VITE_REACT_APP_MONAD_CHAIN_ID || '10143');
-
-  // Make sure you have the project ID (this is critical for mobile)
+  // In your configuration part:
   const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 
-  // Configure chains
+  // Define available chains
   const { chains, publicClient } = configureChains(
-    [monadTestnet], 
+    [mainnet, monadTestnet], // Make sure monadTestnet is defined
     [publicProvider()]
   );
 
-  // Set up wallet connectors with explicit inclusion of mobile options
-  const { connectors } = connectorsForWallets([
+  // Configure wallets with better mobile support
+  const connectors = connectorsForWallets([
     {
       groupName: 'Recommended',
       wallets: [
-        wallet.metaMask({ projectId, chains }),
-        wallet.walletConnect({ projectId, chains }),
-        wallet.rainbow({ projectId, chains }),
-        wallet.trust({ projectId, chains }),
-        wallet.coinbase({ chains, appName: 'Monad Jumper' }),
-        // Add any other wallets you want to support
+        metaMaskWallet({ projectId, chains }),
+        trustWallet({ projectId, chains }),
+        coinbaseWallet({ appName: 'Monad Jumper', chains }),
+        rainbowWallet({ projectId, chains }),
+        walletConnectWallet({ projectId, chains }),
+        injectedWallet({ chains })
       ],
-    },
+    }
   ]);
 
-  // Create wagmi config with our connectors
   const wagmiConfig = createConfig({
     autoConnect: true,
     connectors,
-    publicClient,
+    publicClient
   });
 
   return (
     <WagmiConfig config={wagmiConfig}>
       <RainbowKitProvider 
-        chains={chains}
+        chains={chains} 
         modalSize="compact"
+        initialChain={monadTestnet}
+        showRecentTransactions={true}
         appInfo={{
           appName: 'Monad Jumper',
-          learnMoreUrl: 'https://monadjumper.com',
+          learnMoreUrl: 'https://monadjumper.com/about',
         }}
       >
         <Web3Provider>
