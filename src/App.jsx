@@ -32,7 +32,7 @@ import {
 import { connectorsForWallets, wallet } from '@rainbow-me/rainbowkit';
 import { configureChains, createConfig, WagmiConfig } from 'wagmi';
 import { monadTestnet } from './config/chains';
-import { publicProvider } from '@wagmi/core/providers/public';
+import { publicProvider } from 'wagmi/core/providers/public';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 

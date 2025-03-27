@@ -1,1 +1,1 @@
-import { publicProvider } from 'wagmi/providers/public'; 
+import { publicProvider } from 'wagmi/core/providers/public'; 
