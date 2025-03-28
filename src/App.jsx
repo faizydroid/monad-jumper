@@ -30,14 +30,9 @@ import {
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
-import { createConfig } from 'wagmi';
+import { http, createConfig } from 'wagmi';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { createPublicClient, http } from 'viem';
-import MobileHomePage from './components/MobileHomePage';
-import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { configureChains } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
-import { publicProvider } from 'wagmi/providers/public';
 import { monadTestnet } from './config/chains';
 
 // Initialize Supabase client
@@ -1294,7 +1289,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               Developed by <a href="https://x.com/faizydroid" target="_blank" rel="noopener noreferrer">@faizydroid</a>
             </p>
             <p className="built-on">Built on Monad</p>
-            <p className="copyright">© 2023 Monad Jumper - All Rights Reserved</p>
+            <p className="copyright">© 2025 Monad Jumper - All Rights Reserved</p>
           </footer>
         </div>
       </>
@@ -1520,32 +1515,45 @@ function App() {
     }
   }, [hasMintedNft, isNftBalanceLoading, address]);
 
+  // Update your wagmi configuration
+  const config = getDefaultConfig({
+    appName: 'Monad Jumper',
+    projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
+    chains: [monadTestnet, mainnet],
+    transports: {
+      [monadTestnet.id]: http(),
+      [mainnet.id]: http(),
+    },
+  });
+
   return (
     <Web3Provider>
-      {/* Only show navbar when wallet is connected */}
-      {isConnected && <Navbar />}
-      
-      <Routes>
-        {/* Pass NFT status to GameComponent */}
-        <Route path="/" element={
-          <ErrorBoundary>
-            <GameComponent 
-              hasMintedNft={hasMintedNft} 
-              isNftLoading={isNftBalanceLoading}
-              onOpenMintModal={() => setShowMintModal(true)}
-            />
-          </ErrorBoundary>
-        } />
-        <Route path="/admin" element={<AdminAccess />} />
-      </Routes>
-      <TransactionNotifications />
+      <RainbowKitProvider chains={[monadTestnet, mainnet]}>
+        {/* Only show navbar when wallet is connected */}
+        {isConnected && <Navbar />}
+        
+        <Routes>
+          {/* Pass NFT status to GameComponent */}
+          <Route path="/" element={
+            <ErrorBoundary>
+              <GameComponent 
+                hasMintedNft={hasMintedNft} 
+                isNftLoading={isNftBalanceLoading}
+                onOpenMintModal={() => setShowMintModal(true)}
+              />
+            </ErrorBoundary>
+          } />
+          <Route path="/admin" element={<AdminAccess />} />
+        </Routes>
+        <TransactionNotifications />
 
-      {showMintModal && (
-        <NFTMintModal 
-          isOpen={showMintModal} 
-          onClose={() => setShowMintModal(false)}
-        />
-      )}
+        {showMintModal && (
+          <NFTMintModal 
+            isOpen={showMintModal} 
+            onClose={() => setShowMintModal(false)}
+          />
+        )}
+      </RainbowKitProvider>
     </Web3Provider>
   );
 }
