@@ -1,75 +1,74 @@
 /* Mobile homepage optimized CSS */
-.mobile-container{min-height:100vh;padding:30px 20px;display:flex;flex-direction:column;align-items:center;background-color:var(--dark-bg);overflow-x:hidden;position:relative}
-.mobile-game-title{font-size:6rem;font-family:'Bangers',cursive;color:#FFD700;text-align:center;margin:40px 0 15px;text-shadow:5px 5px 0 #9900FF,8px 8px 0 rgba(0,0,0,0.3);letter-spacing:2px;line-height:0.9;transform:rotate(-2deg);animation:bounce-in 1s ease-out}
-.mobile-game-subtitle{font-size:1.3rem;text-align:center;margin:0 auto 25px;font-family:'Chalkboard SE','Short Stack',cursive;color:#FFD700;text-shadow:2px 2px 0 rgba(0,0,0,0.5);width:100%}
-.mobile-character-container{width:100%;height:130px;display:flex;justify-content:center;align-items:center;margin:15px auto 25px;position:relative}
-.mobile-character{width:100px;height:100px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 10px 8px rgba(0,0,0,0.3));animation:mobile-character-bounce 2s infinite ease-in-out}
-.mobile-welcome-message{width:90%;margin:15px auto 30px;padding:25px 20px;text-align:center;border-radius:18px;background:rgba(60,8,117,0.3);border:2px solid rgba(122,54,255,0.3);box-shadow:0 4px 15px rgba(0,0,0,0.3);display:flex;flex-direction:column;align-items:center}
-.mobile-welcome-message p{margin-bottom:20px;font-size:1.2rem;color:#FFD700;text-shadow:2px 2px 0 rgba(0,0,0,0.5);font-family:'Chalkboard SE','Short Stack',cursive}
+.mobile-container {
+  @apply flex flex-col items-center justify-start min-h-screen p-4 bg-gradient-to-b from-purple-900 to-black text-white;
+}
+
+.mobile-header {
+  @apply text-center mb-8;
+}
+
+.mobile-game-title {
+  @apply text-4xl font-bold text-yellow-400 mb-2;
+}
+
+.mobile-game-subtitle {
+  @apply text-lg text-yellow-300;
+}
+
+.mobile-character {
+  @apply w-48 h-48 object-contain mb-8;
+}
+
+.mobile-welcome-message {
+  @apply flex flex-col items-center gap-4 mb-8 text-center;
+}
+
+.mobile-button {
+  @apply px-6 py-3 rounded-full text-lg font-semibold transition-all duration-200 
+         hover:transform hover:scale-105 active:scale-95;
+}
+
+.mobile-play-button {
+  @apply mobile-button bg-green-500 hover:bg-green-600;
+}
+
+.mobile-mint-button {
+  @apply mobile-button bg-blue-500 hover:bg-blue-600;
+}
+
+.mobile-loading-indicator {
+  @apply w-8 h-8 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin;
+}
+
+.mobile-game-facts {
+  @apply grid grid-cols-3 gap-4 mt-auto;
+}
+
+.mobile-fact-bubble {
+  @apply flex flex-col items-center p-3 rounded-lg bg-opacity-20 bg-white;
+}
+
+.mobile-fact-bubble span {
+  @apply text-2xl mb-2;
+}
+
+.mobile-fact-bubble p {
+  @apply text-sm text-center;
+}
+
+.mobile-character-container{width:100%;height:180px;display:flex;justify-content:center;align-items:center;margin:15px auto 15px;position:relative;transform:translateY(25px);z-index:1000}
+.mobile-character{width:120px;height:120px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 10px 8px rgba(0,0,0,0.3));animation:mobile-character-bounce 2s infinite ease-in-out;transform:translateY(25px);z-index:1000}
+.mobile-welcome-message p{margin-bottom:20px;font-size:1.2rem;color:#000;font-family:'Chalkboard SE','Short Stack',cursive}
 .mobile-wallet-connect{width:85%;max-width:300px;margin:5px auto 10px}
-.mobile-button-base,.mobile-play-button,.mobile-mint-button{width:100%;height:50px;font-size:1.4rem;font-family:'Bangers',cursive;letter-spacing:1px;border-radius:30px;border:none;box-shadow:0 4px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;margin:15px auto 5px;max-width:300px;color:white}
-.mobile-play-button{background:linear-gradient(135deg,#4eff9a,#00ff7f)}
-.mobile-mint-button{background:linear-gradient(135deg,#ff9a4e,#ff7f00)}
+.mobile-wallet-connect button,.mobile-button-base,.mobile-connect-wallet-button,.mobile-account-button{width:100%!important;height:50px!important;font-size:1.4rem!important;font-family:'Bangers',cursive!important;letter-spacing:1px!important;border-radius:30px!important;border:none!important;box-shadow:0 4px 10px rgba(0,0,0,0.3)!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:15px auto 5px!important;max-width:300px!important;color:#fff!important}
 .mobile-wallet-connect button,.mobile-connect-wallet-button,.mobile-account-button{background:linear-gradient(135deg,#9a4eff,#7000ff)!important}
 .mobile-wallet-connect button span{display:flex!important;align-items:center!important;justify-content:center!important}
 .mobile-game-facts{width:90%;margin:10px auto;display:flex;flex-direction:column;gap:15px}
-.mobile-fact-bubble{width:100%;padding:18px 20px;border-radius:15px;background:rgba(255,255,255,0.1);backdrop-filter:blur(5px);box-shadow:0 4px 10px rgba(0,0,0,0.2);display:flex;align-items:center;gap:12px;transform:scale(0.95);animation:bubble-appear .5s forwards}
-.mobile-fact-bubble span{font-size:24px}
 .mobile-fact-bubble-1{animation-delay:0.1s;background:linear-gradient(135deg,rgba(255,107,107,0.2),rgba(255,82,82,0.1));border:1px solid rgba(255,107,107,0.3)}
 .mobile-fact-bubble-2{animation-delay:0.2s;background:linear-gradient(135deg,rgba(76,175,80,0.2),rgba(69,160,73,0.1));border:1px solid rgba(76,175,80,0.3)}
 .mobile-fact-bubble-3{animation-delay:0.3s;background:linear-gradient(135deg,rgba(33,150,243,0.2),rgba(30,136,229,0.1));border:1px solid rgba(33,150,243,0.3)}
 .mobile-mint-container{width:90%;margin:0 auto}
-.mobile-loading-indicator{width:30px;height:30px;border:3px solid rgba(153,0,255,0.3);border-radius:50%;border-top-color:#9900ff;animation:spin 1s ease-in-out infinite;margin:15px auto}
 @keyframes mobile-character-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
 @keyframes bubble-appear{0%{opacity:0;transform:scale(0.8) translateY(20px)}100%{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media screen and (max-width:375px){.mobile-game-title{font-size:5.2rem}.mobile-game-subtitle{font-size:1.1rem}.mobile-button-base,.mobile-play-button,.mobile-mint-button{font-size:1.2rem;height:45px}}
-.connection-status{position:fixed;bottom:5px;left:5px;font-size:10px;opacity:0.7}
-
-/* Connect wallet button styling */
-.mobile-connect-wallet-button {
-  width: 100% !important;
-  height: 50px !important;
-  font-size: 1.4rem !important;
-  font-family: 'Bangers', cursive !important;
-  letter-spacing: 1px !important;
-  border-radius: 30px !important;
-  background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin: 15px auto 5px !important;
-  max-width: 300px !important;
-  position: relative !important;
-  z-index: 100 !important;
-}
-
-.mobile-account-button {
-  width: 100% !important;
-  height: 50px !important;
-  font-size: 1.2rem !important;
-  font-family: 'Bangers', cursive !important;
-  letter-spacing: 1px !important;
-  border-radius: 30px !important;
-  background: linear-gradient(135deg, #9a4eff, #7000ff) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 0 20px !important;
-}
-
-.debug-connectors {
-  font-size: 9px;
-  opacity: 0.6;
-  margin-top: 3px;
-}
-
-.rk-wallet-connection-container {
-  width: 100%;
-} 
+@media screen and (max-width:375px){.mobile-game-title{font-size:5.2rem}.mobile-game-subtitle{font-size:1.1rem}.mobile-wallet-connect button{font-size:1.2rem!important}} 
