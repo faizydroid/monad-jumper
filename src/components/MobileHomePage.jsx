@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useConnect } from 'wagmi';
+import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
@@ -11,7 +11,6 @@ const MobileHomePage = ({
   isNftLoading 
 }) => {
   const { address, isConnected } = useAccount();
-  const { connectors } = useConnect();
 
   // Consolidated event handler for both buttons
   const handleAction = (action, e) => {
@@ -20,43 +19,33 @@ const MobileHomePage = ({
     setTimeout(() => action === 'play' ? onPlay?.() : onMint?.(), 100);
   };
 
-  // Mobile optimization and wallet detection fixes
+  // Mobile optimization - cleaned up
   useEffect(() => {
-    // Basic mobile optimizations
     document.documentElement.classList.add('mobile-wallet-view');
     const metaViewport = document.querySelector('meta[name=viewport]');
     if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     
-    // Force RainbowKit to detect we're on mobile and show wallet options
+    // Force mobile wallet detection
     const forceMobileWalletDetection = () => {
-      // Check if running in a mobile browser
-      const isMobileBrowser = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      // Add a tag to help RainbowKit detect mobile properly
+      const mobileTag = document.createElement('meta');
+      mobileTag.name = 'rainbow-kit-ui-mode';
+      mobileTag.content = 'mobile';
+      document.head.appendChild(mobileTag);
       
-      if (isMobileBrowser) {
-        // Set data attributes RainbowKit checks for mobile detection
-        document.documentElement.setAttribute('data-rk-platform', 'mobile');
-        
-        // Add mobile class that RainbowKit's CSS looks for
-        document.body.classList.add('rk-mobile');
-        
-        // Check if WalletConnect is available
-        const hasWalletConnect = connectors.some(c => c.id === 'walletConnect');
-        console.log("WalletConnect available:", hasWalletConnect);
-        
-        // Log available connectors for debugging
-        console.log("Available connectors:", connectors.map(c => c.id));
-      }
+      // Add a data attribute to force mobile detection
+      document.documentElement.setAttribute('data-rk-platform', 'mobile');
     };
     
-    // Run detection immediately
     forceMobileWalletDetection();
     
     return () => {
       document.documentElement.classList.remove('mobile-wallet-view');
+      const mobileTag = document.querySelector('meta[name="rainbow-kit-ui-mode"]');
+      if (mobileTag) mobileTag.remove();
       document.documentElement.removeAttribute('data-rk-platform');
-      document.body.classList.remove('rk-mobile');
     };
-  }, [connectors]);
+  }, []);
 
   return (
     <div className="mobile-container">
@@ -74,7 +63,6 @@ const MobileHomePage = ({
           <>
             <p>Connect your wallet to start your jumping adventure</p>
             <div className="mobile-wallet-connect">
-              {/* Improved mobile wallet connection */}
               <ConnectButton.Custom>
                 {({
                   account,
@@ -88,44 +76,25 @@ const MobileHomePage = ({
                   const connected = ready && account && chain;
 
                   return (
-                    <div 
-                      {...(!ready && {
-                        'aria-hidden': true,
-                        style: {
-                          opacity: 0,
-                          pointerEvents: 'none',
-                        },
-                      })}
-                      className="rk-wallet-connection-container"
-                    >
-                      {(() => {
-                        if (!connected) {
-                          return (
-                            <button
-                              onClick={openConnectModal}
-                              type="button"
-                              className="mobile-connect-wallet-button"
-                              // These special attributes help RainbowKit know this is a mobile button
-                              data-rk-mobile-init="true"
-                              data-rk-connect-button="true"
-                            >
-                              Connect Wallet
-                            </button>
-                          );
-                        }
-
-                        return (
-                          <div style={{ display: 'flex', gap: 12 }}>
-                            <button
-                              onClick={openAccountModal}
-                              type="button"
-                              className="mobile-account-button"
-                            >
-                              {account.displayName}
-                            </button>
-                          </div>
-                        );
-                      })()}
+                    <div className="mobile-wallet-connect">
+                      {!connected ? (
+                        <button 
+                          onClick={openConnectModal}
+                          type="button"
+                          className="mobile-connect-wallet-button"
+                        >
+                          Connect Wallet
+                        </button>
+                      ) : (
+                        <button
+                          onClick={openAccountModal}
+                          type="button"
+                          className="mobile-account-button"
+                        >
+                          {account.displayName}
+                          {account.displayBalance ? ` (${account.displayBalance})` : ''}
+                        </button>
+                      )}
                     </div>
                   );
                 }}
@@ -162,16 +131,10 @@ const MobileHomePage = ({
         )}
       </div>
       
-      {/* Debug info - shows in development mode */}
-      {process.env.NODE_ENV !== 'production' && (
+      {/* Only show debug info in development */}
+      {process.env.NODE_ENV !== 'production' && address && (
         <div className="connection-status">
-          {isConnected ? 
-            `Connected: ${address?.slice(0,6)}...${address?.slice(-4)}` : 
-            'Not connected'
-          }
-          <div className="debug-connectors">
-            Available: {connectors.map(c => c.id).join(', ')}
-          </div>
+          {isConnected ? `Connected: ${address?.slice(0,6)}...${address?.slice(-4)}` : 'Not connected'}
         </div>
       )}
       
