@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
-import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
+import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme, darkTheme } from '@rainbow-me/rainbowkit';
 import { useAccount, usePublicClient, useWalletClient, useConnect, useDisconnect, useContractRead } from 'wagmi';
 import './App.css';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -29,12 +29,14 @@ import {
   coinbaseWallet,
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
+import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig, WagmiConfig } from 'wagmi';
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { getDefaultWallets } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { monadTestnet } from './config/chains'; // You already have this file
+import { configureChains, publicProvider } from 'wagmi';
+import { monadTestnet } from './config/chains';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -466,40 +468,69 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   
   // Initialize fallback provider for offline mode
   useEffect(() => {
+    // Create a fallback provider if we don't have one from web3
     if (!provider) {
-      console.log("No provider available - skipping fallback");
-      return;
+      console.log("Creating fallback provider for offline mode");
+      try {
+        // For ethers v6
+        const offlineProvider = new ethers.JsonRpcProvider(
+          "https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"
+        );
+        
+        // Or alternatively for older ethers v5 (if needed)
+        // const offlineProvider = new ethers.providers.JsonRpcProvider(...)
+        
+        console.log("Fallback provider created successfully");
+        setFallbackProvider(offlineProvider);
+      } catch (error) {
+        console.error("Failed to create fallback provider:", error);
+        // Don't stop execution if fallback provider fails
+        console.log("Continuing without fallback provider");
+      }
     }
   }, [provider]);
   
   // Update the username check effect
   useEffect(() => {
     const checkUsername = async () => {
-      if (!isConnected || !address) {
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('username')
-          .eq('wallet_address', address.toLowerCase())
-          .maybeSingle();
-
-        if (data?.username) {
-          setUsername(data.username);
-          setShowModal(false);
-          setShowUsernameModal(false);
+        if (!isConnected || !address) {
+            console.log("❌ No wallet connected");
+            return;
         }
-      } catch (error) {
-        console.error("Error checking username:", error);
-      }
+        
+        try {
+            console.log("🔍 Checking username for wallet:", address);
+            
+            // Get username from Supabase
+            const { data, error } = await supabase
+                .from('users')
+                .select('username')
+                .eq('wallet_address', address.toLowerCase())
+                .maybeSingle();
+            
+            console.log("📊 Supabase response:", { data, error });
+            
+            if (data?.username) {
+                console.log("✅ Found username:", data.username);
+                setUsername(data.username);
+                setShowModal(false); // Hide modal when username exists
+                setShowUsernameModal(false); // Also hide the username modal
+    } else {
+                console.log("❌ No username found - showing modal");
+                setUsername(null);
+                setShowModal(true);
+                setShowUsernameModal(true); // Show the username modal
+            }
+        } catch (error) {
+            console.error("🔴 Error checking username:", error);
+        }
     };
 
+    // Run username check when wallet connects
     if (isConnected && address) {
-      checkUsername();
+        checkUsername();
     }
-  }, [isConnected, address]);
+}, [isConnected, address]);
 
   // Add a separate effect specifically for game initialization
   // This separates it from other effects that might trigger too early
@@ -753,20 +784,19 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   }, [setGameScore]);
 
   // Detect mobile view on component mount and window resize
-  const detectMobile = useCallback(() => {
-    return window.innerWidth <= 768 || 
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  }, []);
+  const detectMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobileView(detectMobile());
+      setIsMobileView(window.innerWidth <= 768 || detectMobile());
     };
     
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, [detectMobile]);
+  }, []);
 
   // Remove all duplicates and just keep this version
   const renderWalletStatus = () => {
@@ -1262,7 +1292,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               Developed by <a href="https://x.com/faizydroid" target="_blank" rel="noopener noreferrer">@faizydroid</a>
             </p>
             <p className="built-on">Built on Monad</p>
-            <p className="copyright">© 2023 Monad Jumper - All Rights Reserved</p>
+            <p className="copyright">© 2025 Monad Jumper - All Rights Reserved</p>
           </footer>
         </div>
       </>
@@ -1425,14 +1455,6 @@ function AdminAccessCheck() {
   );
 }
 
-// Update the config near the bottom of the file
-const config = getDefaultConfig({
-  appName: 'Monad Jumper',
-  projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-  chains: [monadTestnet],
-  ssr: false,
-});
-
 function App() {
   const location = useLocation();
   const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
@@ -1478,20 +1500,16 @@ function App() {
   }, [nftBalanceData]);
 
   // Detect mobile view
-  const detectMobile = useCallback(() => {
-    return window.innerWidth <= 768 || 
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  }, []);
-
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobileView(detectMobile());
+      setIsMobileView(window.innerWidth <= 768 || 
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
     };
     
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, [detectMobile]);
+  }, []);
 
   // Only log in development
   useEffect(() => {
@@ -1500,17 +1518,41 @@ function App() {
     }
   }, [hasMintedNft, isNftBalanceLoading, address]);
 
+  const { chains, publicClient } = configureChains(
+    [monadTestnet],
+    [publicProvider()]
+  );
+
+  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
+
+  const { connectors } = getDefaultWallets({
+    appName: 'Monad Jumper',
+    projectId,
+    chains,
+  });
+
+  const wagmiConfig = createConfig({
+    autoConnect: true,
+    connectors,
+    publicClient,
+  });
+
   return (
-    <WagmiConfig config={config}>
+    <WagmiConfig config={wagmiConfig}>
       <RainbowKitProvider 
-        chains={[monadTestnet]} 
+        chains={chains} 
+        theme={darkTheme({
+          accentColor: '#7b3fe4',
+          borderRadius: 'medium',
+        })}
         modalSize="compact"
-        initialChain={monadTestnet}
-        showRecentTransactions={true}
       >
         <Web3Provider>
+          {/* Only show navbar when wallet is connected */}
           {isConnected && <Navbar />}
+          
           <Routes>
+            {/* Pass NFT status to GameComponent */}
             <Route path="/" element={
               <ErrorBoundary>
                 <GameComponent 

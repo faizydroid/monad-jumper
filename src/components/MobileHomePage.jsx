@@ -23,26 +23,13 @@ const MobileHomePage = ({
   useEffect(() => {
     document.documentElement.classList.add('mobile-wallet-view');
     const metaViewport = document.querySelector('meta[name=viewport]');
-    if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
     
-    // Force mobile wallet detection
-    const forceMobileWalletDetection = () => {
-      // Add a tag to help RainbowKit detect mobile properly
-      const mobileTag = document.createElement('meta');
-      mobileTag.name = 'rainbow-kit-ui-mode';
-      mobileTag.content = 'mobile';
-      document.head.appendChild(mobileTag);
-      
-      // Add a data attribute to force mobile detection
-      document.documentElement.setAttribute('data-rk-platform', 'mobile');
-    };
-    
-    forceMobileWalletDetection();
+    // Force mobile detection for RainbowKit
+    document.documentElement.setAttribute('data-rk-platform', 'mobile');
     
     return () => {
       document.documentElement.classList.remove('mobile-wallet-view');
-      const mobileTag = document.querySelector('meta[name="rainbow-kit-ui-mode"]');
-      if (mobileTag) mobileTag.remove();
       document.documentElement.removeAttribute('data-rk-platform');
     };
   }, []);
@@ -78,10 +65,11 @@ const MobileHomePage = ({
                   return (
                     <div className="mobile-wallet-connect">
                       {!connected ? (
-                        <button 
+                        <button
+                          className="mobile-connect-wallet-button"
                           onClick={openConnectModal}
                           type="button"
-                          className="mobile-connect-wallet-button"
+                          data-rk-mobile="true"
                         >
                           Connect Wallet
                         </button>
@@ -92,7 +80,6 @@ const MobileHomePage = ({
                           className="mobile-account-button"
                         >
                           {account.displayName}
-                          {account.displayBalance ? ` (${account.displayBalance})` : ''}
                         </button>
                       )}
                     </div>
