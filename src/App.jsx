@@ -33,6 +33,7 @@ import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
+import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 
 // Initialize Supabase client
@@ -46,23 +47,6 @@ window.openMintModal = () => {
   console.log("Global openMintModal function called");
   document.dispatchEvent(new CustomEvent('openMintModal'));
 };
-
-// Near the top of the file, add this check
-if (typeof window !== 'undefined') {
-  // Ensure SES is properly initialized
-  window.lockdown?.();
-}
-
-// Update the Web3Provider wrapper to handle undefined context
-function SafeWeb3Provider({ children }) {
-  return (
-    <Web3Provider>
-      <ErrorBoundary fallback={<div>Something went wrong</div>}>
-        {children}
-      </ErrorBoundary>
-    </Web3Provider>
-  );
-}
 
 // Create cartoon clouds and platforms background
 function BackgroundElements() {
@@ -1148,22 +1132,42 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   if (!isConnected) {
     return (
       <>
+        {isMobileView ? (
+          <MobileHomePage 
+            characterImg="/images/monad0.png" 
+            onPlay={() => {
+              // Preserve wallet connection by updating state without page navigation
+              console.log("Play clicked from mobile, setting showGame via state update");
+              window.location.hash = 'game';
+              setShowGame(true);
+            }}
+            onMint={() => {
+              // Use a state update instead of a function that might cause re-rendering
+              console.log("Mint clicked from mobile, showing modal via state update");
+              setShowMintModal(true);
+            }}
+            hasMintedNft={hasMintedNft}
+            isNftLoading={isNftLoading}
+          />
+        ) : (
+          <>
         <BackgroundElements />
         <div className="container">
-          <h1 className="game-title">MONAD JUMPER</h1>
+              <h1 className="game-title">MONAD JUMPER</h1>
           <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
           
-          <div className="character-container">
-            <img 
-              src="/images/monad0.png" 
-              alt="Game Character" 
-              className="character" 
-            />
+              <div className="character-container" style={{height: "100px", display: "flex", justifyContent: "center", margin: "20px 0"}}>
+                <img 
+                  src="/images/monad0.png" 
+                  alt="Game Character" 
+                  className="character" 
+                  style={{height: "100px", width: "auto"}}
+                />
           </div>
           
-          <div className="welcome-message">
-            <p>Connect your wallet to start your jumping adventure</p>
-            <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
+              <div className="welcome-message">
+                <p>Connect your wallet to start your jumping adventure</p>
+                <div className="wallet-connect mobile">
               <ConnectButton />
             </div>
           </div>
@@ -1183,6 +1187,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             </div>
           </div>
         </div>
+          </>
+        )}
       </>
     );
   }
@@ -1509,21 +1515,14 @@ function App() {
   // Rest of existing useEffects...
 
   return (
-    <SafeWeb3Provider>
+    <Web3Provider>
       {/* Only show navbar when wallet is connected */}
       {isConnected && <Navbar />}
       
       <Routes>
         {/* Pass NFT status to GameComponent */}
         <Route path="/" element={
-          <ErrorBoundary fallback={
-            <div className="error-container">
-              <h2>Oops! Something went wrong</h2>
-              <button onClick={() => window.location.reload()}>
-                Reload Game
-              </button>
-            </div>
-          }>
+          <ErrorBoundary>
             <GameComponent 
               hasMintedNft={hasMintedNft} 
               isNftLoading={isNftBalanceLoading}
@@ -1544,7 +1543,7 @@ function App() {
           }} 
         />
       )}
-    </SafeWeb3Provider>
+    </Web3Provider>
   );
 }
 

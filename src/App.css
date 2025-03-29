@@ -1666,7 +1666,7 @@ iframe.game-frame {
   to { transform: rotate(360deg); }
 }
 
-/* Mobile-specific styles */
+/* Mobile styles */
 .mobile {
   .game-title {
     @apply text-3xl;
@@ -1719,30 +1719,10 @@ iframe.game-frame {
   }
 }
 
-.error-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
-  text-align: center;
-  background: linear-gradient(180deg, #1a0b2e 0%, #000000 100%);
-  color: white;
-}
-
-.error-container button {
-  margin-top: 20px;
-  padding: 10px 20px;
-  border-radius: 50px;
-  background: linear-gradient(90deg, #4CAF50 0%, #45A049 100%);
-  color: white;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.error-container button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+/* Safe area adjustments */
+@supports (padding: max(0px)) {
+  .app-container {
+    padding-top: max(env(safe-area-inset-top), 1rem);
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+  }
 } 
