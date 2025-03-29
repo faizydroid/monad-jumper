@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
-import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
+import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme, getDefaultWallets, configureChains } from '@rainbow-me/rainbowkit';
 import { useAccount, usePublicClient, useWalletClient, useConnect, useDisconnect, useContractRead } from 'wagmi';
 import './App.css';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -31,12 +31,9 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig, WagmiConfig } from 'wagmi';
-import { getDefaultWallets } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { configureChains, RainbowKitProvider } from '@rainbow-me/rainbowkit';
-import { monadTestnet } from './config/chains';
 import { publicProvider } from 'wagmi/providers/public';
 
 // Initialize Supabase client
