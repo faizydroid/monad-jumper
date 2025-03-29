@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
-import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme, darkTheme } from '@rainbow-me/rainbowkit';
+import { ConnectButton, useConnectModal, RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
 import { useAccount, usePublicClient, useWalletClient, useConnect, useDisconnect, useContractRead } from 'wagmi';
 import './App.css';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -31,11 +31,10 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig, WagmiConfig } from 'wagmi';
-import { getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { configureChains, publicProvider } from 'wagmi';
 import { monadTestnet } from './config/chains';
 
 // Initialize Supabase client
@@ -1292,7 +1291,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               Developed by <a href="https://x.com/faizydroid" target="_blank" rel="noopener noreferrer">@faizydroid</a>
             </p>
             <p className="built-on">Built on Monad</p>
-            <p className="copyright">© 2025 Monad Jumper - All Rights Reserved</p>
+            <p className="copyright">© 2023 Monad Jumper - All Rights Reserved</p>
           </footer>
         </div>
       </>
@@ -1474,8 +1473,11 @@ function App() {
   const [isMobileView, setIsMobileView] = useState(false);
   const [showMintModal, setShowMintModal] = useState(false);
   
-  // NFT ownership check - consolidated to one query
-  const { data: nftBalanceData, isLoading: isNftBalanceLoading } = useContractRead({
+  // Use wagmi's reliable contract reading hook
+  const { 
+    data: nftBalanceData,
+    isLoading: isNftBalanceLoading
+  } = useContractRead({
     address: '0xd6f96a88e8abd4da0eab43ec1d044caba3ee9f37',
     abi: [
       {
@@ -1491,7 +1493,7 @@ function App() {
     enabled: isConnected && !!address,
   });
 
-  // Calculate NFT ownership
+  // Calculate NFT ownership status
   const hasMintedNft = useMemo(() => {
     if (!nftBalanceData) return false;
     const balanceNum = typeof nftBalanceData === 'bigint' ? 
@@ -1511,41 +1513,21 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Only log in development
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('NFT ownership status:', { hasMintedNft, isNftBalanceLoading, address });
-    }
-  }, [hasMintedNft, isNftBalanceLoading, address]);
+  // Rest of existing useEffects...
 
-  const { chains, publicClient } = configureChains(
-    [monadTestnet],
-    [publicProvider()]
-  );
-
-  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
-
-  const { connectors } = getDefaultWallets({
+  // Update the wagmi configuration
+  const config = getDefaultConfig({
     appName: 'Monad Jumper',
-    projectId,
-    chains,
-  });
-
-  const wagmiConfig = createConfig({
-    autoConnect: true,
-    connectors,
-    publicClient,
+    projectId: import.meta.env.VITE_PROJECT_ID,
+    chains: [monadTestnet],
+    ssr: false, // Disable server-side rendering
   });
 
   return (
-    <WagmiConfig config={wagmiConfig}>
-      <RainbowKitProvider 
-        chains={chains} 
-        theme={darkTheme({
-          accentColor: '#7b3fe4',
-          borderRadius: 'medium',
-        })}
+    <WagmiConfig config={config}>
+      <RainbowKitProvider
         modalSize="compact"
+        chains={[monadTestnet]}
       >
         <Web3Provider>
           {/* Only show navbar when wallet is connected */}
@@ -1569,7 +1551,10 @@ function App() {
           {showMintModal && (
             <NFTMintModal 
               isOpen={showMintModal} 
-              onClose={() => setShowMintModal(false)}
+              onClose={() => {
+                console.log("Closing mint modal while preserving connection");
+                setShowMintModal(false);
+              }} 
             />
           )}
         </Web3Provider>

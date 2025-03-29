@@ -10,7 +10,12 @@ const MobileHomePage = ({
   hasMintedNft,
   isNftLoading 
 }) => {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount({
+    onConnect: () => {
+      // Only handle post-connection logic here
+      console.log('Wallet connected via button click');
+    }
+  });
 
   // Single optimized handler
   const handleAction = (action) => (e) => {
@@ -19,12 +24,14 @@ const MobileHomePage = ({
   };
 
   useEffect(() => {
-    document.documentElement.classList.add('mobile-wallet-view');
-    document.querySelector('meta[name=viewport]')?.setAttribute(
-      'content',
-      'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
-    );
-    return () => document.documentElement.classList.remove('mobile-wallet-view');
+    // Only handle viewport settings
+    const metaViewport = document.querySelector('meta[name=viewport]');
+    if (metaViewport) {
+      metaViewport.setAttribute(
+        'content',
+        'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
+      );
+    }
   }, []);
 
   return (
