@@ -1,124 +1,59 @@
 /* Mobile homepage optimized CSS */
 .mobile-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 100vh;
-  width: 100%;
-  padding: 1rem;
-  background: linear-gradient(to bottom, #2a0845, #000000);
-  text-align: center;
+  @apply flex flex-col items-center justify-start min-h-screen p-4 bg-gradient-to-b from-purple-900 to-black text-white;
 }
 
 .mobile-header {
-  width: 100%;
-  margin-bottom: 2rem;
-  text-align: center;
+  @apply text-center mb-8;
 }
 
 .mobile-game-title {
-  font-size: 2.5rem;
-  font-weight: bold;
-  color: #FFD700;
-  margin-bottom: 0.5rem;
-  text-align: center;
+  @apply text-4xl font-bold text-yellow-400 mb-2;
 }
 
 .mobile-game-subtitle {
-  font-size: 1.1rem;
-  color: #FFD700;
-  text-align: center;
-  width: 100%;
-  padding: 0 1rem;
+  @apply text-lg text-yellow-300;
 }
 
 .mobile-character {
-  width: 200px;
-  height: 200px;
-  object-fit: contain;
-  margin: 1rem auto;
+  @apply w-48 h-48 object-contain mb-8;
 }
 
 .mobile-welcome-message {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  margin: 1rem 0;
-  text-align: center;
-}
-
-.mobile-welcome-message p {
-  color: white;
-  font-size: 1.1rem;
-  margin: 0;
-  text-align: center;
-  width: 100%;
+  @apply flex flex-col items-center gap-4 mb-8 text-center;
 }
 
 .mobile-button {
-  padding: 0.75rem 2rem;
-  border-radius: 9999px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  transition: all 0.2s;
-  width: auto;
-  min-width: 200px;
-  margin: 0.5rem 0;
+  @apply px-6 py-3 rounded-full text-lg font-semibold transition-all duration-200 
+         hover:transform hover:scale-105 active:scale-95;
 }
 
 .mobile-play-button {
-  composes: mobile-button;
-  background-color: #4CAF50;
-  color: white;
+  @apply mobile-button bg-green-500 hover:bg-green-600;
 }
 
 .mobile-mint-button {
-  composes: mobile-button;
-  background-color: #2196F3;
-  color: white;
+  @apply mobile-button bg-blue-500 hover:bg-blue-600;
 }
 
 .mobile-loading-indicator {
-  width: 2rem;
-  height: 2rem;
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #2196F3;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 1rem auto;
+  @apply w-8 h-8 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin;
 }
 
 .mobile-game-facts {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  width: 100%;
-  margin-top: auto;
-  padding: 1rem;
+  @apply grid grid-cols-3 gap-4 mt-auto;
 }
 
 .mobile-fact-bubble {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 0.5rem;
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+  @apply flex flex-col items-center p-3 rounded-lg bg-opacity-20 bg-white;
 }
 
 .mobile-fact-bubble span {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
+  @apply text-2xl mb-2;
 }
 
 .mobile-fact-bubble p {
-  font-size: 0.875rem;
-  margin: 0;
-  color: white;
+  @apply text-sm text-center;
 }
 
 .mobile-character-container{width:100%;height:180px;display:flex;justify-content:center;align-items:center;margin:15px auto 15px;position:relative;transform:translateY(25px);z-index:1000}
@@ -135,45 +70,5 @@
 .mobile-mint-container{width:90%;margin:0 auto}
 @keyframes mobile-character-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
 @keyframes bubble-appear{0%{opacity:0;transform:scale(0.8) translateY(20px)}100%{opacity:1;transform:scale(1) translateY(0)}}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media screen and (max-width:375px){.mobile-game-title{font-size:5.2rem}.mobile-game-subtitle{font-size:1.1rem}.mobile-wallet-connect button{font-size:1.2rem!important}}
-@media (max-width: 480px) {
-  .mobile-game-title {
-    font-size: 2rem;
-  }
-
-  .mobile-game-subtitle {
-    font-size: 1rem;
-  }
-
-  .mobile-character {
-    width: 150px;
-    height: 150px;
-  }
-
-  .mobile-game-facts {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-  }
-
-  .mobile-fact-bubble {
-    padding: 0.5rem;
-  }
-
-  .mobile-fact-bubble span {
-    font-size: 1.25rem;
-  }
-
-  .mobile-fact-bubble p {
-    font-size: 0.75rem;
-  }
-}
-/* Fix for RainbowKit button on mobile */
-.mobile-welcome-message [data-rk] {
-  width: auto !important;
-  margin: 0 auto;
-} 
+@keyframes spin{to{transform:rotate(360deg)}}
+@media screen and (max-width:375px){.mobile-game-title{font-size:5.2rem}.mobile-game-subtitle{font-size:1.1rem}.mobile-wallet-connect button{font-size:1.2rem!important}} 
