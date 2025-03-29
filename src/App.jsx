@@ -47,6 +47,23 @@ window.openMintModal = () => {
   document.dispatchEvent(new CustomEvent('openMintModal'));
 };
 
+// Near the top of the file, add this check
+if (typeof window !== 'undefined') {
+  // Ensure SES is properly initialized
+  window.lockdown?.();
+}
+
+// Update the Web3Provider wrapper to handle undefined context
+function SafeWeb3Provider({ children }) {
+  return (
+    <Web3Provider>
+      <ErrorBoundary fallback={<div>Something went wrong</div>}>
+        {children}
+      </ErrorBoundary>
+    </Web3Provider>
+  );
+}
+
 // Create cartoon clouds and platforms background
 function BackgroundElements() {
   const [elements, setElements] = useState([]);
@@ -1492,14 +1509,21 @@ function App() {
   // Rest of existing useEffects...
 
   return (
-    <Web3Provider>
+    <SafeWeb3Provider>
       {/* Only show navbar when wallet is connected */}
       {isConnected && <Navbar />}
       
       <Routes>
         {/* Pass NFT status to GameComponent */}
         <Route path="/" element={
-          <ErrorBoundary>
+          <ErrorBoundary fallback={
+            <div className="error-container">
+              <h2>Oops! Something went wrong</h2>
+              <button onClick={() => window.location.reload()}>
+                Reload Game
+              </button>
+            </div>
+          }>
             <GameComponent 
               hasMintedNft={hasMintedNft} 
               isNftLoading={isNftBalanceLoading}
@@ -1520,7 +1544,7 @@ function App() {
           }} 
         />
       )}
-    </Web3Provider>
+    </SafeWeb3Provider>
   );
 }
 

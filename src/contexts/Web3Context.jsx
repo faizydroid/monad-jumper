@@ -78,67 +78,38 @@ export function Web3Provider({ children }) {
 
   // Update the provider initialization in Web3Context.jsx
   useEffect(() => {
-    const initProvider = async () => {
-      try {
-        // Use the safe provider accessor for Edge compatibility
-        const provider = navigator.userAgent.indexOf("Edg") !== -1
-          ? safelyAccessProvider()
-          : window.ethereum;
-          
-        if (!provider) {
-          setProviderError('No Ethereum wallet detected. Please install MetaMask.');
-          return;
-        }
-        
-        // Increase max listeners limit to prevent warnings
-        if (provider.setMaxListeners) {
-          provider.setMaxListeners(20);
-        }
-        
-        // For ethers v5
-        const providerInstance = new ethers.providers.Web3Provider(provider);
-        console.log("Provider initialized successfully");
-        
-        setProvider(providerInstance);
-        
-        // Get signer and chain info
+    const initializeProvider = async () => {
         try {
-          const signer = providerInstance.getSigner();
-          setSigner(signer);
-          const network = await providerInstance.getNetwork();
-          setChainId(network.chainId);
-          console.log("Signer and network info retrieved");
-        } catch (error) {
-          console.error("Error getting signer:", error);
-        }
-
-        // For Edge browser, use limited event listeners
-        if (navigator.userAgent.indexOf("Edg") !== -1) {
-          const setupListeners = () => {
-            // Remove any existing listeners first
-            provider.removeAllListeners && provider.removeAllListeners('accountsChanged');
-            provider.removeAllListeners && provider.removeAllListeners('chainChanged');
-            provider.removeAllListeners && provider.removeAllListeners('connect');
-            provider.removeAllListeners && provider.removeAllListeners('disconnect');
+            console.log("Initializing Web3 provider...");
             
-            // Add only necessary listeners
-            provider.on('accountsChanged', handleAccountsChanged);
-            provider.on('chainChanged', handleChainChanged);
-          };
-          
-          setupListeners();
-        } else {
-          // Normal listener setup for other browsers
-          // ...existing code
+            // Check if window.ethereum exists
+            if (typeof window.ethereum !== 'undefined') {
+                // For ethers v5
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                console.log("Provider initialized successfully");
+                
+                setProvider(provider);
+                
+                // Get signer and chain info
+                try {
+                    const signer = provider.getSigner();
+                    setSigner(signer);
+                    const network = await provider.getNetwork();
+                    setChainId(network.chainId);
+                    console.log("Signer and network info retrieved");
+                } catch (error) {
+                    console.error("Error getting signer:", error);
+                }
+            } else {
+                console.log("No ethereum object found in window");
+            }
+        } catch (error) {
+            console.error("Error initializing provider:", error);
         }
-      } catch (error) {
-        console.error('Provider initialization error:', error);
-        setProviderError('Failed to connect to wallet: ' + error.message);
-      }
     };
-    
-    initProvider();
-  }, []);
+
+    initializeProvider();
+}, []);
 
   useEffect(() => {
     if (isInEdgeFallbackMode) {
@@ -1894,5 +1865,29 @@ export function Web3Provider({ children }) {
   );
 }
 
-export const useWeb3 = () => useContext(Web3Context);
+export const useWeb3 = () => {
+  const context = React.useContext(Web3Context);
+  if (!context) {
+    console.warn('useWeb3 must be used within a Web3Provider');
+    // Return a safe fallback object with all expected properties
+    return {
+      isLoading: false,
+      connectWallet: () => console.warn('Web3 not initialized'),
+      saveScore: () => console.warn('Web3 not initialized'),
+      saveScoreIncrement: () => console.warn('Web3 not initialized'),
+      purchasePowerUp: () => console.warn('Web3 not initialized'),
+      continueGame: () => console.warn('Web3 not initialized'),
+      gameScore: 0,
+      setGameScore: () => console.warn('Web3 not initialized'),
+      provider: null,
+      contract: null,
+      updateScore: () => console.warn('Web3 not initialized'),
+      recordJump: () => console.warn('Web3 not initialized'),
+      providerError: null,
+      signer: null
+    };
+  }
+  return context;
+};
+
 export const useWeb3Context = useWeb3; 
