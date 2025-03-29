@@ -33,7 +33,6 @@ import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
-import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 
 // Initialize Supabase client
@@ -1132,42 +1131,23 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   if (!isConnected) {
     return (
       <>
-        {isMobileView ? (
-          <MobileHomePage 
-            characterImg="/images/monad0.png" 
-            onPlay={() => {
-              // Preserve wallet connection by updating state without page navigation
-              console.log("Play clicked from mobile, setting showGame via state update");
-              window.location.hash = 'game';
-              setShowGame(true);
-            }}
-            onMint={() => {
-              // Use a state update instead of a function that might cause re-rendering
-              console.log("Mint clicked from mobile, showing modal via state update");
-              setShowMintModal(true);
-            }}
-            hasMintedNft={hasMintedNft}
-            isNftLoading={isNftLoading}
-          />
-        ) : (
-          <>
         <BackgroundElements />
         <div className="container">
-              <h1 className="game-title">MONAD JUMPER</h1>
+          <h1 className="game-title">MONAD JUMPER</h1>
           <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
           
-              <div className="character-container" style={{height: "100px", display: "flex", justifyContent: "center", margin: "20px 0"}}>
-                <img 
-                  src="/images/monad0.png" 
-                  alt="Game Character" 
-                  className="character" 
-                  style={{height: "100px", width: "auto"}}
-                />
+          <div className="character-container">
+            <img 
+              src="/images/monad0.png" 
+              alt="Game Character" 
+              className="character" 
+              style={{height: "100px", width: "auto"}}
+            />
           </div>
           
-              <div className="welcome-message">
-                <p>Connect your wallet to start your jumping adventure</p>
-                <div className="wallet-connect mobile">
+          <div className="welcome-message">
+            <p>Connect your wallet to start your jumping adventure</p>
+            <div className={`wallet-connect ${isMobileView ? 'mobile' : ''}`}>
               <ConnectButton />
             </div>
           </div>
@@ -1187,8 +1167,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             </div>
           </div>
         </div>
-          </>
-        )}
       </>
     );
   }
