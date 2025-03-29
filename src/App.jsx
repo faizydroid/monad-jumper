@@ -31,11 +31,13 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig, WagmiConfig } from 'wagmi';
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { getDefaultWallets } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
+import { configureChains, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { monadTestnet } from './config/chains';
+import { publicProvider } from 'wagmi/providers/public';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1515,23 +1517,26 @@ function App() {
 
   // Rest of existing useEffects...
 
-  // Update the wagmi configuration
-  const config = getDefaultConfig({
+  const { chains, publicClient } = configureChains(
+    [monadTestnet],
+    [publicProvider()]
+  );
+
+  const { connectors } = getDefaultWallets({
     appName: 'Monad Jumper',
     projectId: import.meta.env.VITE_PROJECT_ID,
-    chains: [monadTestnet],
-    ssr: false,
-    wallets: [], // Empty array to prevent auto-detection
-    initialChain: monadTestnet,
-    autoConnect: false // Explicitly disable auto-connect
+    chains
+  });
+
+  const wagmiConfig = createConfig({
+    autoConnect: true,
+    connectors,
+    publicClient
   });
 
   return (
-    <WagmiConfig config={config}>
-      <RainbowKitProvider
-        modalSize="compact"
-        chains={[monadTestnet]}
-      >
+    <WagmiConfig config={wagmiConfig}>
+      <RainbowKitProvider chains={chains}>
         <Web3Provider>
           {/* Only show navbar when wallet is connected */}
           {isConnected && <Navbar />}

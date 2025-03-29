@@ -14,8 +14,6 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        '@reown/appkit': '/node_modules/@reown/appkit/dist/index.js',
-        '@reown/appkit-adapter-wagmi': '/node_modules/@reown/appkit-adapter-wagmi/dist/index.js'
       },
     },
     define: {
@@ -27,7 +25,15 @@ export default defineConfig(({ mode }) => {
         input: {
           main: resolve(__dirname, 'index.html'),
         },
+        output: {
+          manualChunks: {
+            'rainbow': ['@rainbow-me/rainbowkit'],
+            'wagmi': ['wagmi'],
+            'supabase': ['@supabase/supabase-js'],
+          }
+        }
       },
+      sourcemap: true,
     },
     optimizeDeps: {
       include: [
@@ -38,8 +44,6 @@ export default defineConfig(({ mode }) => {
         '@tanstack/react-query',
         'viem',
         'ethers',
-        '@reown/appkit',
-        '@reown/appkit-adapter-wagmi'
       ],
       exclude: ['public/js/*'],
     },
