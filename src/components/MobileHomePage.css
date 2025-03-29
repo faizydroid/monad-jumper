@@ -1,74 +1,134 @@
 /* Mobile homepage optimized CSS */
+.safe-area-inset {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
 .mobile-container {
-  @apply flex flex-col items-center justify-start min-h-screen p-4 bg-gradient-to-b from-purple-900 to-black text-white;
+  @apply flex flex-col items-center justify-start min-h-screen w-full;
+  background: linear-gradient(180deg, #1a0b2e 0%, #000000 100%);
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mobile-header {
-  @apply text-center mb-8;
+  @apply w-full text-center py-4 px-2;
 }
 
 .mobile-game-title {
-  @apply text-4xl font-bold text-yellow-400 mb-2;
+  @apply text-3xl sm:text-4xl font-bold text-yellow-400 mb-2;
+  font-family: 'Bangers', cursive;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .mobile-game-subtitle {
-  @apply text-lg text-yellow-300;
+  @apply text-base sm:text-lg text-yellow-300;
+  font-family: 'Chalkboard SE', 'Short Stack', cursive;
+}
+
+.mobile-character-wrapper {
+  @apply w-full flex justify-center items-center my-4 relative;
+  height: 30vh;
+  max-height: 200px;
 }
 
 .mobile-character {
-  @apply w-48 h-48 object-contain mb-8;
+  @apply w-auto h-full object-contain;
+  filter: drop-shadow(0 10px 8px rgba(0,0,0,0.3));
+  animation: float 3s ease-in-out infinite;
+  will-change: transform;
 }
 
 .mobile-welcome-message {
-  @apply flex flex-col items-center gap-4 mb-8 text-center;
+  @apply w-full max-w-sm mx-auto px-4 py-6 flex flex-col items-center;
 }
 
-.mobile-button {
-  @apply px-6 py-3 rounded-full text-lg font-semibold transition-all duration-200 
-         hover:transform hover:scale-105 active:scale-95;
+.mobile-connect-section,
+.mobile-loading-section,
+.mobile-action-section {
+  @apply w-full flex flex-col items-center gap-4;
+}
+
+.mobile-wallet-connect {
+  @apply w-full max-w-[280px];
+}
+
+/* Button Styles */
+.mobile-button-base {
+  @apply w-full max-w-[280px] h-14 rounded-full text-lg font-semibold;
+  @apply transition-all duration-200 active:scale-95;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
 }
 
 .mobile-play-button {
-  @apply mobile-button bg-green-500 hover:bg-green-600;
+  @apply mobile-button-base bg-gradient-to-r from-green-500 to-green-600 text-white;
 }
 
 .mobile-mint-button {
-  @apply mobile-button bg-blue-500 hover:bg-blue-600;
+  @apply mobile-button-base bg-gradient-to-r from-blue-500 to-blue-600 text-white;
 }
 
+/* Loading indicator */
 .mobile-loading-indicator {
-  @apply w-8 h-8 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin;
+  @apply w-8 h-8 border-4 border-t-blue-500 border-blue-200 rounded-full;
+  animation: spin 1s linear infinite;
 }
 
+/* Game facts section */
 .mobile-game-facts {
-  @apply grid grid-cols-3 gap-4 mt-auto;
+  @apply grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-sm mx-auto mt-auto p-4;
 }
 
 .mobile-fact-bubble {
-  @apply flex flex-col items-center p-3 rounded-lg bg-opacity-20 bg-white;
+  @apply flex flex-col items-center p-3 rounded-lg;
+  backdrop-filter: blur(8px);
+  animation: bubble-appear 0.5s ease-out forwards;
 }
 
-.mobile-fact-bubble span {
-  @apply text-2xl mb-2;
+/* Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
 
-.mobile-fact-bubble p {
-  @apply text-sm text-center;
+@keyframes bubble-appear {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.mobile-character-container{width:100%;height:180px;display:flex;justify-content:center;align-items:center;margin:15px auto 15px;position:relative;transform:translateY(25px);z-index:1000}
-.mobile-character{width:120px;height:120px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 10px 8px rgba(0,0,0,0.3));animation:mobile-character-bounce 2s infinite ease-in-out;transform:translateY(25px);z-index:1000}
-.mobile-welcome-message p{margin-bottom:20px;font-size:1.2rem;color:#000;font-family:'Chalkboard SE','Short Stack',cursive}
-.mobile-wallet-connect{width:85%;max-width:300px;margin:5px auto 10px}
-.mobile-wallet-connect button,.mobile-button-base,.mobile-connect-wallet-button,.mobile-account-button{width:100%!important;height:50px!important;font-size:1.4rem!important;font-family:'Bangers',cursive!important;letter-spacing:1px!important;border-radius:30px!important;border:none!important;box-shadow:0 4px 10px rgba(0,0,0,0.3)!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:15px auto 5px!important;max-width:300px!important;color:#fff!important}
-.mobile-wallet-connect button,.mobile-connect-wallet-button,.mobile-account-button{background:linear-gradient(135deg,#9a4eff,#7000ff)!important}
-.mobile-wallet-connect button span{display:flex!important;align-items:center!important;justify-content:center!important}
-.mobile-game-facts{width:90%;margin:10px auto;display:flex;flex-direction:column;gap:15px}
-.mobile-fact-bubble-1{animation-delay:0.1s;background:linear-gradient(135deg,rgba(255,107,107,0.2),rgba(255,82,82,0.1));border:1px solid rgba(255,107,107,0.3)}
-.mobile-fact-bubble-2{animation-delay:0.2s;background:linear-gradient(135deg,rgba(76,175,80,0.2),rgba(69,160,73,0.1));border:1px solid rgba(76,175,80,0.3)}
-.mobile-fact-bubble-3{animation-delay:0.3s;background:linear-gradient(135deg,rgba(33,150,243,0.2),rgba(30,136,229,0.1));border:1px solid rgba(33,150,243,0.3)}
-.mobile-mint-container{width:90%;margin:0 auto}
-@keyframes mobile-character-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
-@keyframes bubble-appear{0%{opacity:0;transform:scale(0.8) translateY(20px)}100%{opacity:1;transform:scale(1) translateY(0)}}
-@keyframes spin{to{transform:rotate(360deg)}}
-@media screen and (max-width:375px){.mobile-game-title{font-size:5.2rem}.mobile-game-subtitle{font-size:1.1rem}.mobile-wallet-connect button{font-size:1.2rem!important}} 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 375px) {
+  .mobile-game-title {
+    font-size: 2rem;
+  }
+  
+  .mobile-game-subtitle {
+    font-size: 0.9rem;
+  }
+  
+  .mobile-character-wrapper {
+    height: 25vh;
+  }
+}
+
+/* Safe area adjustments for notched devices */
+@supports (padding: max(0px)) {
+  .mobile-container {
+    padding-top: max(env(safe-area-inset-top), 1rem);
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+  }
+}
+
+/* PWA display improvements */
+@media (display-mode: standalone) {
+  .mobile-container {
+    height: 100vh;
+    height: -webkit-fill-available;
+  }
+} 
