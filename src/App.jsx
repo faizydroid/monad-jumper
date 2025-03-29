@@ -34,7 +34,7 @@ import { createConfig, WagmiConfig } from 'wagmi';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { publicProvider } from 'wagmi/providers/public';
+import { publicProvider } from '@wagmi/core/providers/public';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1516,7 +1516,11 @@ function App() {
 
   const { chains, publicClient } = configureChains(
     [monadTestnet],
-    [publicProvider()]
+    [
+      publicProvider({
+        apiKey: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
+      })
+    ]
   );
 
   const { connectors } = getDefaultWallets({
