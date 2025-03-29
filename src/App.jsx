@@ -1520,7 +1520,10 @@ function App() {
     appName: 'Monad Jumper',
     projectId: import.meta.env.VITE_PROJECT_ID,
     chains: [monadTestnet],
-    ssr: false, // Disable server-side rendering
+    ssr: false,
+    wallets: [], // Empty array to prevent auto-detection
+    initialChain: monadTestnet,
+    autoConnect: false // Explicitly disable auto-connect
   });
 
   return (

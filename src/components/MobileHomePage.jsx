@@ -24,14 +24,21 @@ const MobileHomePage = ({
   };
 
   useEffect(() => {
-    // Only handle viewport settings
-    const metaViewport = document.querySelector('meta[name=viewport]');
-    if (metaViewport) {
-      metaViewport.setAttribute(
-        'content',
-        'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
-      );
-    }
+    // Prevent mobile browser zooming
+    const viewportMeta = document.createElement('meta');
+    viewportMeta.name = 'viewport';
+    viewportMeta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.head.appendChild(viewportMeta);
+
+    // Clean up
+    return () => {
+      document.head.removeChild(viewportMeta);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.add('mobile-view');
+    return () => document.body.classList.remove('mobile-view');
   }, []);
 
   return (
