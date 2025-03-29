@@ -1,5 +1,5 @@
 export const monadTestnet = {
-  id: 10143,
+  id: Number(import.meta.env.VITE_REACT_APP_MONAD_CHAIN_ID),
   name: 'Monad Testnet',
   network: 'monad-testnet',
   nativeCurrency: {
@@ -8,8 +8,8 @@ export const monadTestnet = {
     symbol: 'MON',
   },
   rpcUrls: {
-    public: { http: ['https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5'] },
-    default: { http: ['https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5'] },
+    public: { http: [import.meta.env.VITE_REACT_APP_MONAD_RPC_URL] },
+    default: { http: [import.meta.env.VITE_REACT_APP_MONAD_RPC_URL] },
   },
   blockExplorers: {
     default: { name: 'Monad Explorer', url: 'https://explorer.monad.xyz' },

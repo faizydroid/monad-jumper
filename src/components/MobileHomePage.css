@@ -1,0 +1,65 @@
+/* Mobile homepage optimized CSS */
+.mobile-container {
+  @apply flex flex-col items-center justify-start min-h-screen p-4 bg-gradient-to-b from-purple-900 to-black;
+}
+
+.mobile-header {
+  @apply text-center mb-6;
+}
+
+.mobile-game-title {
+  @apply text-4xl font-bold text-yellow-400 mb-2;
+}
+
+.mobile-game-subtitle {
+  @apply text-lg text-yellow-200;
+}
+
+.mobile-character-container {
+  @apply w-48 h-48 mb-6;
+}
+
+.mobile-character {
+  @apply w-full h-full object-contain;
+}
+
+.mobile-welcome-message {
+  @apply text-center text-white mb-8;
+}
+
+.mobile-button {
+  @apply px-6 py-3 rounded-full text-lg font-semibold transition-all duration-200 
+         hover:transform hover:scale-105 active:scale-95;
+}
+
+.mobile-play-button {
+  @apply mobile-button bg-green-500 hover:bg-green-600;
+}
+
+.mobile-mint-button {
+  @apply mobile-button bg-purple-500 hover:bg-purple-600;
+}
+
+.mobile-game-facts {
+  @apply flex justify-around w-full mt-8;
+}
+
+.mobile-fact-bubble {
+  @apply flex flex-col items-center bg-opacity-20 bg-white rounded-lg p-3;
+}
+
+.mobile-fact-bubble span {
+  @apply text-2xl mb-2;
+}
+
+.mobile-fact-bubble p {
+  @apply text-sm text-white;
+}
+
+.mobile-wallet-connect{width:85%;max-width:300px;margin:5px auto 10px}
+.mobile-wallet-connect button,.mobile-button-base,.mobile-connect-wallet-button,.mobile-account-button{width:100%!important;height:50px!important;font-size:1.4rem!important;font-family:'Bangers',cursive!important;letter-spacing:1px!important;border-radius:30px!important;border:none!important;box-shadow:0 4px 10px rgba(0,0,0,0.3)!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:15px auto 5px!important;max-width:300px!important;color:#fff!important}
+.mobile-wallet-connect button,.mobile-connect-wallet-button,.mobile-account-button{background:linear-gradient(135deg,#9a4eff,#7000ff)!important}
+.mobile-wallet-connect button span{display:flex!important;align-items:center!important;justify-content:center!important}
+.mobile-loading-indicator{width:30px;height:30px;border:3px solid rgba(153,0,255,0.3);border-radius:50%;border-top-color:#9900ff;animation:spin 1s ease-in-out infinite;margin:15px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media screen and (max-width:375px){.mobile-game-title{font-size:5.2rem}.mobile-game-subtitle{font-size:1.1rem}.mobile-wallet-connect button{font-size:1.2rem!important}} 
