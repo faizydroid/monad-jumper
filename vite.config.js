@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 import { resolve } from 'path'
 
 export default defineConfig(({ mode }) => {
@@ -12,70 +13,40 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': resolve(__dirname, './src'),
+        '@': path.resolve(__dirname, './src'),
       },
-      extensions: ['.js', '.jsx', '.ts', '.tsx', '.css']
     },
     define: {
-      'process.env': Object.entries(env).reduce((prev, [key, val]) => {
-        return {
-          ...prev,
-          [key]: JSON.stringify(val)
-        }
-      }, {}),
-      global: 'globalThis',
-    },
-    css: {
-      modules: {
-        localsConvention: 'camelCase',
-        generateScopedName: '[local]_[hash:base64:5]',
-      },
-      preprocessorOptions: {
-        less: {
-          javascriptEnabled: true,
-        },
-      },
+      'process.env': env,
     },
     build: {
       outDir: 'dist',
-      cssCodeSplit: false,
-      minify: 'terser',
-      terserOptions: {
-        compress: {
-          drop_console: false,
-          drop_debugger: false,
-        },
-        format: {
-          comments: false,
-        },
-      },
-      target: 'esnext',
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'index.html'),
         },
-        output: {
-          manualChunks: (id) => {
-            if (id.includes('node_modules')) {
-              if (id.includes('react')) return 'vendor-react';
-              if (id.includes('wagmi') || id.includes('rainbow')) return 'vendor-web3';
-              return 'vendor';
-            }
-          },
-          assetFileNames: (assetInfo) => {
-            if (assetInfo.name.endsWith('.css')) {
-              return 'assets/styles.[hash].css';
-            }
-            return 'assets/[name].[hash][extname]';
-          },
-          chunkFileNames: 'assets/[name].[hash].js',
-          entryFileNames: 'assets/[name].[hash].js',
+        onwarn(warning, warn) {
+          if (warning.code === 'MISSING_EXPORT') return;
+          warn(warning);
         },
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            'wagmi-vendor': ['wagmi', '@rainbow-me/rainbowkit'],
+          }
+        }
       },
       commonjsOptions: {
         transformMixedEsModules: true,
       },
-      sourcemap: true,
+      sourcemap: process.env.NODE_ENV !== 'production',
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true
+        }
+      }
     },
     optimizeDeps: {
       include: [
@@ -84,16 +55,12 @@ export default defineConfig(({ mode }) => {
         '@rainbow-me/rainbowkit',
         'wagmi',
         '@tanstack/react-query',
-        'viem'
+        'viem',
+        'ethers',
       ],
+      exclude: ['public/js/*'],
       esbuildOptions: {
-        target: 'esnext',
-      }
-    },
-    esbuild: {
-      target: 'esnext',
-      supported: {
-        bigint: true
+        target: 'es2020'
       }
     },
     publicDir: 'public',

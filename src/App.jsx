@@ -1515,35 +1515,37 @@ function App() {
   // Rest of existing useEffects...
 
   return (
-    <Web3Provider>
-      {/* Only show navbar when wallet is connected */}
-      {isConnected && <Navbar />}
-      
-      <Routes>
-        {/* Pass NFT status to GameComponent */}
-        <Route path="/" element={
-          <ErrorBoundary>
-            <GameComponent 
-              hasMintedNft={hasMintedNft} 
-              isNftLoading={isNftBalanceLoading}
-              onOpenMintModal={() => setShowMintModal(true)}
-            />
-          </ErrorBoundary>
-        } />
-        <Route path="/admin" element={<AdminAccess />} />
-      </Routes>
-      <TransactionNotifications />
+    <ErrorBoundary>
+      <Web3Provider>
+        {/* Only show navbar when wallet is connected */}
+        {isConnected && <Navbar />}
+        
+        <Routes>
+          {/* Pass NFT status to GameComponent */}
+          <Route path="/" element={
+            <ErrorBoundary>
+              <GameComponent 
+                hasMintedNft={hasMintedNft} 
+                isNftLoading={isNftBalanceLoading}
+                onOpenMintModal={() => setShowMintModal(true)}
+              />
+            </ErrorBoundary>
+          } />
+          <Route path="/admin" element={<AdminAccess />} />
+        </Routes>
+        <TransactionNotifications />
 
-      {showMintModal && (
-        <NFTMintModal 
-          isOpen={showMintModal} 
-          onClose={() => {
-            console.log("Closing mint modal while preserving connection");
-            setShowMintModal(false);
-          }} 
-        />
-      )}
-    </Web3Provider>
+        {showMintModal && (
+          <NFTMintModal 
+            isOpen={showMintModal} 
+            onClose={() => {
+              console.log("Closing mint modal while preserving connection");
+              setShowMintModal(false);
+            }} 
+          />
+        )}
+      </Web3Provider>
+    </ErrorBoundary>
   );
 }
 

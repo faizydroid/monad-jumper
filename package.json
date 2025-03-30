@@ -3,28 +3,14 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "engines": {
-    "node": ">=16.0.0"
-  },
-  "browserslist": {
-    "production": [
-      "chrome >= 67",
-      "edge >= 79",
-      "firefox >= 68",
-      "opera >= 54",
-      "safari >= 14"
-    ]
-  },
   "description": "",
   "scripts": {
     "dev": "vite",
     "dev:host": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "npm run build",
-    "clean": "rimraf dist",
-    "prebuild": "npm run clean",
-    "build:analyze": "vite build --mode analyze"
+    "deploy": "npm run build && npm run preview",
+    "vercel-build": "vite build"
   },
   "keywords": [],
   "author": "",
@@ -41,14 +27,11 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.3",
     "viem": "^2.23.10",
-    "wagmi": "^2.14.15",
-    "react-error-boundary": "^4.0.12"
+    "wagmi": "^2.14.15"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "http-server": "^14.1.1",
-    "vite": "^5.1.6",
-    "terser": "^5.29.1",
-    "rimraf": "^5.0.1"
+    "vite": "^5.1.6"
   }
 }

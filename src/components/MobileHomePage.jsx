@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useCallback } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
@@ -25,17 +25,34 @@ const MobileHomePage = ({
 }) => {
   const { address, isConnected } = useAccount() || {};
 
-  const handleAction = (action, e) => {
-    if (!e?.preventDefault || !action) return;
+  const handleAction = useCallback((action, e) => {
+    if (!e || !action) return;
     e.preventDefault();
+    e.stopPropagation();
+    
     try {
-      action === 'play' ? onPlay() : onMint();
+      if (action === 'play' && typeof onPlay === 'function') {
+        onPlay();
+      } else if (action === 'mint' && typeof onMint === 'function') {
+        onMint();
+      }
     } catch (error) {
       console.error('Action handler error:', error);
     }
-  };
+  }, [onPlay, onMint]);
 
-  const renderContent = () => {
+  const renderButton = useCallback(({ type, text }) => (
+    <button 
+      onClick={(e) => handleAction(type, e)}
+      className={`mobile-${type}-button`}
+      type="button"
+      disabled={isNftLoading}
+    >
+      {text}
+    </button>
+  ), [handleAction, isNftLoading]);
+
+  const renderContent = useCallback(() => {
     if (!isConnected) {
       return (
         <>
@@ -55,31 +72,20 @@ const MobileHomePage = ({
       return <LoadingSpinner />;
     }
 
-    const ButtonComponent = hasMintedNft ? (
-      <button 
-        onClick={(e) => handleAction('play', e)}
-        className="mobile-play-button"
-        type="button"
-      >
-        Play Now
-      </button>
-    ) : (
-      <button 
-        onClick={(e) => handleAction('mint', e)}
-        className="mobile-mint-button"
-        type="button"
-      >
-        Mint to Play
-      </button>
-    );
-
     return (
       <>
         <p>{hasMintedNft ? "You're ready to jump!" : "Mint an NFT to start playing"}</p>
-        {ButtonComponent}
+        {renderButton({
+          type: hasMintedNft ? 'play' : 'mint',
+          text: hasMintedNft ? 'Play Now' : 'Mint to Play'
+        })}
       </>
     );
-  };
+  }, [isConnected, isNftLoading, hasMintedNft, renderButton]);
+
+  if (typeof window === 'undefined') {
+    return null; // SSR safety
+  }
 
   return (
     <div className="mobile-container">
@@ -90,16 +96,18 @@ const MobileHomePage = ({
       
       <Suspense fallback={<LoadingSpinner />}>
         <div className="mobile-character-container">
-          <img 
-            src={characterImg} 
-            alt="Game Character" 
-            className="mobile-character"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = '/fallback-character.png';
-            }}
-            loading="lazy"
-          />
+          {characterImg && (
+            <img 
+              src={characterImg} 
+              alt="Game Character" 
+              className="mobile-character"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = '/fallback-character.png';
+              }}
+              loading="lazy"
+            />
+          )}
         </div>
       </Suspense>
       
@@ -108,12 +116,16 @@ const MobileHomePage = ({
       </div>
       
       <div className="mobile-game-facts">
-        <GameFact emoji="🚀" text="Play & Earn!" />
-        <GameFact emoji="🎮" text="Fun Gameplay!" />
-        <GameFact emoji="⛓️" text="Powered by Monad!" />
+        {[
+          { emoji: '🚀', text: 'Play & Earn!' },
+          { emoji: '🎮', text: 'Fun Gameplay!' },
+          { emoji: '⛓️', text: 'Powered by Monad!' }
+        ].map((fact) => (
+          <GameFact key={fact.text} {...fact} />
+        ))}
       </div>
     </div>
   );
 };
 
-export default MobileHomePage; 
+export default React.memo(MobileHomePage); 
