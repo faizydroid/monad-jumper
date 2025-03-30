@@ -7,9 +7,11 @@
   "scripts": {
     "dev": "vite",
     "dev:host": "vite --host",
-    "build": "vite build",
+    "build": "vite build --emptyOutDir",
     "preview": "vite preview",
-    "deploy": "npm run build && npm run preview",
+    "deploy": "npm run build",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
     "build:analyze": "vite build --mode analyze"
   },
   "keywords": [],
@@ -32,6 +34,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "http-server": "^14.1.1",
-    "vite": "^5.1.6"
+    "vite": "^5.1.6",
+    "terser": "^5.29.1"
   }
 }

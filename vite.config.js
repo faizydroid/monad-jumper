@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
 import { resolve } from 'path'
 
 export default defineConfig(({ mode }) => {
@@ -13,7 +12,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': resolve(__dirname, './src'),
       },
     },
     define: {
@@ -21,12 +20,16 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      cssCodeSplit: true,
+      cssCodeSplit: false,
       minify: 'terser',
       terserOptions: {
         compress: {
           drop_console: true,
           drop_debugger: true,
+          pure_funcs: ['console.log', 'console.debug', 'console.info'],
+        },
+        format: {
+          comments: false,
         },
       },
       rollupOptions: {
@@ -34,17 +37,26 @@ export default defineConfig(({ mode }) => {
           main: resolve(__dirname, 'index.html'),
         },
         output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom'],
-            wagmi: ['wagmi', '@wagmi/core'],
-            rainbow: ['@rainbow-me/rainbowkit'],
+          manualChunks: (id) => {
+            if (id.includes('node_modules')) {
+              if (id.includes('react')) return 'vendor-react';
+              if (id.includes('wagmi') || id.includes('rainbow')) return 'vendor-web3';
+              return 'vendor';
+            }
           },
+          assetFileNames: (assetInfo) => {
+            if (assetInfo.name.endsWith('.css')) {
+              return 'assets/styles.[hash].css';
+            }
+            return 'assets/[name].[hash][extname]';
+          },
+          chunkFileNames: 'assets/[name].[hash].js',
+          entryFileNames: 'assets/[name].[hash].js',
         },
-        onwarn(warning, warn) {
-          if (warning.code === 'MISSING_EXPORT') return;
-          warn(warning);
-        }
       },
+      sourcemap: false,
+      target: 'es2018',
+      assetsInlineLimit: 4096,
     },
     optimizeDeps: {
       include: [
@@ -53,10 +65,12 @@ export default defineConfig(({ mode }) => {
         '@rainbow-me/rainbowkit',
         'wagmi',
         '@tanstack/react-query',
-        'viem',
-        'ethers',
+        'viem'
       ],
-      exclude: ['public/js/*'],
+    },
+    esbuild: {
+      jsxInject: `import React from 'react'`,
+      target: 'es2018',
     },
     publicDir: 'public',
   }
