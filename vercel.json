@@ -16,5 +16,9 @@
   ],
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "github": {
+    "silent": true
+  },
+  "version": 2
 } 

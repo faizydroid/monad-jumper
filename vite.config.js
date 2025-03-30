@@ -26,12 +26,12 @@ export default defineConfig(({ mode }) => {
         compress: {
           drop_console: true,
           drop_debugger: true,
-          pure_funcs: ['console.log', 'console.debug', 'console.info'],
         },
         format: {
           comments: false,
         },
       },
+      target: 'esnext',
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'index.html'),
@@ -55,8 +55,6 @@ export default defineConfig(({ mode }) => {
         },
       },
       sourcemap: false,
-      target: 'es2018',
-      assetsInlineLimit: 4096,
     },
     optimizeDeps: {
       include: [
@@ -69,7 +67,10 @@ export default defineConfig(({ mode }) => {
       ],
     },
     esbuild: {
-      target: 'es2018',
+      target: 'esnext',
+      supported: {
+        bigint: true
+      }
     },
     publicDir: 'public',
   }
