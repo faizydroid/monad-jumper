@@ -1,20 +1,7 @@
-import React, { Suspense, useCallback } from 'react';
+import React from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
-
-const LoadingSpinner = () => (
-  <div className="loading-spinner">
-    Loading...
-  </div>
-);
-
-const GameFact = ({ emoji, text }) => (
-  <div className="mobile-fact-bubble">
-    <span>{emoji}</span>
-    <p>{text}</p>
-  </div>
-);
 
 const MobileHomePage = ({ 
   characterImg = '',
@@ -25,34 +12,17 @@ const MobileHomePage = ({
 }) => {
   const { address, isConnected } = useAccount() || {};
 
-  const handleAction = useCallback((action, e) => {
+  const handleAction = (action, e) => {
     if (!e || !action) return;
     e.preventDefault();
-    e.stopPropagation();
-    
     try {
-      if (action === 'play' && typeof onPlay === 'function') {
-        onPlay();
-      } else if (action === 'mint' && typeof onMint === 'function') {
-        onMint();
-      }
+      action === 'play' ? onPlay() : onMint();
     } catch (error) {
       console.error('Action handler error:', error);
     }
-  }, [onPlay, onMint]);
+  };
 
-  const renderButton = useCallback(({ type, text }) => (
-    <button 
-      onClick={(e) => handleAction(type, e)}
-      className={`mobile-${type}-button`}
-      type="button"
-      disabled={isNftLoading}
-    >
-      {text}
-    </button>
-  ), [handleAction, isNftLoading]);
-
-  const renderContent = useCallback(() => {
+  const renderContent = () => {
     if (!isConnected) {
       return (
         <>
@@ -69,22 +39,36 @@ const MobileHomePage = ({
     }
 
     if (isNftLoading) {
-      return <LoadingSpinner />;
+      return <p>Checking NFT ownership...</p>;
     }
 
-    return (
+    return hasMintedNft ? (
       <>
-        <p>{hasMintedNft ? "You're ready to jump!" : "Mint an NFT to start playing"}</p>
-        {renderButton({
-          type: hasMintedNft ? 'play' : 'mint',
-          text: hasMintedNft ? 'Play Now' : 'Mint to Play'
-        })}
+        <p>You're ready to jump!</p>
+        <button 
+          onClick={(e) => handleAction('play', e)}
+          className="mobile-play-button"
+          type="button"
+        >
+          Play Now
+        </button>
+      </>
+    ) : (
+      <>
+        <p>Mint an NFT to start playing</p>
+        <button 
+          onClick={(e) => handleAction('mint', e)}
+          className="mobile-mint-button"
+          type="button"
+        >
+          Mint to Play
+        </button>
       </>
     );
-  }, [isConnected, isNftLoading, hasMintedNft, renderButton]);
+  };
 
-  if (typeof window === 'undefined') {
-    return null; // SSR safety
+  if (!characterImg) {
+    return <div>Loading game assets...</div>;
   }
 
   return (
@@ -94,38 +78,32 @@ const MobileHomePage = ({
         <p className="mobile-game-subtitle">Jump through the blockchain one block at a time!</p>
       </div>
       
-      <Suspense fallback={<LoadingSpinner />}>
-        <div className="mobile-character-container">
-          {characterImg && (
-            <img 
-              src={characterImg} 
-              alt="Game Character" 
-              className="mobile-character"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = '/fallback-character.png';
-              }}
-              loading="lazy"
-            />
-          )}
-        </div>
-      </Suspense>
+      <div className="mobile-character-container">
+        <img 
+          src={characterImg} 
+          alt="Game Character" 
+          className="mobile-character"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = '/fallback-character.png';
+          }}
+        />
+      </div>
       
       <div className="mobile-welcome-message">
         {renderContent()}
       </div>
       
       <div className="mobile-game-facts">
-        {[
-          { emoji: '🚀', text: 'Play & Earn!' },
-          { emoji: '🎮', text: 'Fun Gameplay!' },
-          { emoji: '⛓️', text: 'Powered by Monad!' }
-        ].map((fact) => (
-          <GameFact key={fact.text} {...fact} />
+        {['Play & Earn!', 'Fun Gameplay!', 'Powered by Monad!'].map((text, i) => (
+          <div key={text} className={`mobile-fact-bubble mobile-fact-bubble-${i + 1}`}>
+            <span>{['🚀', '🎮', '⛓️'][i]}</span>
+            <p>{text}</p>
+          </div>
         ))}
       </div>
     </div>
   );
 };
 
-export default React.memo(MobileHomePage); 
+export default MobileHomePage; 

@@ -28,24 +28,8 @@ export default defineConfig(({ mode }) => {
         onwarn(warning, warn) {
           if (warning.code === 'MISSING_EXPORT') return;
           warn(warning);
-        },
-        output: {
-          manualChunks: (id) => {
-            if (id.includes('node_modules')) {
-              if (id.includes('@rainbow-me') || id.includes('wagmi')) {
-                return 'wallet-vendor';
-              }
-              return 'vendor';
-            }
-          }
         }
       },
-      commonjsOptions: {
-        esmExternals: true,
-        requireReturnsDefault: 'auto'
-      },
-      target: 'esnext',
-      sourcemap: false
     },
     optimizeDeps: {
       include: [
@@ -58,12 +42,6 @@ export default defineConfig(({ mode }) => {
         'ethers',
       ],
       exclude: ['public/js/*'],
-      esbuildOptions: {
-        target: 'esnext',
-        supported: { 
-          bigint: true 
-        },
-      }
     },
     publicDir: 'public',
   }

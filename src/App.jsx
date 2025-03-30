@@ -30,12 +30,11 @@ import {
   walletConnectWallet
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
-import { createConfig, WagmiConfig } from 'wagmi';
+import { createConfig } from 'wagmi';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
-import { monadTestnet } from './config/chains';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -1454,16 +1453,6 @@ function AdminAccessCheck() {
   );
 }
 
-// Add this configuration before the App component
-const config = createConfig(
-  getDefaultConfig({
-    appName: 'Monad Jumper',
-    projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-    chains: [monadTestnet],
-    ssr: false // Important for avoiding SES errors
-  })
-);
-
 function App() {
   const location = useLocation();
   const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
@@ -1526,39 +1515,35 @@ function App() {
   // Rest of existing useEffects...
 
   return (
-    <WagmiConfig config={config}>
-      <ErrorBoundary>
-        <Web3Provider>
-          {/* Only show navbar when wallet is connected */}
-          {isConnected && <Navbar />}
-          
-          <Routes>
-            {/* Pass NFT status to GameComponent */}
-            <Route path="/" element={
-              <ErrorBoundary>
-                <GameComponent 
-                  hasMintedNft={hasMintedNft} 
-                  isNftLoading={isNftBalanceLoading}
-                  onOpenMintModal={() => setShowMintModal(true)}
-                />
-              </ErrorBoundary>
-            } />
-            <Route path="/admin" element={<AdminAccess />} />
-          </Routes>
-          <TransactionNotifications />
-
-          {showMintModal && (
-            <NFTMintModal 
-              isOpen={showMintModal} 
-              onClose={() => {
-                console.log("Closing mint modal while preserving connection");
-                setShowMintModal(false);
-              }} 
+    <Web3Provider>
+      {/* Only show navbar when wallet is connected */}
+      {isConnected && <Navbar />}
+      
+      <Routes>
+        {/* Pass NFT status to GameComponent */}
+        <Route path="/" element={
+          <ErrorBoundary>
+            <GameComponent 
+              hasMintedNft={hasMintedNft} 
+              isNftLoading={isNftBalanceLoading}
+              onOpenMintModal={() => setShowMintModal(true)}
             />
-          )}
-        </Web3Provider>
-      </ErrorBoundary>
-    </WagmiConfig>
+          </ErrorBoundary>
+        } />
+        <Route path="/admin" element={<AdminAccess />} />
+      </Routes>
+      <TransactionNotifications />
+
+      {showMintModal && (
+        <NFTMintModal 
+          isOpen={showMintModal} 
+          onClose={() => {
+            console.log("Closing mint modal while preserving connection");
+            setShowMintModal(false);
+          }} 
+        />
+      )}
+    </Web3Provider>
   );
 }
 
