@@ -4,17 +4,22 @@ import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
-  characterImg, 
-  onPlay, 
-  onMint,
-  hasMintedNft,
-  isNftLoading 
+  characterImg = '',
+  onPlay = () => {},
+  onMint = () => {},
+  hasMintedNft = false,
+  isNftLoading = false 
 }) => {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useAccount() || {};
 
   const handleAction = (action, e) => {
+    if (!e || !action) return;
     e.preventDefault();
-    action === 'play' ? onPlay?.() : onMint?.();
+    try {
+      action === 'play' ? onPlay() : onMint();
+    } catch (error) {
+      console.error('Action handler error:', error);
+    }
   };
 
   const renderContent = () => {
@@ -43,6 +48,7 @@ const MobileHomePage = ({
         <button 
           onClick={(e) => handleAction('play', e)}
           className="mobile-play-button"
+          type="button"
         >
           Play Now
         </button>
@@ -53,12 +59,17 @@ const MobileHomePage = ({
         <button 
           onClick={(e) => handleAction('mint', e)}
           className="mobile-mint-button"
+          type="button"
         >
           Mint to Play
         </button>
       </>
     );
   };
+
+  if (!characterImg) {
+    return <div>Loading game assets...</div>;
+  }
 
   return (
     <div className="mobile-container">
@@ -68,7 +79,15 @@ const MobileHomePage = ({
       </div>
       
       <div className="mobile-character-container">
-        <img src={characterImg} alt="Game Character" className="mobile-character" />
+        <img 
+          src={characterImg} 
+          alt="Game Character" 
+          className="mobile-character"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = '/fallback-character.png';
+          }}
+        />
       </div>
       
       <div className="mobile-welcome-message">

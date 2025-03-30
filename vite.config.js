@@ -25,15 +25,11 @@ export default defineConfig(({ mode }) => {
         input: {
           main: resolve(__dirname, 'index.html'),
         },
-        output: {
-          manualChunks: {
-            'rainbow': ['@rainbow-me/rainbowkit'],
-            'wagmi': ['wagmi'],
-            'supabase': ['@supabase/supabase-js'],
-          }
+        onwarn(warning, warn) {
+          if (warning.code === 'MISSING_EXPORT') return;
+          warn(warning);
         }
       },
-      sourcemap: true,
     },
     optimizeDeps: {
       include: [

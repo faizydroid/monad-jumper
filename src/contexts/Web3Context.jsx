@@ -1865,29 +1865,5 @@ export function Web3Provider({ children }) {
   );
 }
 
-export const useWeb3 = () => {
-  const context = React.useContext(Web3Context);
-  if (!context) {
-    console.warn('useWeb3 must be used within a Web3Provider');
-    // Return a safe fallback object with all expected properties
-    return {
-      isLoading: false,
-      connectWallet: () => console.warn('Web3 not initialized'),
-      saveScore: () => console.warn('Web3 not initialized'),
-      saveScoreIncrement: () => console.warn('Web3 not initialized'),
-      purchasePowerUp: () => console.warn('Web3 not initialized'),
-      continueGame: () => console.warn('Web3 not initialized'),
-      gameScore: 0,
-      setGameScore: () => console.warn('Web3 not initialized'),
-      provider: null,
-      contract: null,
-      updateScore: () => console.warn('Web3 not initialized'),
-      recordJump: () => console.warn('Web3 not initialized'),
-      providerError: null,
-      signer: null
-    };
-  }
-  return context;
-};
-
+export const useWeb3 = () => useContext(Web3Context);
 export const useWeb3Context = useWeb3; 
