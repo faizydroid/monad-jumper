@@ -17,7 +17,13 @@ export default defineConfig(({ mode }) => {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.css']
     },
     define: {
-      'process.env': env,
+      'process.env': Object.entries(env).reduce((prev, [key, val]) => {
+        return {
+          ...prev,
+          [key]: JSON.stringify(val)
+        }
+      }, {}),
+      global: 'globalThis',
     },
     css: {
       modules: {
@@ -36,8 +42,8 @@ export default defineConfig(({ mode }) => {
       minify: 'terser',
       terserOptions: {
         compress: {
-          drop_console: true,
-          drop_debugger: true,
+          drop_console: false,
+          drop_debugger: false,
         },
         format: {
           comments: false,
@@ -66,7 +72,10 @@ export default defineConfig(({ mode }) => {
           entryFileNames: 'assets/[name].[hash].js',
         },
       },
-      sourcemap: false,
+      commonjsOptions: {
+        transformMixedEsModules: true,
+      },
+      sourcemap: true,
     },
     optimizeDeps: {
       include: [
@@ -77,6 +86,9 @@ export default defineConfig(({ mode }) => {
         '@tanstack/react-query',
         'viem'
       ],
+      esbuildOptions: {
+        target: 'esnext',
+      }
     },
     esbuild: {
       target: 'esnext',
