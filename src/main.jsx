@@ -1,9 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import App from './App.jsx'
-import './App.css'
 import '@rainbow-me/rainbowkit/styles.css'
+import './index.css'
+import App from './App'
 import {
   getDefaultWallets,
   RainbowKitProvider,

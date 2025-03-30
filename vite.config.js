@@ -14,9 +14,21 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': resolve(__dirname, './src'),
       },
+      extensions: ['.js', '.jsx', '.ts', '.tsx', '.css']
     },
     define: {
       'process.env': env,
+    },
+    css: {
+      modules: {
+        localsConvention: 'camelCase',
+        generateScopedName: '[local]_[hash:base64:5]',
+      },
+      preprocessorOptions: {
+        less: {
+          javascriptEnabled: true,
+        },
+      },
     },
     build: {
       outDir: 'dist',
