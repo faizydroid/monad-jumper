@@ -30,23 +30,22 @@ export default defineConfig(({ mode }) => {
           warn(warning);
         },
         output: {
-          manualChunks: {
-            'react-vendor': ['react', 'react-dom'],
-            'wagmi-vendor': ['wagmi', '@rainbow-me/rainbowkit'],
+          manualChunks: (id) => {
+            if (id.includes('node_modules')) {
+              if (id.includes('@rainbow-me') || id.includes('wagmi')) {
+                return 'wallet-vendor';
+              }
+              return 'vendor';
+            }
           }
         }
       },
       commonjsOptions: {
-        transformMixedEsModules: true,
+        esmExternals: true,
+        requireReturnsDefault: 'auto'
       },
-      sourcemap: process.env.NODE_ENV !== 'production',
-      minify: 'terser',
-      terserOptions: {
-        compress: {
-          drop_console: true,
-          drop_debugger: true
-        }
-      }
+      target: 'esnext',
+      sourcemap: false
     },
     optimizeDeps: {
       include: [
@@ -60,7 +59,10 @@ export default defineConfig(({ mode }) => {
       ],
       exclude: ['public/js/*'],
       esbuildOptions: {
-        target: 'es2020'
+        target: 'esnext',
+        supported: { 
+          bigint: true 
+        },
       }
     },
     publicDir: 'public',
