@@ -69,7 +69,6 @@ export default defineConfig(({ mode }) => {
       ],
     },
     esbuild: {
-      jsxInject: `import React from 'react'`,
       target: 'es2018',
     },
     publicDir: 'public',
