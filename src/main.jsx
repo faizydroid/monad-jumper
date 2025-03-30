@@ -40,12 +40,53 @@ const queryClient = new QueryClient({
   },
 })
 
+// Error Fallback component
+const ErrorFallback = ({ error, resetErrorBoundary }) => {
+  return (
+    <div style={{ 
+      padding: '20px', 
+      textAlign: 'center',
+      color: '#fff',
+      backgroundColor: '#242424',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      <h1 style={{ marginBottom: '20px' }}>Something went wrong</h1>
+      <pre style={{ marginBottom: '20px', color: '#ff6b6b' }}>
+        {error.message}
+      </pre>
+      <button
+        onClick={resetErrorBoundary}
+        style={{
+          padding: '10px 20px',
+          backgroundColor: '#4CAF50',
+          color: 'white',
+          border: 'none',
+          borderRadius: '5px',
+          cursor: 'pointer'
+        }}
+      >
+        Try again
+      </button>
+    </div>
+  )
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root'))
 
 try {
   root.render(
     <React.StrictMode>
-      <ErrorBoundary>
+      <ErrorBoundary
+        FallbackComponent={ErrorFallback}
+        onReset={() => window.location.reload()}
+        onError={(error, info) => {
+          console.error('Error caught by boundary:', error, info)
+        }}
+      >
         <BrowserRouter>
           <WagmiProvider config={wagmiConfig}>
             <QueryClientProvider client={queryClient}>
@@ -60,34 +101,4 @@ try {
   )
 } catch (error) {
   console.error('Render error:', error)
-}
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props)
-    this.state = { hasError: false }
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true }
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo)
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-          <h1>Something went wrong.</h1>
-          <button onClick={() => window.location.reload()}>
-            Reload Page
-          </button>
-        </div>
-      )
-    }
-
-    return this.props.children
-  }
 } 
