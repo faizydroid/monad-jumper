@@ -1,75 +1,34 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
 
 const MobileHomePage = ({ 
-  characterImg = '',
-  onPlay = () => {},
-  onMint = () => {},
-  hasMintedNft = false,
-  isNftLoading = false 
+  characterImg, 
+  onPlay, 
+  onMint,
+  hasMintedNft,
+  isNftLoading 
 }) => {
-  const { address, isConnected } = useAccount() || {};
+  const { address, isConnected } = useAccount();
 
+  // Single handler for both buttons
   const handleAction = (action, e) => {
-    if (!e || !action) return;
     e.preventDefault();
-    try {
-      action === 'play' ? onPlay() : onMint();
-    } catch (error) {
-      console.error('Action handler error:', error);
-    }
+    e.stopPropagation();
+    setTimeout(() => {
+      console.log(`${action} button clicked`);
+      action === 'play' ? onPlay && onPlay() : onMint && onMint();
+    }, 100);
   };
 
-  const renderContent = () => {
-    if (!isConnected) {
-      return (
-        <>
-          <p>Connect your wallet to start your jumping adventure</p>
-          <div className="mobile-wallet-connect">
-            <ConnectButton 
-              showBalance={false}
-              chainStatus="none"
-              accountStatus="address"
-            />
-          </div>
-        </>
-      );
-    }
-
-    if (isNftLoading) {
-      return <p>Checking NFT ownership...</p>;
-    }
-
-    return hasMintedNft ? (
-      <>
-        <p>You're ready to jump!</p>
-        <button 
-          onClick={(e) => handleAction('play', e)}
-          className="mobile-play-button"
-          type="button"
-        >
-          Play Now
-        </button>
-      </>
-    ) : (
-      <>
-        <p>Mint an NFT to start playing</p>
-        <button 
-          onClick={(e) => handleAction('mint', e)}
-          className="mobile-mint-button"
-          type="button"
-        >
-          Mint to Play
-        </button>
-      </>
-    );
-  };
-
-  if (!characterImg) {
-    return <div>Loading game assets...</div>;
-  }
+  // Mobile optimization
+  useEffect(() => {
+    document.documentElement.classList.add('mobile-wallet-view');
+    const metaViewport = document.querySelector('meta[name=viewport]');
+    if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    return () => document.documentElement.classList.remove('mobile-wallet-view');
+  }, []);
 
   return (
     <div className="mobile-container">
@@ -79,28 +38,70 @@ const MobileHomePage = ({
       </div>
       
       <div className="mobile-character-container">
-        <img 
-          src={characterImg} 
-          alt="Game Character" 
-          className="mobile-character"
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = '/fallback-character.png';
-          }}
-        />
+        <img src={characterImg} alt="Game Character" className="mobile-character" />
       </div>
       
       <div className="mobile-welcome-message">
-        {renderContent()}
+        {!isConnected ? (
+          <>
+            <p>Connect your wallet to start your jumping adventure</p>
+            <div className="mobile-wallet-connect">
+              <ConnectButton 
+                showBalance={false}
+                chainStatus="none"
+                accountStatus="address"
+              />
+            </div>
+          </>
+        ) : isNftLoading ? (
+          <>
+            <p>Checking NFT ownership...</p>
+            <div className="mobile-loading-indicator"></div>
+          </>
+        ) : hasMintedNft ? (
+          <>
+            <p>You're ready to jump!</p>
+            <button 
+              onClick={(e) => handleAction('play', e)}
+              className="mobile-play-button"
+              type="button"
+            >
+              Play Now
+            </button>
+          </>
+        ) : (
+          <>
+            <p>Mint an NFT to start playing</p>
+            <button 
+              onClick={(e) => handleAction('mint', e)}
+              className="mobile-mint-button"
+              type="button"
+            >
+              Mint to Play
+            </button>
+          </>
+        )}
       </div>
       
+      {process.env.NODE_ENV !== 'production' && (
+        <div className="connection-status" style={{position: 'fixed', bottom: 5, left: 5, fontSize: '10px', opacity: 0.7}}>
+          {isConnected ? `Connected: ${address?.slice(0,6)}...${address?.slice(-4)}` : 'Not connected'}
+        </div>
+      )}
+      
       <div className="mobile-game-facts">
-        {['Play & Earn!', 'Fun Gameplay!', 'Powered by Monad!'].map((text, i) => (
-          <div key={text} className={`mobile-fact-bubble mobile-fact-bubble-${i + 1}`}>
-            <span>{['🚀', '🎮', '⛓️'][i]}</span>
-            <p>{text}</p>
-          </div>
-        ))}
+        <div className="mobile-fact-bubble mobile-fact-bubble-1">
+          <span>🚀</span>
+          <p>Play & Earn!</p>
+        </div>
+        <div className="mobile-fact-bubble mobile-fact-bubble-2">
+          <span>🎮</span>
+          <p>Fun Gameplay!</p>
+        </div>
+        <div className="mobile-fact-bubble mobile-fact-bubble-3">
+          <span>⛓️</span>
+          <p>Powered by Monad!</p>
+        </div>
       </div>
     </div>
   );
