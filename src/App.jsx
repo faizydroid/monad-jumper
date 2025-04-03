@@ -1526,7 +1526,7 @@ function App() {
             <GameComponent 
               hasMintedNft={hasMintedNft} 
               isNftLoading={isNftBalanceLoading}
-              onOpenMintModal={() => setShowMintModal(true)}
+              onOpenMintModal={() => setShowMintModal(!0)}
             />
           </ErrorBoundary>
         } />
@@ -1536,11 +1536,8 @@ function App() {
 
       {showMintModal && (
         <NFTMintModal 
-          isOpen={showMintModal} 
-          onClose={() => {
-            console.log("Closing mint modal while preserving connection");
-            setShowMintModal(false);
-          }} 
+          isOpen={!0} 
+          onClose={()=>setShowMintModal(!1)} 
         />
       )}
     </Web3Provider>

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
@@ -10,25 +10,7 @@ const MobileHomePage = ({
   hasMintedNft,
   isNftLoading 
 }) => {
-  const { address, isConnected } = useAccount();
-
-  // Single handler for both buttons
-  const handleAction = (action, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setTimeout(() => {
-      console.log(`${action} button clicked`);
-      action === 'play' ? onPlay && onPlay() : onMint && onMint();
-    }, 100);
-  };
-
-  // Mobile optimization
-  useEffect(() => {
-    document.documentElement.classList.add('mobile-wallet-view');
-    const metaViewport = document.querySelector('meta[name=viewport]');
-    if (metaViewport) metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-    return () => document.documentElement.classList.remove('mobile-wallet-view');
-  }, []);
+  const { isConnected } = useAccount();
 
   return (
     <div className="mobile-container">
@@ -62,9 +44,8 @@ const MobileHomePage = ({
           <>
             <p>You're ready to jump!</p>
             <button 
-              onClick={(e) => handleAction('play', e)}
+              onClick={onPlay}
               className="mobile-play-button"
-              type="button"
             >
               Play Now
             </button>
@@ -73,9 +54,8 @@ const MobileHomePage = ({
           <>
             <p>Mint an NFT to start playing</p>
             <button 
-              onClick={(e) => handleAction('mint', e)}
+              onClick={onMint}
               className="mobile-mint-button"
-              type="button"
             >
               Mint to Play
             </button>
