@@ -1,6 +1,6 @@
 /* Base styles */
 :root{--dark-bg:#1a1a1a}
-.mobile-container{min-height:100vh;padding:30px 20px;display:flex;flex-direction:column;align-items:center;background-color:var(--dark-bg);overflow-x:hidden;position:relative}
+.mobile-container{min-height:100vh;padding:30px 20px;display:flex;flex-direction:column;align-items:center;background-color:transparent;overflow-x:hidden;position:relative}
 .mobile-game-title{font:6rem Bangers,cursive;color:#fff;text-align:center;margin:40px 0 15px;text-shadow:5px 5px 0 #90f,8px 8px 0 rgba(0,0,0,.3);letter-spacing:2px;line-height:.9;transform:rotate(-2deg);animation:bounce-in 1s ease-out}
 .mobile-game-subtitle{font:1.3rem 'Chalkboard SE','Short Stack',cursive;text-align:center;margin:0 auto 25px;color:#ffd700;text-shadow:2px 2px 0 rgba(0,0,0,.5);width:100%}
 
