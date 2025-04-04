@@ -30,8 +30,9 @@ const MobileHomePage = ({
             <div className="mobile-wallet-connect">
               <ConnectButton 
                 showBalance={false}
-                chainStatus="none"
+                chainStatus="icon"
                 accountStatus="address"
+                label="Connect Wallet"
               />
             </div>
           </>

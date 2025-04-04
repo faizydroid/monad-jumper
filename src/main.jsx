@@ -1,30 +1,49 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import { RainbowKitProvider, getDefaultWallets } from '@rainbow-me/rainbowkit'
+import { RainbowKitProvider, getDefaultWallets, connectorsForWallets } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
 import { createConfig, WagmiProvider } from 'wagmi'
 import { http } from 'viem'
 import { monadTestnet } from './config/chains'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+// Import additional wallet connectors
+import { 
+  metaMaskWallet, 
+  walletConnectWallet,
+  okxWallet,
+  coinbaseWallet,
+  trustWallet
+} from '@rainbow-me/rainbowkit/wallets'
 
-// Create query client for wagmi v2
+// Create query client
 const queryClient = new QueryClient()
 
-// Create config for wagmi
+// Get the project ID from environment variables
+const projectId = import.meta.env.VITE_PROJECT_ID || import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
+
+// Set up available wallets with proper configuration
+const connectors = connectorsForWallets([
+  {
+    groupName: 'Recommended',
+    wallets: [
+      metaMaskWallet({ projectId, chains: [monadTestnet] }),
+      okxWallet({ projectId, chains: [monadTestnet] }),
+      coinbaseWallet({ appName: 'Monad Jumper', chains: [monadTestnet] }),
+      walletConnectWallet({ projectId, chains: [monadTestnet] }),
+      trustWallet({ projectId, chains: [monadTestnet] })
+    ]
+  }
+])
+
+// Create wagmi config
 const config = createConfig({
   chains: [monadTestnet],
   transports: {
     [monadTestnet.id]: http(monadTestnet.rpcUrls.default.http[0])
-  }
-})
-
-// Get RainbowKit wallets
-const { wallets } = getDefaultWallets({
-  appName: 'Monad Jumper',
-  projectId: import.meta.env.VITE_PROJECT_ID || import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-  chains: [monadTestnet]
+  },
+  connectors
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(
