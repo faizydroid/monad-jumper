@@ -32,12 +32,25 @@
   --card-shadow: 0 10px 0 rgba(0, 0, 0, 0.3);
 }
 
+.app {
+  min-height: 100vh;
+  background: transparent !important;
+  overflow-x: hidden;
+  color: var(--text-light);
+}
+
+/* Make sure no container is hiding the background */
+.container, .mobile-container, .game-container {
+  background: transparent !important;
+}
+
 body {
   font-family: 'Fredoka', sans-serif;
-  background: #5662EB;
-  background-image: 
-    url("data:image/svg+xml,%3Csvg width='52' height='26' viewBox='0 0 52 26' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M10 10c0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6h2c0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4v2c-3.314 0-6-2.686-6-6 0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6zm25.464-1.95l8.486 8.486-1.414 1.414-8.486-8.486 1.414-1.414z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E"),
-    linear-gradient(135deg, #5662EB 0%, #7C3AED 100%);
+  background-image: url('/images/bg.jpg');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
+  background-size: cover;
   min-height: 100vh;
   overflow-x: hidden;
   color: var(--text-light);
