@@ -21,27 +21,26 @@
   // Set a global flag for Firefox to be used later in the app
   window.__IS_FIREFOX = isFirefox;
   
-  // Handle Firefox redirect logic
+  // Handle Firefox redirect logic - redirect straight to firefox-direct.html
   if (isFirefox) {
     // Check if this is the first visit or user has chosen a mode
     var firefoxMode = localStorage.getItem('firefox_safe_mode');
-    var isFirefoxEntryPage = window.location.pathname.endsWith('firefox-entry.html');
+    var isFirefoxPage = window.location.pathname.endsWith('firefox-direct.html') || 
+                         window.location.pathname.endsWith('firefox-entry.html');
     
-    if (firefoxMode === null && !isFirefoxEntryPage && !window.location.href.includes('localhost')) {
-      // First visit, redirect to Firefox entry page
-      console.log('First Firefox visit, redirecting to firefox-entry.html');
-      window.location.href = '/firefox-entry.html';
+    // Use the direct page as it's more reliable
+    if (firefoxMode === null && !isFirefoxPage && !window.location.href.includes('localhost')) {
+      // First visit, redirect to Firefox direct page
+      console.log('First Firefox visit, redirecting to firefox-direct.html');
+      window.location.href = '/firefox-direct.html';
       return;
     }
     
+    // Apply fixes if in safe mode
     if (firefoxMode === 'true') {
-      console.log('Firefox safe mode enabled');
+      console.log('Firefox safe mode enabled - applying aggressive fixes');
       
-      // Safe mode - apply aggressive fixes
-      // Prevent SES lockdown errors by adding a compatibility layer
-      console.log('Firefox detected - applying aggressive compatibility fixes');
-      
-      // Add error handling for SES lockdown issues
+      // Add error handling for SES lockdown issues and b_ undefined issues
       window.addEventListener('error', function(event) {
         if (event.message && (
             event.message.includes('lockdown') || 
@@ -52,6 +51,13 @@
           console.warn('Caught SES lockdown error:', event.message);
           event.preventDefault();
           event.stopPropagation();
+          
+          // Ensure b_ exists
+          window.b_ = window.b_ || {};
+          if (typeof globalThis !== 'undefined') {
+            globalThis.b_ = globalThis.b_ || {};
+          }
+          
           return true; // Prevent the error from bubbling up
         }
       }, true);
@@ -63,6 +69,14 @@
           var originalDefineProperty = Object.defineProperty;
           Object.defineProperty = function(obj, prop, descriptor) {
             try {
+              // If trying to access b_, ensure it exists
+              if (prop === 'b_' && (obj === window || obj === globalThis)) {
+                window.b_ = window.b_ || {};
+                if (typeof globalThis !== 'undefined') {
+                  globalThis.b_ = globalThis.b_ || {};
+                }
+              }
+              
               return originalDefineProperty.call(Object, obj, prop, descriptor);
             } catch (e) {
               console.warn('Caught error in defineProperty:', e);

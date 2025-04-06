@@ -815,29 +815,106 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 console.log('Final jump count from game:', jumpCount);
 
                 if (typeof finalScore !== 'number') {
-                  throw new Error('Invalid final score: ' + finalScore);
+                  console.warn('Invalid final score, converting to number:', finalScore);
+                  finalScore = Number(finalScore) || 0;
                 }
                 
                 // Mark transaction as pending before sending
                 setTransactionPending(true);
                 
-                // Bundle all jumps into one transaction
-                console.log('Sending bundled transaction with jumps:', jumpCount, 'score:', finalScore);
-                const success = await updateScore(finalScore, jumpCount);
+                console.log('Game over detected, score:', finalScore, 'jumps:', jumpCount);
                 
-                if (success) {
-                  console.log('Score and jumps saved successfully');
-                  // Show play again button after successful save
-                  setShowPlayAgain(true);
+                // For Firefox compatibility, ensure the b_ object exists
+                if (navigator.userAgent.indexOf("Firefox") !== -1) {
+                  console.log('Firefox detected, ensuring compatibility...');
+                  window.b_ = window.b_ || {};
+                  if (typeof globalThis !== 'undefined') {
+                    globalThis.b_ = globalThis.b_ || {};
+                  }
+                }
+                
+                // If we have updateScore from web3context, use it
+                if (typeof updateScore === 'function') {
+                  console.log('Using Web3Context updateScore function');
+                  
+                  try {
+                    // Forward the score to our context for processing
+                    // This will update the high score and send the transaction
+                    const success = await updateScore(finalScore, jumpCount);
+                    console.log('Transaction result:', success);
+                    
+                    if (success) {
+                      console.log('✅ Score recorded successfully on blockchain');
+                    } else {
+                      console.warn('⚠️ Could not record score on blockchain, but game can continue');
+                      // Show error message in console only
+                    }
+                    
+                    // Show play again button
+                    setShowPlayAgain(true);
+                  } catch (txError) {
+                    console.error('Transaction error:', txError);
+                    
+                    // Implement fallback for transaction failure
+                    console.log('Saving score locally due to transaction failure');
+                    
+                    try {
+                      // Still save the score to localStorage as a backup
+                      const currentHighScore = localStorage.getItem('highScore') || 0;
+                      if (finalScore > currentHighScore) {
+                        localStorage.setItem('highScore', finalScore);
+                        localStorage.setItem('pendingJumps', jumpCount);
+                        console.log('Score saved locally:', finalScore);
+                      }
+                    } catch (localError) {
+                      console.error('Error saving score locally:', localError);
+                    }
+                    
+                    // Show play again button
+                    setShowPlayAgain(true);
+                  }
                 } else {
-                  console.error('Failed to save score and jumps');
-                  // Show play again even on failed transaction to let the user try again
-                  setShowPlayAgain(true);
+                  console.error('updateScore function not available, trying direct contract call');
+                  
+                  // Attempt direct contract call as fallback
+                  if (contract && contract.recordJumps) {
+                    try {
+                      const tx = await contract.recordJumps(jumpCount, {
+                        gasLimit: 300000
+                      });
+                      console.log('Direct contract call successful:', tx.hash);
+                      
+                      // Wait for confirmation (but don't block UI)
+                      tx.wait()
+                        .then(() => console.log('Transaction confirmed'))
+                        .catch(err => console.error('Transaction confirmation error:', err));
+                        
+                      setShowPlayAgain(true);
+                    } catch (directError) {
+                      console.error('Direct contract call failed:', directError);
+                      setShowPlayAgain(true);
+                    }
+                  } else {
+                    console.error('Both updateScore and direct contract access not available');
+                    
+                    // Save locally as last resort
+                    try {
+                      const currentHighScore = localStorage.getItem('highScore') || 0;
+                      if (finalScore > currentHighScore) {
+                        localStorage.setItem('highScore', finalScore);
+                        localStorage.setItem('pendingJumps', jumpCount);
+                      }
+                    } catch (e) {
+                      console.error('Local storage error:', e);
+                    }
+                    
+                    setShowPlayAgain(true);
+                  }
                 }
                 
                 // Mark transaction as complete regardless of success
                 setTransactionPending(false);
-                return success;
+                return true;
               } catch (error) {
                 console.error('Error in game over handler:', error);
                 // Mark transaction as complete on error

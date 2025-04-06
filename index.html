@@ -4,15 +4,92 @@
     <meta charset="UTF-8">
     <!-- Define b_ immediately to prevent errors -->
     <script>
-        window.b_ = window.b_ || {};
+        // Create b_ with safety protections
+        var b_ = {};
+        Object.defineProperty(window, 'b_', {
+            value: b_,
+            writable: true,
+            configurable: true,
+            enumerable: true
+        });
+        
+        // Also set on globalThis
         if (typeof globalThis !== 'undefined') {
-            globalThis.b_ = globalThis.b_ || {};
+            Object.defineProperty(globalThis, 'b_', {
+                value: b_,
+                writable: true,
+                configurable: true,
+                enumerable: true
+            });
+        }
+        
+        // Firefox detection
+        var isFirefox = navigator.userAgent.indexOf('Firefox') > -1;
+        if (isFirefox) {
+            // Set flag for Firefox
+            window.__IS_FIREFOX = true;
+            
+            // Add error interceptor for Firefox
+            window.addEventListener('error', function(event) {
+                if (event.message && (
+                    event.message.includes('b_ is undefined') ||
+                    event.message.includes('SES') ||
+                    event.message.includes('lockdown')
+                )) {
+                    console.warn('Prevented Firefox error:', event.message);
+                    // Restore b_ if needed
+                    window.b_ = window.b_ || {};
+                    if (typeof globalThis !== 'undefined') {
+                        globalThis.b_ = globalThis.b_ || {};
+                    }
+                    event.preventDefault();
+                    return true;
+                }
+            }, true);
         }
     </script>
     <!-- Load SES lockdown fix first -->
     <script src="/lockdown-fix.js"></script>
     <!-- Load compatibility script as early as possible -->
     <script src="/compatibility.js"></script>
+    <!-- Add vendor.js polyfill specifically -->
+    <script>
+        // This handles the vendor.js b_ issue specifically
+        document.addEventListener('DOMContentLoaded', function() {
+            // Find any vendor.js scripts
+            var scripts = document.querySelectorAll('script[src*="vendor"]');
+            scripts.forEach(function(script) {
+                console.log('Found vendor.js script:', script.src);
+                // Ensure b_ exists before and after script loads
+                window.b_ = window.b_ || {};
+                if (typeof globalThis !== 'undefined') {
+                    globalThis.b_ = globalThis.b_ || {};
+                }
+            });
+            
+            // Create observer for dynamically added vendor scripts
+            var observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList' && mutation.addedNodes.length) {
+                        for (var i = 0; i < mutation.addedNodes.length; i++) {
+                            var node = mutation.addedNodes[i];
+                            if (node.tagName === 'SCRIPT' && node.src && node.src.includes('vendor')) {
+                                console.log('Vendor script dynamically added:', node.src);
+                                // Set b_ again
+                                window.b_ = window.b_ || {};
+                                if (typeof globalThis !== 'undefined') {
+                                    globalThis.b_ = globalThis.b_ || {};
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // Start observing
+            observer.observe(document, { childList: true, subtree: true });
+        });
+    </script>
     <link rel="icon" type="image/svg+xml" href="/images/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png" />
