@@ -1298,6 +1298,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     document.body.style.backgroundAttachment = "fixed";
   }, []);
 
+<<<<<<< HEAD
   // Add this effect to manage loading state and play button
   useEffect(() => {
     if (showGame) {
@@ -1318,6 +1319,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }
   }, [showGame]);
 
+=======
+>>>>>>> f7e7a85611c646abfc08b31e0fa3f6c74efa0310
   if (providerError) {
     return (
       <div className="wallet-error">
