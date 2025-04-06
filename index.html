@@ -2,12 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- Define b_ immediately to prevent errors -->
+    <script>
+        window.b_ = window.b_ || {};
+        if (typeof globalThis !== 'undefined') {
+            globalThis.b_ = globalThis.b_ || {};
+        }
+    </script>
+    <!-- Load SES lockdown fix first -->
+    <script src="/lockdown-fix.js"></script>
+    <!-- Load compatibility script as early as possible -->
+    <script src="/compatibility.js"></script>
     <link rel="icon" type="image/svg+xml" href="/images/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monad Jumper</title>
-    <script src="/compatibility.js"></script>
 </head>
 <body>
     <div id="root"></div>

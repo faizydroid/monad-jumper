@@ -1,5 +1,11 @@
 // This script runs BEFORE everything else to detect browser compatibility
 (function() {
+  // Define b_ immediately to prevent undefined errors
+  window.b_ = window.b_ || {};
+  if (typeof globalThis !== 'undefined') {
+    globalThis.b_ = globalThis.b_ || {};
+  }
+  
   // Detect browser types
   var isEdge = navigator.userAgent.indexOf("Edg") !== -1;
   var isFirefox = navigator.userAgent.indexOf("Firefox") !== -1;
@@ -15,29 +21,62 @@
   // Set a global flag for Firefox to be used later in the app
   window.__IS_FIREFOX = isFirefox;
   
-  // Handle SES lockdown errors in Firefox
+  // Handle Firefox redirect logic
   if (isFirefox) {
-    // Prevent SES lockdown errors by adding a compatibility layer
-    console.log('Firefox detected - applying compatibility fixes');
+    // Check if this is the first visit or user has chosen a mode
+    var firefoxMode = localStorage.getItem('firefox_safe_mode');
+    var isFirefoxEntryPage = window.location.pathname.endsWith('firefox-entry.html');
     
-    // Add error handling for SES lockdown issues
-    window.addEventListener('error', function(event) {
-      if (event.message && (
-          event.message.includes('lockdown') || 
-          event.message.includes('SES') || 
-          event.message.includes('Uncaught TypeError: b_ is undefined')
-      )) {
-        console.warn('Caught SES lockdown error:', event.message);
-        event.preventDefault();
-        return true; // Prevent the error from bubbling up
+    if (firefoxMode === null && !isFirefoxEntryPage && !window.location.href.includes('localhost')) {
+      // First visit, redirect to Firefox entry page
+      console.log('First Firefox visit, redirecting to firefox-entry.html');
+      window.location.href = '/firefox-entry.html';
+      return;
+    }
+    
+    if (firefoxMode === 'true') {
+      console.log('Firefox safe mode enabled');
+      
+      // Safe mode - apply aggressive fixes
+      // Prevent SES lockdown errors by adding a compatibility layer
+      console.log('Firefox detected - applying aggressive compatibility fixes');
+      
+      // Add error handling for SES lockdown issues
+      window.addEventListener('error', function(event) {
+        if (event.message && (
+            event.message.includes('lockdown') || 
+            event.message.includes('SES') || 
+            event.message.includes('Uncaught TypeError: b_ is undefined') ||
+            event.message.includes('b_ is')
+        )) {
+          console.warn('Caught SES lockdown error:', event.message);
+          event.preventDefault();
+          event.stopPropagation();
+          return true; // Prevent the error from bubbling up
+        }
+      }, true);
+      
+      // Anti-lockdown protection
+      if (typeof Object.defineProperty === 'function') {
+        try {
+          // Override defineProperty for aggressive lockdown prevention
+          var originalDefineProperty = Object.defineProperty;
+          Object.defineProperty = function(obj, prop, descriptor) {
+            try {
+              return originalDefineProperty.call(Object, obj, prop, descriptor);
+            } catch (e) {
+              console.warn('Caught error in defineProperty:', e);
+              return obj;
+            }
+          };
+        } catch (e) {
+          console.error('Failed to override Object.defineProperty:', e);
+        }
       }
-    }, true);
-    
-    // Provide fallback for b_ object that causes errors in vendor.js
-    window.b_ = window.b_ || {};
-    
-    // Add compatibility settings for Firefox
-    localStorage.setItem('firefox_compatibility_mode', 'true');
+      
+      // Add compatibility settings for Firefox
+      localStorage.setItem('firefox_compatibility_mode', 'true');
+    }
   }
   
   // If we're in Edge without ethereum provider, show static page
