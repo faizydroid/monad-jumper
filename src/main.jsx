@@ -8,6 +8,10 @@ import { WagmiConfig, createConfig } from 'wagmi'
 import { monadTestnet } from './config/chains'
 import { BrowserRouter } from 'react-router-dom'
 import { http } from 'viem'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+// Create the query client
+const queryClient = new QueryClient()
 
 // Configure chains with a transport
 const config = createConfig({
@@ -26,12 +30,14 @@ const { connectors } = getDefaultWallets({
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <WagmiConfig config={config}>
-      <RainbowKitProvider chains={[monadTestnet]}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </RainbowKitProvider>
-    </WagmiConfig>
+    <QueryClientProvider client={queryClient}>
+      <WagmiConfig config={config}>
+        <RainbowKitProvider chains={[monadTestnet]}>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </RainbowKitProvider>
+      </WagmiConfig>
+    </QueryClientProvider>
   </React.StrictMode>
 ) 
