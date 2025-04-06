@@ -25,9 +25,13 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       'process.env': env,
+      'globalThis.b_': '{}',
+      'window.b_': '{}',
     },
     build: {
       outDir: 'dist',
+      sourcemap: true,
+      target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'index.html'),
@@ -38,6 +42,22 @@ export default defineConfig(({ mode }) => {
             wagmi: ['wagmi', '@rainbow-me/rainbowkit']
           }
         }
+      },
+      assetsInlineLimit: 4096,
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: false,
+          unsafe: false,
+          unsafe_arrows: false,
+          unsafe_comps: false,
+          unsafe_Function: false,
+          unsafe_math: false,
+          unsafe_methods: false,
+          unsafe_proto: false,
+          unsafe_regexp: false,
+          unsafe_undefined: false,
+        },
       },
     },
     optimizeDeps: {

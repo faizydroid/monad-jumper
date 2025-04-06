@@ -1,15 +1,44 @@
 // This script runs BEFORE everything else to detect browser compatibility
 (function() {
-  // Detect if we're in Edge with OKX disabled
+  // Detect browser types
   var isEdge = navigator.userAgent.indexOf("Edg") !== -1;
+  var isFirefox = navigator.userAgent.indexOf("Firefox") !== -1;
   var hasEthereumProvider = typeof window.ethereum !== 'undefined';
   
   // Log detection info
   console.log('Browser detection:', {
-    browser: isEdge ? 'Edge' : 'Other',
+    browser: isEdge ? 'Edge' : (isFirefox ? 'Firefox' : 'Other'),
     hasEthereumProvider: hasEthereumProvider,
     userAgent: navigator.userAgent
   });
+  
+  // Set a global flag for Firefox to be used later in the app
+  window.__IS_FIREFOX = isFirefox;
+  
+  // Handle SES lockdown errors in Firefox
+  if (isFirefox) {
+    // Prevent SES lockdown errors by adding a compatibility layer
+    console.log('Firefox detected - applying compatibility fixes');
+    
+    // Add error handling for SES lockdown issues
+    window.addEventListener('error', function(event) {
+      if (event.message && (
+          event.message.includes('lockdown') || 
+          event.message.includes('SES') || 
+          event.message.includes('Uncaught TypeError: b_ is undefined')
+      )) {
+        console.warn('Caught SES lockdown error:', event.message);
+        event.preventDefault();
+        return true; // Prevent the error from bubbling up
+      }
+    }, true);
+    
+    // Provide fallback for b_ object that causes errors in vendor.js
+    window.b_ = window.b_ || {};
+    
+    // Add compatibility settings for Firefox
+    localStorage.setItem('firefox_compatibility_mode', 'true');
+  }
   
   // If we're in Edge without ethereum provider, show static page
   if (isEdge && !hasEthereumProvider) {

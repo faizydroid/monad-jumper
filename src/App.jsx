@@ -720,13 +720,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     if (!provider) {
       console.log("Creating fallback provider for offline mode");
       try {
-        // For ethers v6
-        const offlineProvider = new ethers.JsonRpcProvider(
+        // For ethers v5 (correct syntax)
+        const offlineProvider = new ethers.providers.JsonRpcProvider(
           "https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"
         );
-        
-        // Or alternatively for older ethers v5 (if needed)
-        // const offlineProvider = new ethers.providers.JsonRpcProvider(...)
         
         console.log("Fallback provider created successfully");
         setFallbackProvider(offlineProvider);
