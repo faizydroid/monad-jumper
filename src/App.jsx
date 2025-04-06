@@ -651,6 +651,69 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Add this hook near your other hook declarations
   const { openConnectModal } = useConnectModal();
   
+  // Detect Microsoft Edge browser
+  const isEdgeBrowser = useRef(
+    typeof navigator !== 'undefined' && 
+    (navigator.userAgent.indexOf("Edge") > -1 || 
+     navigator.userAgent.indexOf("Edg/") > -1)
+  ).current;
+  
+  // Log browser detection on component mount
+  useEffect(() => {
+    console.log("Browser detection:", { 
+      isEdgeBrowser,
+      hasEthereum: typeof window.ethereum !== 'undefined',
+      hasWalletConnect: typeof window.WalletConnectProvider !== 'undefined'
+    });
+    
+    // Add special handling for Edge browser
+    if (isEdgeBrowser) {
+      console.log("Microsoft Edge detected - using enhanced wallet compatibility mode");
+    }
+  }, [isEdgeBrowser]);
+  
+  // When using ethers in Edge, use this wrapped function
+  const getSafeEthereumProvider = useCallback(() => {
+    if (!window.ethereum) return null;
+    
+    try {
+      // For Edge, we need to be extra careful
+      if (isEdgeBrowser) {
+        // Connect first to ensure accounts are available
+        window.ethereum.request({ method: 'eth_requestAccounts' })
+          .catch(e => console.log("Could not request accounts:", e));
+          
+        // Create provider with special Edge handling
+        return {
+          provider: new ethers.providers.Web3Provider(window.ethereum),
+          getSignerAddress: async () => {
+            try {
+              // Try the normal way first
+              const signer = new ethers.providers.Web3Provider(window.ethereum).getSigner();
+              return await signer.getAddress();
+            } catch (e) {
+              // Fallback for Edge
+              const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+              return accounts[0];
+            }
+          }
+        };
+      }
+      
+      // Normal provider for other browsers
+      return {
+        provider: new ethers.providers.Web3Provider(window.ethereum),
+        getSignerAddress: async () => {
+          const signer = new ethers.providers.Web3Provider(window.ethereum).getSigner();
+          return await signer.getAddress();
+        }
+      };
+    } catch (e) {
+      console.error("Error creating Ethereum provider:", e);
+      return null;
+    }
+  }, [isEdgeBrowser]);
+  
   // Initialize fallback provider for offline mode
   useEffect(() => {
     // Create a fallback provider if we don't have one from web3
@@ -1132,55 +1195,118 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             // Set transaction as pending
             setTransactionPending(true);
             
-            // Direct contract call without relying on web3Context's contract
-            if (window.ethereum) {
-              const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
-              const signer = ethersProvider.getSigner();
-              const account = await signer.getAddress();
+            // Check if we can use Wagmi hooks first (more reliable across browsers)
+            if (walletClient && address) {
+              console.log("Using Wagmi for transaction");
               
-              // Contract address - use the known value
-              const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
-              
-              // Minimal ABI for recordJumps function
-              const contractAbi = [
-                "function recordJumps(uint256 _jumps) external",
-                "function getPlayerJumps(address _player) external view returns (uint256)",
-                "function getMyJumps() external view returns (uint256)"
-              ];
-              
-              // Create contract instance
-              const contractInstance = new ethers.Contract(
-                contractAddress,
-                contractAbi,
-                signer
-              );
-              
-              console.log("Direct contract transaction preparation:", {
-                contractAddress,
-                account,
-                jumpCount
-              });
-              
-              // Submit the transaction
-              const tx = await contractInstance.recordJumps(jumpCount, {
-                gasLimit: 300000 // Set appropriate gas limit for Monad
-              });
-              
-              console.log("Transaction submitted:", tx.hash);
-            
-            // Wait for confirmation
-            const receipt = await tx.wait();
-              console.log("Transaction confirmed in block:", receipt.blockNumber);
-              
-              // Complete handling
-              setTransactionPending(false);
-              setShowPlayAgain(true);
+              try {
+                // Contract address - use the known value
+                const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
+                
+                // Submit transaction using Wagmi
+                const hash = await walletClient.writeContract({
+                  address: contractAddress,
+                  abi: [
+                    {
+                      name: "recordJumps",
+                      type: "function",
+                      stateMutability: "nonpayable",
+                      inputs: [{ name: "_jumps", type: "uint256" }],
+                      outputs: []
+                    }
+                  ],
+                  functionName: "recordJumps",
+                  args: [BigInt(jumpCount)]
+                });
+                
+                console.log("Transaction submitted via Wagmi:", hash);
+                
+                // Wait for confirmation using publicClient
+                const receipt = await publicClient.waitForTransactionReceipt({ hash });
+                console.log("Transaction confirmed in block:", receipt.blockNumber);
+                
+                // Complete handling
+                setTransactionPending(false);
+                setShowPlayAgain(true);
+              } catch (wagmiError) {
+                console.error("Wagmi transaction failed, falling back to window.ethereum:", wagmiError);
+                // Fall back to window.ethereum if Wagmi fails
+                fallbackToWindowEthereum();
+              }
             } else {
-              console.error("No Ethereum provider available");
-              setTransactionPending(false);
-              setShowPlayAgain(true);
+              // Fallback to window.ethereum
+              fallbackToWindowEthereum();
             }
-        } catch (error) {
+            
+            // Fallback function to use window.ethereum directly
+            async function fallbackToWindowEthereum() {
+              // Check if window.ethereum is available
+              if (window.ethereum) {
+                try {
+                  // Use our safe provider wrapper
+                  const safeProvider = getSafeEthereumProvider();
+                  if (!safeProvider) {
+                    throw new Error("Could not create safe provider");
+                  }
+                  
+                  // Get the provider and account
+                  const { provider, getSignerAddress } = safeProvider;
+                  const providerSigner = provider.getSigner();
+                  const userAccount = await getSignerAddress();
+                  
+                  if (!userAccount) {
+                    throw new Error("No connected account available");
+                  }
+                  
+                  // Contract address - use the known value
+                  const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
+                  
+                  // Minimal ABI for recordJumps function
+                  const contractAbi = [
+                    "function recordJumps(uint256 _jumps) external",
+                    "function getPlayerJumps(address _player) external view returns (uint256)",
+                    "function getMyJumps() external view returns (uint256)"
+                  ];
+                  
+                  // Create contract instance
+                  const contractInstance = new ethers.Contract(
+                    contractAddress,
+                    contractAbi,
+                    providerSigner
+                  );
+                  
+                  console.log("Direct contract transaction preparation:", {
+                    contractAddress,
+                    account: userAccount,
+                    jumpCount
+                  });
+                  
+                  // Submit the transaction
+                  const tx = await contractInstance.recordJumps(jumpCount, {
+                    gasLimit: 300000 // Set appropriate gas limit for Monad
+                  });
+                  
+                  console.log("Transaction submitted:", tx.hash);
+                  
+                  // Wait for confirmation
+                  const receipt = await tx.wait();
+                  console.log("Transaction confirmed in block:", receipt.blockNumber);
+                  
+                  // Complete handling
+                  setTransactionPending(false);
+                  setShowPlayAgain(true);
+                } catch (error) {
+                  console.error('Direct Ethereum transaction error:', error);
+                  setTransactionPending(false);
+                  setShowPlayAgain(true);
+                }
+              } else {
+                console.error("No Ethereum provider available");
+                setTransactionPending(false);
+                setShowPlayAgain(true);
+              }
+            }
+          } catch (error) {
             console.error('Transaction error:', error);
             setTransactionPending(false);
             setShowPlayAgain(true);
