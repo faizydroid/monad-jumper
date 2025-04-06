@@ -1298,7 +1298,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     document.body.style.backgroundAttachment = "fixed";
   }, []);
 
-<<<<<<< HEAD
   // Add this effect to manage loading state and play button
   useEffect(() => {
     if (showGame) {
@@ -1311,7 +1310,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       
       return () => {
         clearTimeout(timer);
-      }
+      };
     } else {
       // Reset loading state when returning to home
       setIsLoading(false);
@@ -1319,8 +1318,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }
   }, [showGame]);
 
-=======
->>>>>>> f7e7a85611c646abfc08b31e0fa3f6c74efa0310
   if (providerError) {
     return (
       <div className="wallet-error">
@@ -1401,7 +1398,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               </div>
               <div className="fact-bubble fact-bubble-3">
                 <span>⛓️</span>
-                <p>Powered by Monad!</p>
+                <p>Built on Monad!</p>
               </div>
             </div>
           </div>
