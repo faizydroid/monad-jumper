@@ -1101,6 +1101,15 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
   }, [onGameOver]);
 
+  // Add this at the top of your component
+  useEffect(() => {
+    document.body.style.backgroundImage = "url('/images/bg.jpg')";
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundPosition = "center center";
+    document.body.style.backgroundRepeat = "no-repeat";
+    document.body.style.backgroundAttachment = "fixed";
+  }, []);
+
   if (providerError) {
     return (
       <div className="wallet-error">
