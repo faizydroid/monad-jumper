@@ -11,6 +11,13 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       open: true,
     },
+    css: {
+      preprocessorOptions: {
+        css: {
+          charset: false
+        }
+      }
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -25,9 +32,11 @@ export default defineConfig(({ mode }) => {
         input: {
           main: resolve(__dirname, 'index.html'),
         },
-        onwarn(warning, warn) {
-          if (warning.code === 'MISSING_EXPORT') return;
-          warn(warning);
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom'],
+            wagmi: ['wagmi', '@rainbow-me/rainbowkit']
+          }
         }
       },
     },

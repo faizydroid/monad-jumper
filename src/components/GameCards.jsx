@@ -1,88 +1,82 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import '../styles/GameCards.css';
 
 const GameCards = () => {
-  useEffect(() => {
-    console.log('GameCards component mounted');
-  }, []);
-
   return (
     <div className="game-cards-container">
+      {/* How to Play Card */}
       <div className="game-card how-to-play-card">
-        <div className="card-badge">HOW TO PLAY</div>
-        <div className="card-content">
-          <h2 className="card-title">🎮 Jump Your Way Up!</h2>
+        <div className="card-badge">GUIDE</div>
+        <h3 className="card-title">How to Play</h3>
+        <div className="instruction-list">
+          <div className="instruction-item">
+            <div className="instruction-icon">1</div>
+            <div className="instruction-text">
+              <strong>Move</strong>
+              Use arrow keys to move left and right
+            </div>
+          </div>
           
-          <div className="instruction-list">
-            <div className="instruction-item">
-              <span className="instruction-icon">⬅️➡️</span>
-              <div className="instruction-text">
-                <strong>Left & Right Arrows</strong> to move horizontally
-              </div>
+          <div className="instruction-item">
+            <div className="instruction-icon">2</div>
+            <div className="instruction-text">
+              <strong>Jump</strong>
+              Jump on platforms to go higher
             </div>
-            
-            <div className="instruction-item">
-              <span className="instruction-icon">🔄</span>
-              <div className="instruction-text">
-                <strong>Auto-Jump</strong> helps you navigate platforms
-              </div>
+          </div>
+          
+          <div className="instruction-item">
+            <div className="instruction-icon">3</div>
+            <div className="instruction-text">
+              <strong>Collect</strong>
+              Gather coins and power-ups
             </div>
-            
-            <div className="instruction-item">
-              <span className="instruction-icon">⌨️</span>
-              <div className="instruction-text">
-                <strong>Space Bar</strong> to shoot enemies
-              </div>
+          </div>
+          
+          <div className="instruction-item">
+            <div className="instruction-icon">4</div>
+            <div className="instruction-text">
+              <strong>Score</strong>
+              Reach higher to score more points
             </div>
-            
-            <div className="instruction-item">
-              <span className="instruction-icon">⚡</span>
-              <div className="instruction-text">
-                <strong>Level Up</strong>
-              </div>
-            </div>
-            
-           
           </div>
         </div>
       </div>
       
+      {/* Blockchain Features Card */}
       <div className="game-card features-card">
         <div className="card-badge">FEATURES</div>
-        <div className="card-content">
-          <h2 className="card-title">⛓️ Blockchain Powers</h2>
+        <h3 className="card-title">Blockchain Powers</h3>
+        <div className="feature-list">
+          <div className="feature-item">
+            <div className="feature-icon">🏆</div>
+            <div className="feature-text">
+              <strong>On-Chain Leaderboard</strong>
+              Your scores are saved on Monad blockchain
+            </div>
+          </div>
           
-          <div className="feature-list">
-            <div className="feature-item">
-              <span className="feature-icon">🔐</span>
-              <div className="feature-text">
-                
-                <strong>On-Chain Scores</strong>
-                <p>Your high scores are stored on Monad blockchain</p>
-              </div>
+          <div className="feature-item">
+            <div className="feature-icon">🎮</div>
+            <div className="feature-text">
+              <strong>NFT Character</strong>
+              Mint your unique character to play
             </div>
-            <div className="feature-item">
-              <span className="feature-icon">👾</span>
-              <div className="feature-text">
-                <strong>Mint your character</strong>
-                <p>Play with your minted character</p>
-              </div>
+          </div>
+          
+          <div className="feature-item">
+            <div className="feature-icon">💎</div>
+            <div className="feature-text">
+              <strong>Earn Rewards</strong>
+              Collect tokens as you play
             </div>
-            <div className="feature-item">
-              <span className="feature-icon">🦘</span>
-              <div className="feature-text">
-                <strong>Jump NFTs</strong>
-                <p>Each jump is recorded as a transaction</p>
-              </div>
-            </div>
-            
-           
-            <div className="feature-item">
-              <span className="feature-icon">⚡</span>
-              <div className="feature-text">
-                <strong>Monad Speed | 10,000 TPS</strong>
-                <p>Experience lightning-fast transactions</p>
-              </div>
+          </div>
+          
+          <div className="feature-item">
+            <div className="feature-icon">🚀</div>
+            <div className="feature-text">
+              <strong>Community Events</strong>
+              Join competitions for prizes
             </div>
           </div>
         </div>
@@ -91,5 +85,4 @@ const GameCards = () => {
   );
 };
 
-// Make sure to properly export the component as default
 export default GameCards; 

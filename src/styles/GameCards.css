@@ -1,10 +1,10 @@
 .game-cards-container {
   display: flex;
-  flex-direction: column;
-  gap: 30px;
+  flex-direction: row;
+  gap: 20px;
   max-width: 1200px;
-  margin: 30px auto;
-  padding: 0 20px;
+  margin: 10px auto;
+  padding: 0;
 }
 
 @media (min-width: 992px) {
@@ -17,167 +17,275 @@
   .game-card {
     flex: 1;
     margin: 0;
-    max-width: calc(50% - 15px);
+    max-width: calc(50% - 10px);
   }
 }
 
 .game-card {
   position: relative;
-  border-radius: 20px;
-  padding: 25px 20px 20px;
-  box-shadow: 0 10px 0 rgba(0, 0, 0, 0.1), 0 0 20px rgba(0, 0, 0, 0.05);
+  border-radius: var(--card-radius);
+  padding: 15px 15px 10px;
+  box-shadow: var(--card-shadow);
   transform-style: preserve-3d;
-  transform: perspective(1000px) rotateX(5deg);
-  transition: transform 0.3s ease;
-  font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', sans-serif;
+  transform: perspective(1000px) rotateX(3deg);
+  transition: all 0.3s ease;
+  font-family: 'Nunito', sans-serif;
   overflow: hidden;
+  max-height: 18vh;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  border: 3px solid rgba(255, 255, 255, 0.5);
 }
 
 .game-card:hover {
-  transform: perspective(1000px) rotateX(8deg) translateY(-5px);
+  transform: perspective(1000px) rotateX(5deg) translateY(-5px);
+  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.15);
+}
+
+/* Add card hover effect with a gradient overlay */
+.game-card:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.game-card:hover:before {
+  opacity: 1;
+}
+
+/* Add sparkle animation to card corners on hover */
+.game-card:after {
+  content: '✨';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 1.2rem;
+  opacity: 0;
+  transform: scale(0) rotate(0deg);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+}
+
+.game-card:hover:after {
+  opacity: 1;
+  transform: scale(1) rotate(15deg);
 }
 
 .how-to-play-card {
-  background-color: #ffeaa7;
-  border: 8px solid #fdcb6e;
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.2) 0%, rgba(255, 209, 102, 0.3) 100%);
+  border-color: rgba(255, 209, 102, 0.5);
 }
 
 .features-card {
-  background-color: #a29bfe;
-  border: 8px solid #6c5ce7;
+  background: linear-gradient(135deg, rgba(78, 205, 196, 0.2) 0%, rgba(78, 205, 196, 0.3) 100%);
+  border-color: rgba(78, 205, 196, 0.5);
+}
+
+/* Apply special hover effects for each card type */
+.how-to-play-card:hover {
+  background: linear-gradient(145deg, rgba(255, 209, 102, 0.3) 0%, rgba(255, 209, 102, 0.4) 100%);
+  border-color: rgba(255, 209, 102, 0.7);
+}
+
+.features-card:hover {
+  background: linear-gradient(145deg, rgba(78, 205, 196, 0.3) 0%, rgba(78, 205, 196, 0.4) 100%);
+  border-color: rgba(78, 205, 196, 0.7);
 }
 
 .game-card .card-badge {
   position: absolute;
-  top: -12px;
-  left: 20px;
-  background-color: #ff7675;
+  top: -10px;
+  left: 15px;
   color: white;
   font-weight: bold;
-  padding: 5px 15px;
+  padding: 5px 12px;
   border-radius: 15px;
   font-size: 0.8rem;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   transform: rotate(-5deg);
   z-index: 1;
+  font-family: 'Bubblegum Sans', cursive;
+}
+
+.game-card:hover .card-badge {
+  transform: rotate(0deg) scale(1.1);
 }
 
 .how-to-play-card .card-badge {
-  background-color: #ff7675;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
 }
 
 .features-card .card-badge {
-  background-color: #6c5ce7;
+  background: linear-gradient(135deg, var(--secondary) 0%, #3DBBB4 100%);
 }
 
 .card-title {
   text-align: center;
-  font-size: 1.6rem;
-  margin-bottom: 20px;
-  color: #2d3436;
+  font-size: 1.3rem;
+  margin-bottom: 10px;
+  color: var(--dark);
+  font-family: 'Bubblegum Sans', cursive;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.game-card:hover .card-title {
+  transform: scale(1.05);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
 .instruction-list, .feature-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 8px;
 }
 
 .instruction-item, .feature-item {
   display: flex;
   align-items: center;
-  background-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.5);
   border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s;
+  padding: 6px 10px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
 .instruction-item:hover, .feature-item:hover {
   transform: translateY(-3px);
-  box-shadow: 0 7px 0 rgba(0, 0, 0, 0.05);
+  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.08);
+}
+
+.game-card:hover .instruction-item,
+.game-card:hover .feature-item {
+  animation: list-bounce 0.5s forwards;
+}
+
+.game-card:hover .instruction-item:nth-child(1),
+.game-card:hover .feature-item:nth-child(1) { animation-delay: 0.1s; }
+.game-card:hover .instruction-item:nth-child(2),
+.game-card:hover .feature-item:nth-child(2) { animation-delay: 0.2s; }
+.game-card:hover .instruction-item:nth-child(3),
+.game-card:hover .feature-item:nth-child(3) { animation-delay: 0.3s; }
+.game-card:hover .instruction-item:nth-child(4),
+.game-card:hover .feature-item:nth-child(4) { animation-delay: 0.4s; }
+
+@keyframes list-bounce {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(5px); }
+  100% { transform: translateX(0); }
+}
+
+.instruction-item:after, .feature-item:after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    to bottom right,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  transform: rotate(45deg);
+  pointer-events: none;
 }
 
 .instruction-icon, .feature-icon {
-  font-size: 1.8rem;
-  margin-right: 15px;
-  background-color: rgba(255, 255, 255, 0.9);
-  width: 40px;
-  height: 40px;
+  font-size: 1.2rem;
+  margin-right: 10px;
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%);
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  color: white;
+}
+
+.instruction-item:hover .instruction-icon,
+.feature-item:hover .feature-icon {
+  transform: rotate(360deg) scale(1.1);
 }
 
 .instruction-text, .feature-text {
   flex: 1;
+  font-size: 0.9rem;
+  color: var(--dark);
 }
 
 .instruction-text strong, .feature-text strong {
   display: block;
   margin-bottom: 2px;
-  color: #2d3436;
+  color: var(--dark);
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .feature-text p {
   margin: 0;
-  font-size: 0.9rem;
-  color: #636e72;
+  font-size: 0.8rem;
+  color: var(--dark);
+  opacity: 0.8;
 }
 
-/* Before elements for decorative effects */
-.how-to-play-card::before {
-  content: '';
-  position: absolute;
-  bottom: -10px;
-  right: -10px;
-  width: 80px;
-  height: 80px;
-  background-color: #ffeaa7;
-  border-radius: 50%;
-  z-index: -1;
-  animation: float 4s ease-in-out infinite;
+/* Customize icons */
+.instruction-item:nth-child(1) .instruction-icon {
+  background: linear-gradient(135deg, #FF6B6B 0%, #FF4D4D 100%);
 }
 
-.features-card::before {
-  content: '';
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 60px;
-  height: 60px;
-  background-color: #a29bfe;
-  border-radius: 50%;
-  z-index: -1;
-  animation: float 3s ease-in-out infinite alternate;
+.instruction-item:nth-child(2) .instruction-icon {
+  background: linear-gradient(135deg, #4ECDC4 0%, #33B3AA 100%);
 }
 
-@keyframes float {
-  0% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-10px) rotate(5deg); }
-  100% { transform: translateY(0) rotate(0deg); }
+.instruction-item:nth-child(3) .instruction-icon {
+  background: linear-gradient(135deg, #FFD166 0%, #FFC233 100%);
 }
 
-/* Add some fun animations on hover */
-.instruction-item:nth-child(odd):hover .instruction-icon,
-.feature-item:nth-child(odd):hover .feature-icon {
-  animation: wiggle 0.5s ease;
+.instruction-item:nth-child(4) .instruction-icon {
+  background: linear-gradient(135deg, #9B5DE5 0%, #8046CC 100%);
 }
 
-.instruction-item:nth-child(even):hover .instruction-icon,
-.feature-item:nth-child(even):hover .feature-icon {
-  animation: bounce 0.5s ease;
+@keyframes iconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
-@keyframes wiggle {
-  0%, 100% { transform: rotate(0); }
-  25% { transform: rotate(-15deg); }
-  75% { transform: rotate(15deg); }
-}
-
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+@media (max-width: 768px) {
+  .game-cards-container {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .game-card {
+    max-width: 100%;
+    padding: 12px 10px 8px;
+  }
+  
+  .card-title {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+  }
+  
+  .instruction-item, .feature-item {
+    padding: 5px;
+  }
+  
+  .instruction-icon, .feature-icon {
+    width: 25px;
+    height: 25px;
+    font-size: 1rem;
+  }
 } 

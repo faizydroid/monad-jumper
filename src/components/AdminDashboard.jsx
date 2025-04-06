@@ -379,35 +379,7 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-      
-      {players.length > 0 && (
-        <div className="admin-section">
-          <h3>Registered Players: {players.length}</h3>
-          <div className="players-list">
-            {players.slice(0, 10).map((player, index) => {
-              // Try to get wallet or address
-              const walletAddr = player.wallet || player.address || player.wallet_address || player.ethereum_address || '';
-              // Try to get jumps
-              const jumps = player.jumps || player.jump_count || player.jumpCount || 0;
-              
-              return (
-                <div key={index} className="player-item">
-                  Player {index + 1}: 
-                  {walletAddr ? 
-                    `${walletAddr.substring(0, 6)}...${walletAddr.substring(walletAddr.length - 4)}` :
-                    '(No wallet address)'}
-                  {jumps > 0 ? ` - Jumps: ${jumps}` : ''}
-                </div>
-              );
-            })}
-            {players.length > 10 && 
-              <div className="more-players">
-                ...and {players.length - 10} more players
-              </div>
-            }
-          </div>
-        </div>
-      )}
+   
       
       <div className="admin-section contract-actions">
         <h2>Contract Management</h2>

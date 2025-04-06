@@ -8,8 +8,7 @@
     "dev": "vite",
     "dev:host": "vite --host",
     "build": "vite build",
-    "preview": "vite preview",
-    "deploy": "npm run build && npm run preview"
+    "preview": "vite preview"
   },
   "keywords": [],
   "author": "",

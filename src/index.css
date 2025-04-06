@@ -7,27 +7,18 @@ html, body, #root {
 }
 
 body {
-  /* Update to match the lighter purple background */
-  background: #6c63ff;
-  background-image: linear-gradient(135deg, #6c63ff 0%, #7e74ff 100%);
-  background-attachment: fixed;
+  /* Replace gradient with background image */
+  background: url('/bg.jpg') no-repeat center center;
   background-size: cover;
+  background-attachment: fixed;
   color: #ffffff;
   font-family: system-ui, -apple-system, sans-serif;
   position: relative;
 }
 
-/* Add subtle pattern overlay */
+/* Remove the pattern overlay since we have a detailed background image */
 body::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%239C92FF' fill-opacity='0.1' fill-rule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 0;
+  content: none;
 }
 
 /* This ensures the background applies to the entire app */

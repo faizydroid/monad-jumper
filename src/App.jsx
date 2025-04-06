@@ -48,97 +48,87 @@ window.openMintModal = () => {
   document.dispatchEvent(new CustomEvent('openMintModal'));
 };
 
-// Create cartoon clouds and platforms background
+// Background animations component
 function BackgroundElements() {
   const [elements, setElements] = useState([]);
   
   useEffect(() => {
-    const newElements = [];
-    const sizes = ['sm', 'md', 'lg'];
-    const colors = ['green', 'blue', 'white', 'brown'];
-    const delays = ['', 'floating-delay-1', 'floating-delay-2', 'floating-delay-3'];
-    
-    // Create 15 random platforms
-    for (let i = 0; i < 15; i++) {
-      newElements.push({
-        id: i,
+    // Generate random platforms, clouds and sparkles
+    const platforms = Array.from({ length: 8 }, (_, i) => {
+      const size = Math.random() * 60 + 40;
+      return {
         type: 'platform',
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        size: sizes[Math.floor(Math.random() * sizes.length)],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        delay: delays[Math.floor(Math.random() * delays.length)],
-        rotation: Math.random() * 25 - 12.5,
-      });
-    }
+        id: `platform-${i}`,
+        style: {
+          width: `${size}px`,
+          height: '10px',
+          backgroundColor: i % 3 === 0 ? 'rgba(255, 209, 102, 0.5)' : 
+                          i % 3 === 1 ? 'rgba(78, 205, 196, 0.5)' : 
+                          'rgba(255, 107, 107, 0.5)',
+          borderRadius: '5px',
+          position: 'absolute',
+          left: `${Math.random() * 90}%`,
+          top: `${Math.random() * 90}%`,
+          transform: 'rotate(-5deg)',
+          boxShadow: '0 3px 5px rgba(0, 0, 0, 0.1)',
+          animation: `float ${10 + Math.random() * 10}s infinite ease-in-out`,
+          zIndex: '-1'
+        }
+      };
+    });
     
-    // Add 3 clouds
-    newElements.push({ id: 'cloud-1', type: 'cloud', className: 'cloud cloud-1' });
-    newElements.push({ id: 'cloud-2', type: 'cloud', className: 'cloud cloud-2' });
-    newElements.push({ id: 'cloud-3', type: 'cloud', className: 'cloud cloud-3' });
+    const clouds = [
+      {
+        type: 'cloud',
+        id: 'cloud-1',
+        className: 'cloud cloud-1'
+      },
+      {
+        type: 'cloud',
+        id: 'cloud-2',
+        className: 'cloud cloud-2'
+      }
+    ];
     
-    setElements(newElements);
+    const sparkles = Array.from({ length: 15 }, (_, i) => {
+      const size = Math.random() * 10 + 5;
+      const delay = Math.random() * 5;
+      const duration = Math.random() * 3 + 2;
+      
+      return {
+        type: 'sparkle',
+        id: `sparkle-${i}`,
+        style: {
+          width: `${size}px`,
+          height: `${size}px`,
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: '50%',
+          position: 'absolute',
+          left: `${Math.random() * 90}%`,
+          top: `${Math.random() * 90}%`,
+          animation: `sparkle ${duration}s infinite ease-in-out ${delay}s`,
+          boxShadow: '0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.5)',
+          zIndex: '-1'
+        }
+      };
+    });
+    
+    setElements([...platforms, ...clouds, ...sparkles]);
   }, []);
   
   return (
-    <div className="background-elements">
-      {elements.map(element => 
-        element.type === 'platform' ? (
-          <div 
-            key={element.id}
-            className={`platform ${element.size} ${element.color} floating ${element.delay}`}
-            style={{
-              left: `${element.x}%`,
-              top: `${element.y}%`,
-              '--rotation': `${element.rotation}deg`
-            }}
-          />
-        ) : (
-          <div key={element.id} className={element.className} />
-        )
-      )}
-    </div>
-  );
-}
-
-// Cartoon username modal
-function UsernameModal({ onSubmit }) {
-  const [username, setUsername] = useState('');
-  const [error, setError] = useState('');
-  
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    if (username.trim().length < 3) {
-      setError('Username must be at least 3 characters');
-      return;
-    }
-    
-    setError('');
-    onSubmit(username);
-  };
-  
-  return (
-    <div className="username-modal">
-      <div className="modal-content">
-        <h2>Choose Your Name!</h2>
-        <p>Pick a cool username for your jumping adventure</p>
-        {error && <div className="error">{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter awesome username (min 3 chars)"
-            required
-            autoFocus
-          />
-          <button type="submit">
-            Let's Jump!
-          </button>
-        </form>
-      </div>
-    </div>
+    <>
+      {elements.map(element => {
+        if (element.type === 'platform') {
+          return <div key={element.id} style={element.style} />;
+        } else if (element.type === 'cloud') {
+          return <div key={element.id} className={element.className} />;
+        } else if (element.type === 'sparkle') {
+          return <div key={element.id} style={element.style} />;
+        }
+        return null;
+      })}
+    </>
   );
 }
 
@@ -402,6 +392,205 @@ function LoadingSpinner({ isMobile }) {
   );
 }
 
+// Horizontal Stats Component
+function HorizontalStats() {
+  const { playerHighScore, totalJumps, username, setUserUsername } = useWeb3();
+  const { isConnected, address } = useAccount();
+  const [newUsername, setNewUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+  
+  console.log("HorizontalStats render - Connected:", isConnected, "Address:", address, "Username:", username, "Score:", playerHighScore);
+  
+  // Handle username submission directly with Web3Context
+  const handleSubmitUsername = async (e) => {
+    e.preventDefault();
+    
+    if (newUsername.trim().length < 3) {
+      setUsernameError('Username must be at least 3 characters');
+      return;
+    }
+    
+    try {
+      // Use the setUserUsername function from Web3Context
+      const success = await setUserUsername(newUsername);
+      if (success) {
+        setUsernameError('');
+        setNewUsername('');
+        // Show success message
+        setShowSuccess(true);
+        
+        // Create confetti effect
+        createConfettiEffect();
+        
+        // Hide success message after 4 seconds
+        setTimeout(() => {
+          setShowSuccess(false);
+        }, 4000);
+      } else {
+        setUsernameError('Failed to set username. Please try again.');
+      }
+    } catch (error) {
+      console.error("Error setting username:", error);
+      setUsernameError(error.message || 'Failed to set username');
+    }
+  };
+
+  // Function to create confetti effect
+  const createConfettiEffect = () => {
+    const container = document.querySelector('.username-form-card');
+    if (!container) return;
+    
+    // Create 50 confetti particles
+    for (let i = 0; i < 50; i++) {
+      const confetti = document.createElement('div');
+      confetti.className = 'confetti-particle';
+      
+      // Random confetti properties
+      const size = Math.random() * 10 + 5; // Size between 5-15px
+      const colors = ['#FFD166', '#4ECDC4', '#FF6B6B', '#A5D858', '#9B5DE5'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      
+      // Set styles
+      confetti.style.width = `${size}px`;
+      confetti.style.height = `${size}px`;
+      confetti.style.backgroundColor = color;
+      confetti.style.left = `${Math.random() * 100}%`;
+      confetti.style.top = '0';
+      confetti.style.position = 'absolute';
+      confetti.style.zIndex = '10';
+      confetti.style.borderRadius = `${Math.random() > 0.5 ? '50%' : '0'}`;
+      confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+      
+      // Animation properties
+      confetti.style.animation = `confetti-fall ${Math.random() * 3 + 2}s ease-out forwards`;
+      
+      // Add to container
+      container.appendChild(confetti);
+      
+      // Remove after animation completes
+      setTimeout(() => {
+        if (container.contains(confetti)) {
+          container.removeChild(confetti);
+        }
+      }, 5000);
+    }
+  };
+
+  // Reset form if address changes
+  useEffect(() => {
+    setNewUsername('');
+    setUsernameError('');
+    setShowSuccess(false);
+  }, [address]);
+  
+  if (!isConnected || !address) {
+    return (
+      <div className="stats-card-horizontal">
+        <div className="card-badge">STATS</div>
+        <div className="stats-info">
+          <h3 className="greeting-title">Ready to break the monad?</h3>
+          <p className="greeting-message">Connect your wallet to start jumping! 🚀</p>
+        </div>
+        <p>Connect wallet to see your stats</p>
+      </div>
+    );
+  }
+
+  // If no username is set, show the username input form
+  if (!username) {
+    return (
+      <div className="stats-card-horizontal username-form-card">
+        <div className="card-badge">SET USERNAME</div>
+        
+        <div className="stats-info">
+          <h3 className="greeting-title">Welcome to Monad Jumper!</h3>
+          <p className="greeting-message">Please set a username to play</p>
+        </div>
+        
+        <form onSubmit={handleSubmitUsername} className="username-form">
+          {usernameError && <div className="error-message">{usernameError}</div>}
+          {showSuccess && <div className="success-message">Username set successfully! Let's play! 🎮</div>}
+          <input
+            type="text"
+            value={newUsername}
+            onChange={(e) => setNewUsername(e.target.value)}
+            placeholder="Enter username (min 3 characters)"
+            className="username-input"
+            required
+          />
+          <button type="submit" className="set-username-button">
+            Set Username
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // Get username for greeting
+  return (
+    <div className="stats-card-horizontal">
+      <div className="card-badge">STATS</div>
+      
+      <div className="stats-info">
+        <h3 className="greeting-title">Hi there, {username}!</h3>
+        <p className="greeting-message">Ready to break the monad?</p>
+      </div>
+      
+      <div className="stats-grid-horizontal">
+        <div className="stat-item-horizontal">
+          <div className="stat-value">{playerHighScore || '0'}</div>
+          <div className="stat-label">Hi-Score</div>
+        </div>
+        
+        <div className="stat-item-horizontal">
+          <div className="stat-value">{totalJumps || 0}</div>
+          <div className="stat-label">Total Jumps</div>
+        </div>
+        
+        <div className="stat-item-horizontal">
+          <div className="stat-value">{Math.max(1, Math.floor((playerHighScore || 0) / 100))}</div>
+          <div className="stat-label">Level</div>
+        </div>
+        
+        <div className="stat-item-horizontal">
+          <div className="stat-value">{getRank(playerHighScore || 0)}</div>
+          <div className="stat-label">Rank</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Helper function to determine player rank based on score
+function getRank(score) {
+  if (score === 0) return 'Newbie';
+  if (score < 300) return 'Beginner';
+  if (score < 800) return 'Jumper';
+  if (score < 2000) return 'Pro Jumper';
+  if (score < 5000) return 'Master';
+  return 'Legend';
+}
+
+// Helper function to get random loading tips
+function getRandomTip() {
+  const tips = [
+    "Collect coins for extra points!",
+    "Jump on platforms to climb higher!",
+    "Watch out for moving platforms!",
+    "The higher you climb, the harder it gets!",
+    "Timing is everything for perfect jumps!",
+    "Don't look down! Keep jumping up!",
+    "Break the monad, one jump at a time!",
+    "Collect power-ups for special abilities!",
+    "Try to beat your friends on the leaderboard!",
+    "Each jump is recorded on the blockchain!",
+    "Higher scores earn better ranks!",
+    "Challenge yourself to reach Legend rank!"
+  ];
+  return tips[Math.floor(Math.random() * tips.length)];
+}
+
 function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver }) {
   // Import the web3Context correctly at the top of your component
   const web3Context = useWeb3();
@@ -436,6 +625,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   const [showGame, setShowGame] = useState(false);
   const iframeRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showPlayButton, setShowPlayButton] = useState(false);
   
   // Create a fallback provider for offline mode
   const [fallbackProvider, setFallbackProvider] = useState(null);
@@ -449,9 +639,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Get public client and wallet client from wagmi v2
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
-  
-  // Add username state and modal state
-  const [showUsernameModal, setShowUsernameModal] = useState(false);
   
   // Clean implementation for session tracking
   const [currentJumps, setCurrentJumps] = useState(0);
@@ -493,11 +680,15 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     const checkUsername = async () => {
         if (!isConnected || !address) {
             console.log("❌ No wallet connected");
+            setUsername(null);
             return;
         }
         
         try {
             console.log("🔍 Checking username for wallet:", address);
+            
+            // Force clear any previous username first 
+            setUsername(null);
             
             // Get username from Supabase
             const { data, error } = await supabase
@@ -512,20 +703,19 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 console.log("✅ Found username:", data.username);
                 setUsername(data.username);
                 setShowModal(false); // Hide modal when username exists
-                setShowUsernameModal(false); // Also hide the username modal
-    } else {
-                console.log("❌ No username found - showing modal");
+            } else {
+                console.log("❌ No username found for current wallet - username input form will be shown");
                 setUsername(null);
                 setShowModal(true);
-                setShowUsernameModal(true); // Show the username modal
             }
         } catch (error) {
             console.error("🔴 Error checking username:", error);
+            setUsername(null);
         }
     };
 
-    // Run username check when wallet connects
-    if (isConnected && address) {
+    // Run username check when wallet connects or changes
+    if (isConnected) {
         checkUsername();
     }
 }, [isConnected, address]);
@@ -695,39 +885,13 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     checkMintStatus();
   }, [isConnected, address, checkNFTOwnership]);
 
-  // Update the handleUsernameSubmit function
-  const handleUsernameSubmit = async (newUsername) => {
-    if (!address) return;
-    
-    try {
-        console.log(`💾 Saving username "${newUsername}" for wallet ${address}`);
-        
-        // Use upsert instead of delete/insert
-      const { error } = await supabase
-        .from('users')
-            .upsert({ 
-                wallet_address: address.toLowerCase(),
-            username: newUsername,
-                updated_at: new Date().toISOString()
-            });
-        
-        if (error) throw error;
-        
-        console.log("✅ Username saved successfully");
-        
-        // Update local state
-        setUsername(newUsername);
-        setShowModal(false);
-        setShowUsernameModal(false);
-        
-    } catch (error) {
-        console.error("🔴 Error saving username:", error);
-        alert("Error saving username. Please try again.");
-    }
-};
-
   // Update the wallet connection status effect
   useEffect(() => {
+    // Clear username when wallet disconnects or changes
+    if (!isConnected || !address) {
+      setUsername(null);
+    }
+
     // Send wallet connection status to the game iframe
     const sendWalletStatus = () => {
         const gameIframe = iframeRef.current;
@@ -821,18 +985,42 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     );
   };
 
-  // Add this function inside your GameComponent before the return statement
+  // Update the handlePlayClick to check if username exists and simplify the animation/transition
   const handlePlayClick = useCallback(() => {
+    // Check if username exists first
+    if (!username) {
+      console.log('Username not set, cannot play');
+      // Flash the username form or show a toast notification
+      const statsCard = document.querySelector('.username-form-card');
+      if (statsCard) {
+        statsCard.classList.add('highlight-card');
+        setTimeout(() => {
+          statsCard.classList.remove('highlight-card');
+        }, 1500);
+      }
+      return;
+    }
+    
+    // Add button animation
+    const playButton = document.querySelector('.play-button');
+    if (playButton) {
+      playButton.classList.add('play-button-clicked');
+    }
+    
     // Set the hash to indicate we're in game mode
     window.location.hash = 'game';
     
-    // Important: Don't use regular navigation which would cause a page reload
-    // and lose wallet connection
+    // Show the game with loading animation already defined in the app
     console.log('Setting showGame to true while preserving wallet connection');
-    
-    // Show the game iframe without unmounting parent components
     setShowGame(true);
-  }, []);
+    
+    // Reset play button animation after a delay
+    setTimeout(() => {
+      if (playButton) {
+        playButton.classList.remove('play-button-clicked');
+      }
+    }, 500);
+  }, [username]);
 
   // Comment out or remove this useEffect that's causing conflicts (around line 626-650)
   /*
@@ -1101,6 +1289,35 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
   }, [onGameOver]);
 
+  // Add this at the top of your component
+  useEffect(() => {
+    document.body.style.backgroundImage = "url('/images/bg.jpg')";
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundPosition = "center center";
+    document.body.style.backgroundRepeat = "no-repeat";
+    document.body.style.backgroundAttachment = "fixed";
+  }, []);
+
+  // Add this effect to manage loading state and play button
+  useEffect(() => {
+    if (showGame) {
+      // Reset loading state when game is shown
+      setIsLoading(true);
+      // Show play button after 1.5 seconds 
+      const timer = setTimeout(() => {
+        setShowPlayButton(true);
+      }, 1500);
+      
+      return () => {
+        clearTimeout(timer);
+      }
+    } else {
+      // Reset loading state when returning to home
+      setIsLoading(false);
+      setShowPlayButton(false);
+    }
+  }, [showGame]);
+
   if (providerError) {
     return (
       <div className="wallet-error">
@@ -1136,13 +1353,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           <MobileHomePage 
             characterImg="/images/monad0.png" 
             onPlay={() => {
-              // Preserve wallet connection by updating state without page navigation
               console.log("Play clicked from mobile, setting showGame via state update");
               window.location.hash = 'game';
               setShowGame(true);
             }}
             onMint={() => {
-              // Use a state update instead of a function that might cause re-rendering
               console.log("Mint clicked from mobile, showing modal via state update");
               setShowMintModal(true);
             }}
@@ -1151,86 +1366,44 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           />
         ) : (
           <>
-        <BackgroundElements />
-        <div className="container">
-              <h1 className="game-title">MONAD JUMPER</h1>
-          <p className="game-subtitle">Jump through the blockchain one block at a time!</p>
-          
-              <div className="character-container" style={{height: "100px", display: "flex", justifyContent: "center", margin: "20px 0"}}>
-                <img 
-                  src="/images/monad0.png" 
-                  alt="Game Character" 
-                  className="character" 
-                  style={{height: "100px", width: "auto"}}
-                />
-          </div>
-          
-              <div className="welcome-message">
-                <p>Connect your wallet to start your jumping adventure</p>
-                <div className="wallet-connect mobile">
-              <ConnectButton />
+          <BackgroundElements />
+          <div className="home-container">
+            <h1 className="game-title">MONAD JUMPER</h1>
+            <p className="game-subtitle">Jump to the MOON! </p>
+            
+            <div className="character-container animated">
+              <img 
+                src="/images/monad0.png" 
+                alt="Game Character" 
+                className="character" 
+              />
+              <div className="shadow"></div>
+            </div>
+            
+            <div className="connect-container">
+              <p className="connect-instructions">Connect your wallet to play the game!</p>
+              <div className="wallet-connect">
+                <ConnectButton label="CONNECT" />
+              </div>
+            </div>
+            
+            <div className="game-facts">
+              <div className="fact-bubble fact-bubble-1">
+                <span>🚀</span>
+                <p>Play & Earn!</p>
+              </div>
+              <div className="fact-bubble fact-bubble-2">
+                <span>🎮</span>
+                <p>Fun Gameplay!</p>
+              </div>
+              <div className="fact-bubble fact-bubble-3">
+                <span>⛓️</span>
+                <p>Powered by Monad!</p>
+              </div>
             </div>
           </div>
-          
-          <div className="game-facts">
-            <div className="fact-bubble fact-bubble-1">
-              <span>🚀</span>
-              <p>Play & Earn!</p>
-            </div>
-            <div className="fact-bubble fact-bubble-2">
-              <span>🎮</span>
-              <p>Fun Gameplay!</p>
-            </div>
-            <div className="fact-bubble fact-bubble-3">
-              <span>⛓️</span>
-              <p>Powered by Monad!</p>
-            </div>
-          </div>
-        </div>
           </>
         )}
-      </>
-    );
-  }
-
-  // Update the username modal condition to be more precise
-  if (!username && showModal) {
-    return (
-      <>
-        <div className="container">
-          <h1 className="game-title">Monad Jumper</h1>
-          <div className="character-container">
-            <div className="shadow"></div>
-            <div className="character"></div>
-          </div>
-          <button 
-            className="mint-to-play-button"
-            onClick={handlePlayClick}
-          >
-            PLAY
-          </button>
-          <UsernameModal onSubmit={handleUsernameSubmit} />
-        </div>
-      </>
-    );
-  }
-
-  // If wallet is loading, show loading indicator
-  if (walletLoading) {
-    return (
-      <>
-        <div className="loading-screen">
-          <h2>Loading Game...</h2>
-          <p style={{marginBottom: '1.5rem', color: 'rgba(255,255,255,0.7)'}}>
-            Preparing your jumping adventure
-          </p>
-          <div className="loading-bar-container">
-            <div className="loading-bar"></div>
-          </div>
-          <div className="loading-tips">
-            <p>Tip: Collect power-ups for special abilities!</p>
-          </div>
-        </div>
       </>
     );
   }
@@ -1238,62 +1411,64 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Game is ready to play, but hasn't started yet
   if (!showGame && !walletLoading) {
     return (
-      <>
+      <div className="container">
         <BackgroundElements />
-        <div className="container">
-          <header>
-            <h1 className="game-title">Monad Jumper</h1>
-          </header>
-          
-          <div className="character-container">
-            <div className="shadow"></div>
-            <div className="character"></div>
-          </div>
-          
-          {isNftLoading ? (
-            <div className="loading-nft-check">
-              <p>Checking NFT ownership...</p>
-              <div className="loading-spinner"></div>
-            </div>
-          ) : hasMintedNft ? (
-            // This is the green PLAY button for users who already have an NFT
-            <button 
-              className="play-button"
-              onClick={handlePlayClick}
-            >
-              PLAY
-            </button>
-          ) : (
-            // This is the red MINT TO PLAY button we want to keep
-            <button 
-              className="mint-to-play-button"
-              onClick={onOpenMintModal}
-            >
-              MINT TO PLAY
-            </button>
-          )}
-          
-          <main className="stats-leaderboard-container">
-            <div className="stats-column">
-              <PlayerStats />
+        
+        <header>
+          <h1 className="title">MONAD JUMPER</h1>
+          <p className="subtitle">Jump to the MOON! 🚀</p>
+        </header>
+        
+        <div className="game-content">
+          <div className="game-main">
+            <div className="character-container">
+              <div className="character-glow"></div>
+              <div className="character"></div>
+              <div className="shadow"></div>
+              <div className="character-effect character-effect-1">⭐</div>
+              <div className="character-effect character-effect-2">↑</div>
+              <div className="character-effect character-effect-3">⚡</div>
             </div>
             
-            <div className="leaderboard-column">
-              <Leaderboard />
+            {isNftLoading ? (
+              <div className="loading-nft-check">
+                <p>Checking NFT ownership...</p>
+                <div className="loading-spinner"></div>
+              </div>
+            ) : hasMintedNft ? (
+              <div 
+                className={`play-button ${!username ? 'disabled-button' : ''}`} 
+                onClick={username ? handlePlayClick : null}
+              >
+                <span className="play-text">PLAY NOW</span>
+                <span className="play-icon">▶</span>
+              </div>
+            ) : (
+              <button 
+                className="mint-to-play-button"
+                onClick={onOpenMintModal}
+              >
+                <span className="mint-button-text">MINT TO PLAY</span>
+                <span className="mint-button-icon">🪙</span>
+              </button>
+            )}
+            
+            <div className="stats-row">
+              <HorizontalStats />
             </div>
-          </main>
+            
+            <GameCards />
+          </div>
           
-          <GameCards />
-          
-          <footer className="footer">
-            <p className="developed-by">
-              Developed by <a href="https://x.com/faizydroid" target="_blank" rel="noopener noreferrer">@faizydroid</a>
-            </p>
-            <p className="built-on">Built on Monad</p>
-            <p className="copyright">© 2023 Monad Jumper - All Rights Reserved</p>
-          </footer>
+          <div className="leaderboard-column">
+            <Leaderboard />
+          </div>
         </div>
-      </>
+        
+        <footer className="footer">
+          <p>Developed with 💖 by The Monad Team</p>
+        </footer>
+      </div>
     );
   }
 
@@ -1312,6 +1487,28 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           <div className="loading-tips">
             <p>Tip: Collect power-ups for special abilities!</p>
           </div>
+          
+          {/* Play button for loading screen - only show after delay */}
+          {showPlayButton && (
+            <button 
+              id="playButton" 
+              className="start-game-button"
+              onClick={() => {
+                // Hide loading screen completely when button is clicked
+                setIsLoading(false);
+                
+                // Make sure iframe is fully visible
+                const iframe = iframeRef.current;
+                if (iframe) {
+                  iframe.style.visibility = 'visible';
+                  iframe.style.opacity = '1';
+                  iframe.focus(); // Focus the iframe for immediate keyboard input
+                }
+              }}
+            >
+              PLAY!
+            </button>
+          )}
         </div>
       </>
     );
@@ -1320,34 +1517,64 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Game is showing
   return (
     <div className="app">
-      {/* Add game begin screen */}
-        {isLoading && showGame && (
+      {/* Game loading screen - only show when both showGame and isLoading are true */}
+      {isLoading && showGame && (
         <div className="loading-screen game-begin-screen">
           <h1 className="game-title">Monad Jumper</h1>
           <div className="character-container">
-            <div className="shadow"></div>
             <div className="character"></div>
+            <div className="shadow"></div>
           </div>
-            <div className="loading-bar-container">
-              <div className="loading-bar"></div>
-            </div>
+          <div className="loading-bar-container">
+            <div className="loading-bar"></div>
+          </div>
           <div className="loading-tips">
-            <p>Get ready to jump!</p>
-            </div>
+            <p>{getRandomTip()}</p>
           </div>
-        )}
+          
+          {/* Play button for loading screen - only show after delay */}
+          {showPlayButton && (
+            <button 
+              id="playButton" 
+              className="start-game-button"
+              onClick={() => {
+                // Hide loading screen completely when button is clicked
+                setIsLoading(false);
+                
+                // Make sure iframe is fully visible
+                const iframe = iframeRef.current;
+                if (iframe) {
+                  iframe.style.visibility = 'visible';
+                  iframe.style.opacity = '1';
+                  iframe.focus(); // Focus the iframe for immediate keyboard input
+                }
+              }}
+            >
+              PLAY!
+            </button>
+          )}
+          
+          <div className="loading-particles">
+            {[...Array(20)].map((_, i) => (
+              <div 
+                key={i} 
+                className="loading-particle"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${1 + Math.random() * 3}s`
+                }}
+              ></div>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div className="game-container">
-        {!showGame && (
-          <div className="game-start-screen">
-            <h1 className="game-title">Monad Jumper</h1>
-            <div className="character-container">
-              <div className="shadow"></div>
-              <div className="character"></div>
-            </div>
-          </div>
-        )}
+        {/* Remove the separate start screen that shows the Play button */}
         
+        {/* Always render the iframe but control visibility */}
         <iframe 
           key={`game-${gameId}`}
           ref={iframeRef}
@@ -1357,7 +1584,19 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           allow="autoplay"
           frameBorder="0"
           tabIndex="0"
-          style={{ visibility: isLoading ? 'hidden' : 'visible' }}
+          style={{ visibility: isLoading ? 'hidden' : 'visible', opacity: isLoading ? 0 : 1 }}
+          onLoad={() => {
+            // Only auto-hide the loading screen if not already hidden by the Play button
+            if (isLoading) {
+              // Wait some time before auto-hiding to allow manual click
+              setTimeout(() => {
+                // Only auto-hide if still loading (not already clicked)
+                if (isLoading) {
+                  setIsLoading(false);
+                }
+              }, 3000);
+            }
+          }}
         />
       </div>
       
@@ -1391,10 +1630,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         >
           {transactionPending ? "Processing Transaction..." : "Play Again"}
               </button>
-      )}
-      {/* Username Modal - Show when needed */}
-      {showUsernameModal && (
-        <UsernameModal onSubmit={handleUsernameSubmit} />
       )}
       {transactionPending && <LoadingSpinner isMobile={isMobileView} />}
     </div>

@@ -34,7 +34,7 @@ export default function PlayerStats() {
 
   return (
     <div className="player-stats card">
-      <div className="card-badge">STATS</div>
+      <div className="card-badge">STATSx</div>
       
       {/* Greeting Section */}
       <div className="greeting-section">

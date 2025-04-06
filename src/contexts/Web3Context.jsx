@@ -14,17 +14,53 @@ const SUPABASE_URL = import.meta.env.VITE_REACT_APP_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY;
 const GAME_CONTRACT_ADDRESS = import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS;
 
-console.log('Supabase config:', { SUPABASE_URL, SUPABASE_ANON_KEY });
+// Add more detailed logging for Supabase configuration
+console.log('Supabase config:', { 
+  SUPABASE_URL, 
+  SUPABASE_ANON_KEY: SUPABASE_ANON_KEY ? `${SUPABASE_ANON_KEY.substring(0, 5)}...` : 'missing',
+  url_length: SUPABASE_URL?.length || 0,
+  key_length: SUPABASE_ANON_KEY?.length || 0
+});
+
+// Check for missing configuration
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('⚠️ MISSING SUPABASE CONFIGURATION! Check your environment variables.');
+}
 
 // Create Supabase client with explicit timeout
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  realtime: {
-    timeout: 60000 // 60 seconds
-  },
-  db: {
-    schema: 'public'
-  }
-});
+let supabase;
+try {
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    realtime: {
+      timeout: 60000 // 60 seconds
+    },
+    db: {
+      schema: 'public'
+    },
+    auth: {
+      persistSession: false
+    }
+  });
+  
+  console.log('✅ Supabase client initialized successfully');
+  
+  // Test the connection
+  (async () => {
+    try {
+      const { data, error } = await supabase.from('users').select('count').limit(1);
+      if (error) {
+        console.error('❌ Supabase connection test failed:', error);
+      } else {
+        console.log('✅ Supabase connection test successful:', data);
+      }
+    } catch (e) {
+      console.error('❌ Error testing Supabase connection:', e);
+    }
+  })();
+} catch (error) {
+  console.error('❌ Failed to initialize Supabase client:', error);
+  supabase = null;
+}
 
 const RPC_URL = 'https://prettiest-snowy-pine.monad-testnet.quiknode.pro/4fc856936286525197c30da74dd994d2c7710e93';
 
@@ -85,10 +121,10 @@ export function Web3Provider({ children }) {
             // Check if window.ethereum exists
             if (typeof window.ethereum !== 'undefined') {
                 // For ethers v5
-                const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
                 console.log("Provider initialized successfully");
                 
-                setProvider(provider);
+      setProvider(provider);
                 
                 // Get signer and chain info
                 try {
@@ -103,13 +139,13 @@ export function Web3Provider({ children }) {
             } else {
                 console.log("No ethereum object found in window");
             }
-        } catch (error) {
-            console.error("Error initializing provider:", error);
-        }
+    } catch (error) {
+      console.error("Error initializing provider:", error);
+    }
     };
 
     initializeProvider();
-}, []);
+  }, []);
 
   useEffect(() => {
     if (isInEdgeFallbackMode) {
@@ -146,11 +182,16 @@ export function Web3Provider({ children }) {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // No user found, show username modal
-          console.log('No user found - showing username modal');
-          setUsername(null);
-          setShowUsernameModal(true);
-          console.log('Modal state after setting:', true);
+          // No user found, but DON'T show username modal
+          console.log('No user found - generating default username');
+          const defaultUsername = `Player${Math.floor(Math.random() * 10000)}`;
+          setUsername(defaultUsername);
+          
+          // Create user with default username
+          await supabase.from('users').insert({
+            wallet_address: newAccount.toLowerCase(),
+            username: defaultUsername
+          });
         } else {
           console.error('Error checking username:', error);
           setSupabaseError(error.message);
@@ -159,22 +200,25 @@ export function Web3Provider({ children }) {
       }
 
       if (!existingUser || !existingUser.username) {
-        // User exists but no username, show modal
-        console.log('No username found - showing modal');
-        setUsername(null);
-        setShowUsernameModal(true);
-        console.log('Modal state after setting:', true);
+        // User exists but no username, generate a default one
+        console.log('No username found - generating default username');
+        const defaultUsername = `Player${Math.floor(Math.random() * 10000)}`;
+        setUsername(defaultUsername);
+        
+        // Update user with default username
+        await supabase.from('users').update({
+          username: defaultUsername
+        }).eq('wallet_address', newAccount.toLowerCase());
       } else {
         // Username found
         console.log('Username found:', existingUser.username);
         setUsername(existingUser.username);
-        setShowUsernameModal(false);
-        console.log('Modal state after setting:', false);
       }
     } catch (error) {
       console.error('Error handling account change:', error);
-      setShowUsernameModal(true);
-      console.log('Modal state after error:', true);
+      // Generate random username on error
+      const defaultUsername = `Player${Math.floor(Math.random() * 10000)}`;
+      setUsername(defaultUsername);
     } finally {
       setIsLoading(false);
     }
@@ -250,28 +294,12 @@ export function Web3Provider({ children }) {
     const normalizedAddress = walletAddress.toLowerCase();
     
     try {
-      // First check localStorage for cached username
-      const cachedUsername = localStorage.getItem(`username_${normalizedAddress}`);
+      // Clear any existing username in state first to prevent showing wrong username
+      setUsername(null);
       
-      if (cachedUsername) {
-        const { username, timestamp } = JSON.parse(cachedUsername);
-        
-        // Check if cached result is still valid (less than 7 days old)
-        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-        const now = Date.now();
-        
-        if (now - timestamp < sevenDaysMs) {
-          console.log(`👤 Using cached username: ${username}`);
-          
-          // Set the username directly without showing modal
-          setUsername(username);
-          return username;
-        }
-      }
-      
-      // No valid cached result, check Supabase
       console.log(`👤 Checking username for ${normalizedAddress}...`);
       
+      // Skip localStorage and always check Supabase
       const { data, error } = await supabase
         .from('users')
         .select('username')
@@ -298,8 +326,8 @@ export function Web3Provider({ children }) {
         return data.username;
       }
       
-      // No username found, we'll need to show the modal
-      console.log('👤 No username found, will show modal');
+      // No username found for this wallet address
+      console.log('👤 No username found for this wallet address');
       setShowUsernameModal(true);
       return null;
     } catch (error) {
@@ -313,21 +341,42 @@ export function Web3Provider({ children }) {
     if (!address || !newUsername) return false;
     
     try {
-      console.log(`👤 Setting username: ${newUsername}`);
+      console.log(`👤 Setting username: ${newUsername} for address: ${address}`);
       const normalizedAddress = address.toLowerCase();
       
-      // Save to Supabase
-      const { error } = await supabase
+      // Check Supabase connection
+      console.log('👤 Supabase client:', !!supabase);
+      
+      // Log the full request details
+      console.log('👤 Attempting Supabase upsert with:', {
+        table: 'users',
+        wallet_address: normalizedAddress,
+        username: newUsername
+      });
+      
+      // Save to Supabase with improved error handling
+      const { data, error } = await supabase
         .from('users')
         .upsert({ 
           wallet_address: normalizedAddress,
-          username: newUsername
+          username: newUsername,
+          updated_at: new Date().toISOString()
+        }, { 
+          returning: 'minimal'
         });
       
       if (error) {
-        console.error('👤 Error saving username:', error);
+        console.error('👤 Error saving username to Supabase:', error);
+        console.error('👤 Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
         return false;
       }
+      
+      console.log('👤 Supabase response:', data);
       
       // Update state
       setUsername(newUsername);
@@ -345,6 +394,8 @@ export function Web3Provider({ children }) {
       return true;
     } catch (error) {
       console.error('👤 Error in setUserUsername:', error);
+      console.error('👤 Error type:', typeof error);
+      console.error('👤 Error stack:', error.stack);
       return false;
     }
   };
@@ -353,6 +404,10 @@ export function Web3Provider({ children }) {
   useEffect(() => {
     if (isConnected && address && supabase) {
       checkAndLoadUsername(address);
+    } else if (!isConnected) {
+      // Clear username when wallet disconnects
+      setUsername(null);
+      setShowUsernameModal(false);
     }
   }, [isConnected, address, supabase, checkAndLoadUsername]);
 
@@ -467,8 +522,8 @@ export function Web3Provider({ children }) {
       // Wait for confirmation
       const receipt = await tx.wait();
       console.log("Transaction confirmed in block:", receipt.blockNumber);
-      
-      return true;
+    
+    return true;
     } catch (error) {
       console.error("Transaction error:", error);
       // Check for specific errors
