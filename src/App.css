@@ -63,7 +63,6 @@ body {
   background-attachment: fixed;
   background-size: cover;
   height: 100vh;
-  overflow: hidden;
   color: var(--text-light);
   font-size: 18px;
 }
@@ -297,10 +296,27 @@ body {
   overflow: hidden;
 }
 
+.stats-card-horizontal .card-badge {
+  position: absolute;
+  top: -10px;
+  left: 15px;
+  background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
+  color: white;
+  font-weight: bold;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: rotate(-5deg);
+  z-index: 1;
+  font-family: 'Bubblegum Sans', cursive;
+  margin-bottom: 15px;
+}
+
 .stats-info {
   flex: 1;
   padding: 0 10px;
-  margin-top: 15px;
+  margin-top: 25px;
 }
 
 .greeting-title {
@@ -325,12 +341,30 @@ body {
   transition: all 0.3s ease;
   border: 2px solid rgba(255, 255, 255, 0.3);
   flex: 1;
+  min-width: 95px;
 }
 
 .stat-item-horizontal:hover {
   transform: translateY(-3px);
   background: rgba(255, 255, 255, 0.6);
   box-shadow: 0 10px 15px rgba(0, 0, 0, 0.05);
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--dark);
+  margin-top: 3px;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.stat-value {
+  font-family: 'Bubblegum Sans', cursive;
+  font-size: 1.5rem;
+  color: var(--dark);
+  margin: 0;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
 /* Character animation */
@@ -512,7 +546,7 @@ body {
 
 .play-button:active {
   transform: translateY(3px);
-  box-shadow: 0 4px 0 #3A8F3E, 0 5px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 0 #3A8F3E, 0 8px 15px rgba(0, 0, 0, 0.2);
 }
 
 .play-button::after {
@@ -547,60 +581,72 @@ body {
 
 /* Enhanced Mint Button */
 .mint-to-play-button {
-  margin: 5px auto 15px;
-  background: linear-gradient(180deg, var(--pink) 0%, var(--primary-dark) 100%);
-  color: white;
   font-family: 'Bubblegum Sans', cursive;
-  font-size: 1.5rem;
-  padding: 18px 50px;
+  font-size: 24px;
+  padding: 15px 40px;
   border: none;
   border-radius: 50px;
-  box-shadow: 0 8px 0 #C1255A, 0 10px 20px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #ff4e00, #ec9f05);
+  color: white;
+  box-shadow: 0 8px 0 #d17d00, 0 12px 20px rgba(0, 0, 0, 0.2);
   cursor: pointer;
+  margin-top: 30px;
   position: relative;
+  transition: all 0.2s ease;
   overflow: hidden;
-  letter-spacing: 1px;
+  z-index: 10;
   text-transform: uppercase;
-  display: block;
+  letter-spacing: 1px;
+  font-weight: bold;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mint-to-play-button:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 0 #C1255A, 0 15px 25px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 10px 0 #d17d00, 0 15px 25px rgba(0, 0, 0, 0.25);
 }
 
 .mint-to-play-button:active {
   transform: translateY(3px);
-  box-shadow: 0 4px 0 #C1255A, 0 5px 10px rgba(0, 0, 0, 0.2);
-}
-
-.mint-to-play-button::after {
-  content: "";
-  position: absolute;
-  top: -50%;
-  left: -20%;
-  width: 140%;
-  height: 200%;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.2) 0%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  transform: rotate(35deg);
-  transition: all 0.5s ease;
-  animation: shine 3s infinite ease-in-out;
-}
-
-.mint-button-icon {
-  animation: iconPulse 2s infinite ease-in-out;
-  display: inline-block;
-  font-size: 1.3rem;
+  box-shadow: 0 4px 0 #d17d00, 0 8px 15px rgba(0, 0, 0, 0.2);
 }
 
 .mint-button-text {
-  position: relative;
-  z-index: 2;
+  margin-right: 8px;
+}
+
+.mint-button-icon {
+  font-size: 1.2em;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease infinite;
+  margin-top: 10px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-nft-check {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 30px;
+  color: white;
+  background: rgba(0,0,0,0.2);
+  padding: 15px 30px;
+  border-radius: 50px;
 }
 
 @keyframes iconPulse {
@@ -1914,6 +1960,22 @@ iframe.game-frame {
   z-index: 1;
 }
 
+/* Iframe background wrapper */
+.iframe-background {
+  width: 100%;
+  height: 100vh;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  background-image: url('/images/iframebg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 .game-frame:not([style*="hidden"]) {
   opacity: 1;
   z-index: 2;
@@ -2147,8 +2209,6 @@ iframe.game-frame {
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
 }
 
-
-
 /* Connect instructions styling */
 .connect-instructions {
   font-family: 'Bubblegum Sans', cursive;
@@ -2157,4 +2217,59 @@ iframe.game-frame {
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   margin-bottom: 15px;
   text-align: center;
+}
+
+/* Add styles for social media links */
+.social-links {
+  position: fixed; /* Position relative to the viewport */
+  bottom: 20px;    /* Distance from the bottom */
+  left: 20px;     /* Distance from the left */
+  display: flex;   /* Arrange icons horizontally */
+  gap: 15px;       /* Space between icons */
+  z-index: 1000;   /* Ensure they are above other content */
+}
+
+.social-links a {
+  color: #ffffff; /* White icon color */
+  text-decoration: none;
+  transition: color 0.3s ease, transform 0.3s ease;
+}
+
+.social-links a:hover {
+  color: #a0a0a0; /* Lighter gray on hover */
+  transform: scale(1.1); /* Slightly enlarge on hover */
+}
+
+/* Base styles, allowing vertical scroll by default */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%; /* Use min-height if content might exceed viewport */
+  min-height: 100%;
+  width: 100%;
+  font-family: 'Nunito', sans-serif; /* Use consistent font */
+  overflow-x: hidden; /* Prevent horizontal scroll */
+  overflow-y: auto; /* Allow vertical scroll by default */
+}
+
+/* Media Query for Mobile - ensure scrolling is enabled */
+@media (max-width: 768px) {
+  html, body {
+    overflow-y: auto; /* Explicitly allow scrolling */
+    height: auto; /* Allow body height to grow with content */
+    min-height: 100%;
+  }
+  
+  /* Ensure .app container allows scrolling too if needed */
+  .app {
+    overflow-y: auto; /* Or visible */
+    height: auto;
+    min-height: 100vh;
+  }
+  
+  /* Adjust fixed elements if they interfere with scrolling */
+  .social-links {
+    /* Consider if position: fixed works well on mobile scroll */
+    /* Might need position: absolute or different placement */
+  }
 } 

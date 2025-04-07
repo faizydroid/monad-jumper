@@ -94,7 +94,7 @@ export default function Navbar() {
           {/* Show connect button only on homepage - FIXED VERSION */}
           {isHomepage && (
             <div className="navbar-connect-button-fixed">
-              <ConnectButton />
+              <ConnectButton showBalance={true} />
             </div>
           )}
           

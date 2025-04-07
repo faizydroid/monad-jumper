@@ -31,11 +31,11 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 let supabase;
 try {
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    realtime: {
-      timeout: 60000 // 60 seconds
-    },
-    db: {
-      schema: 'public'
+  realtime: {
+    timeout: 60000 // 60 seconds
+  },
+  db: {
+    schema: 'public'
     },
     auth: {
       persistSession: false
@@ -112,40 +112,432 @@ export function Web3Provider({ children }) {
   const [isCheckingNFT, setIsCheckingNFT] = useState(false);
   const [hasNFT, setHasNFT] = useState(false);
 
-  // Update the provider initialization in Web3Context.jsx
+  // First define the saveScore function since recordScore depends on it
+  const saveScore = async (walletAddress, score) => {
+    if (!walletAddress || score <= 0 || !supabase) {
+      console.error('🏆 Invalid parameters for saving score');
+      return;
+    }
+    
+    try {
+      console.log(`🏆 SAVING SCORE: ${score} points for ${walletAddress}`);
+      const normalizedAddress = walletAddress.toLowerCase();
+      
+      // First ensure the user exists (required by foreign key constraint)
+      await ensureUserExists(normalizedAddress);
+      
+      // Get the current high score for this user
+      const { data: existingScore, error: fetchError } = await supabase
+        .from('scores')
+        .select('id, score')
+        .eq('wallet_address', normalizedAddress)
+        .order('score', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('🏆 Error fetching existing score:', fetchError);
+        return null;
+      }
+      
+      // Only save if this is a new high score
+      if (existingScore && score <= existingScore.score) {
+        console.log(`🏆 Current score (${score}) is not higher than existing high score (${existingScore.score}), not saving`);
+        return existingScore.score;
+      }
+      
+      // Insert the new score record (we always insert a new record, not update)
+      console.log(`🏆 Inserting new high score: ${score}`);
+      const { error: insertError } = await supabase
+        .from('scores')
+        .insert([{
+          wallet_address: normalizedAddress,
+          score: score
+        }]);
+      
+      if (insertError) {
+        console.error('🏆 Error inserting score:', insertError);
+        return null;
+      }
+      
+      console.log(`🏆 Successfully recorded new high score: ${score}`);
+      setPlayerHighScore(score);
+      
+      return score;
+    } catch (error) {
+      console.error('🏆 Unexpected error in saveScore:', error);
+      return null;
+    }
+  };
+  
+  // Helper function for ensuring user exists
+  const ensureUserExists = async (walletAddress) => {
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('wallet_address')
+        .eq('wallet_address', walletAddress)
+        .maybeSingle();
+        
+      if (!data) {
+        // Create user if doesn't exist
+        await supabase.from('users').insert({
+          wallet_address: walletAddress,
+          username: `Player_${walletAddress.substring(0, 6)}`
+        });
+      }
+      return true;
+    } catch (error) {
+      console.error('Error ensuring user exists:', error);
+      return false;
+    }
+  };
+  
+  // Define recordScore next since the useEffect depends on it
+  const recordScore = useCallback(async (score) => {
+    if (!isConnected || !address) {
+      console.log('Cannot record score: not connected');
+      return false;
+    }
+    
+    console.log(`🎮 Recording score: ${score}`);
+    
+    if (score > 0) {
+      // Always update the current game score
+      setCurrentGameScore(score);
+      
+      // Check if this is a new high score
+      if (score > playerHighScore) {
+        console.log(`🎮 New high score: ${score} > ${playerHighScore}`);
+        
+        // Update local state
+        setPlayerHighScore(score);
+        setHighScore(score);
+        
+        // Save to localStorage
+        localStorage.setItem(`highScore_${address.toLowerCase()}`, score);
+        
+        // Save to Supabase
+        try {
+          console.log(`🎮 Saving high score to Supabase: ${score}`);
+          const savedScore = await saveScore(address, score);
+          console.log(`🎮 High score saved to Supabase: ${savedScore}`);
+          return true;
+        } catch (error) {
+          console.error('🎮 Error saving high score:', error);
+          return false;
+        }
+      } else {
+        console.log(`🎮 Score ${score} not higher than current high score ${playerHighScore}`);
+        return true;
+      }
+    }
+    
+    return false;
+  }, [address, isConnected, playerHighScore, saveScore]);
+
+  // Add the function that is referenced in useEffect early on to prevent reference errors
+  const recordBundledJumps = async (jumpCount) => {
+    if (!jumpCount || jumpCount <= 0) {
+      console.log('No jumps to record, skipping transaction');
+      return true; // Don't process zero jumps
+    }
+    
+    console.log(`Recording ${jumpCount} bundled jumps`);
+    
+    // First track locally in Supabase - this ensures we have a record even if the blockchain call fails
+    try {
+      if (account) {
+        await saveJumpsToSupabase(account, jumpCount);
+      }
+    } catch (dbError) {
+      console.error('Failed to record jumps in database:', dbError);
+      // Continue to blockchain call anyway
+    }
+    
+    // If we're in development mode with mocking enabled, just update the local state
+    if (import.meta.env.DEV && import.meta.env.VITE_MOCK_TRANSACTIONS === 'true') {
+      console.log("DEV MODE: Mocking bundled jumps transaction");
+      setPendingJumps(prev => Math.max(0, prev - jumpCount));
+      return true;
+    }
+    
+    try {
+      // Check for required dependencies
+      if (!signer || !contract || !account) {
+        console.log('Missing dependencies for blockchain transaction, storing jumps locally');
+        setPendingJumps(prev => prev + jumpCount);
+        return false;
+      }
+      
+      // Update the local state even before making the RPC call
+      const newPendingJumps = Math.max(0, pendingJumps - jumpCount);
+      setPendingJumps(newPendingJumps);
+      
+      // Rate limit to avoid too many RPC calls - if we have a transaction in flight, wait
+      if (window.__jumpTransactionInProgress) {
+        console.log('Jump transaction already in progress, will try later');
+        return true;
+      }
+      
+      // Set transaction flag
+      window.__jumpTransactionInProgress = true;
+      
+      try {
+        console.log(`Submitting transaction to record ${jumpCount} jumps`);
+        
+        // Submit the transaction with explicit gasLimit
+        const tx = await contract.recordJumps(jumpCount, {
+          gasLimit: 300000 // Set a specific gas limit for Monad testnet
+        });
+        
+        console.log("Transaction submitted:", tx.hash);
+        return true;
+      } catch (txError) {
+        console.error("Transaction error:", txError);
+        
+        // Re-add to pending if transaction failed
+        setPendingJumps(prev => prev + jumpCount);
+        return false;
+      } finally {
+        // Clear transaction flag after a delay to prevent rapid retries
+        setTimeout(() => {
+          window.__jumpTransactionInProgress = false;
+        }, 5000);
+      }
+    } catch (error) {
+      console.error("Unexpected error in recordBundledJumps:", error);
+      
+      // Store jumps for later retry
+      setPendingJumps(prev => prev + jumpCount);
+      return false;
+    }
+  };
+  
+  // Add the saveJumpsToSupabase function early since recordBundledJumps depends on it
+  const saveJumpsToSupabase = async (walletAddress, jumpCount) => {
+    if (!walletAddress || jumpCount <= 0 || !supabase) {
+      console.error('Invalid parameters for saving jumps to Supabase');
+      return false;
+    }
+    
+    try {
+      console.log(`Saving ${jumpCount} jumps to Supabase for ${walletAddress}`);
+      const normalizedAddress = walletAddress.toLowerCase();
+      
+      // First ensure user exists in database
+      try {
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('wallet_address')
+          .eq('wallet_address', normalizedAddress)
+          .maybeSingle();
+          
+        if (!existingUser) {
+          // Create user if doesn't exist
+          await supabase.from('users').insert({
+            wallet_address: normalizedAddress,
+            username: `Player_${normalizedAddress.substring(0, 6)}`
+          });
+        }
+      } catch (userError) {
+        console.error('Error checking/creating user:', userError);
+      }
+      
+      // Check for existing jumps record
+      const { data: existingJumps, error } = await supabase
+        .from('jumps')
+        .select('id, count')
+        .eq('wallet_address', normalizedAddress)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching existing jumps:', error);
+        return false;
+      }
+      
+      if (existingJumps) {
+        // Update existing record
+        const newTotal = existingJumps.count + jumpCount;
+        await supabase
+          .from('jumps')
+          .update({ count: newTotal })
+          .eq('id', existingJumps.id);
+          
+        setTotalJumps(newTotal);
+        return true;
+      } else {
+        // Create new record
+        await supabase
+          .from('jumps')
+          .insert({
+            wallet_address: normalizedAddress,
+            count: jumpCount
+          });
+          
+        setTotalJumps(jumpCount);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error saving jumps to Supabase:', error);
+      return false;
+    }
+  };
+
+  // Update the provider initialization in Web3Context.jsx with better network detection
   useEffect(() => {
+    // Skip initialization if we already have a provider or if we're in fallback mode
+    if (provider || isInEdgeFallbackMode) return;
+    
     const initializeProvider = async () => {
         try {
             console.log("Initializing Web3 provider...");
             
             // Check if window.ethereum exists
             if (typeof window.ethereum !== 'undefined') {
-                // For ethers v5
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
+          // Create a cached provider to avoid repeated initialization
+          let initProvider;
+          try {
+            // Set network options with more robust configuration
+            const networkOptions = {
+              name: 'Monad Network',
+              chainId: monadTestnet.id,
+              // Critical options to prevent network errors:
+              allowUnlimitedContractSize: true,
+              polling: false,
+              staticNetwork: true,
+              // Add more tolerance for network errors:
+              ignoreNetworkError: true,
+              cacheTimeout: 5 * 60 * 1000 // 5 minute cache to reduce RPC calls
+            };
+            
+            // Create provider with more robust options
+            initProvider = new ethers.providers.Web3Provider(
+              window.ethereum, 
+              networkOptions
+            );
+            
                 console.log("Provider initialized successfully");
-                
-      setProvider(provider);
-                
-                // Get signer and chain info
+            setProvider(initProvider);
+            
+            // Request the network switch first to ensure we're on the right chain
+            try {
+              // This chain ID format needs to be in hex with 0x prefix
+              const chainIdHex = `0x${monadTestnet.id.toString(16)}`;
+              
+              console.log(`Requesting switch to chain: ${chainIdHex}`);
+              await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: chainIdHex }],
+              });
+              
+              console.log("Successfully switched to Monad network");
+            } catch (switchError) {
+              console.warn("Network switch request failed:", switchError.message);
+              
+              // If the chain isn't added, try to add it
+              if (switchError.code === 4902) {
                 try {
-                    const signer = provider.getSigner();
+                  await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [
+                      {
+                        chainId: `0x${monadTestnet.id.toString(16)}`,
+                        chainName: monadTestnet.name,
+                        nativeCurrency: monadTestnet.nativeCurrency,
+                        rpcUrls: [monadTestnet.rpcUrls.default.http[0]],
+                        blockExplorerUrls: [monadTestnet.blockExplorers?.default.url],
+                      },
+                    ],
+                  });
+                  console.log("Monad network added to wallet");
+                } catch (addError) {
+                  console.error('Failed to add Monad network:', addError);
+                }
+              }
+            }
+            
+            // Initialize signer only if we're connected
+            if (isConnected && address) {
+              try {
+                const signer = initProvider.getSigner();
                     setSigner(signer);
-                    const network = await provider.getNetwork();
-                    setChainId(network.chainId);
-                    console.log("Signer and network info retrieved");
-                } catch (error) {
-                    console.error("Error getting signer:", error);
+                console.log("Signer initialized successfully");
+                
+                // Initialize contract if we have an address - do this only once
+                const contractAddress = import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS || 
+                                      '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Fallback address
+                                       
+                if (contractAddress && !contract) {
+                  try {
+                    const gameContract = new ethers.Contract(
+                      contractAddress,
+                      gameContractABI,
+                      signer
+                    );
+                    setContract(gameContract);
+                    console.log("Game contract initialized successfully:", contractAddress);
+                  } catch (contractError) {
+                    console.error("Error initializing contract:", contractError);
+                  }
+                }
+              } catch (signerError) {
+                console.error("Error getting signer:", signerError);
+              }
+            }
+            
+            // Instead of getNetwork(), which makes an RPC call, just set the network
+            try {
+              // Override the getNetwork() method to always return our expected network
+              initProvider.network = {
+                chainId: monadTestnet.id,
+                name: monadTestnet.name,
+                ensAddress: null
+              };
+              
+              // Save configured network to help with troubleshooting
+              console.log("Using configured network:", JSON.stringify({
+                name: monadTestnet.name,
+                chainId: monadTestnet.id
+              }));
+            } catch (networkError) {
+              console.warn("Could not set network info:", networkError);
+            }
+          } catch (providerError) {
+            console.error("Error creating provider:", providerError);
                 }
             } else {
-                console.log("No ethereum object found in window");
+          console.log("No ethereum object found in window - using fallback provider");
+          // Don't recreate the provider if we already have one
+          if (!readOnlyProvider) {
+            // Use our fallback RPC system instead of hardcoding an RPC endpoint
+            if (window.__lastWorkingRPC) {
+              try {
+                const fallbackProvider = new ethers.providers.JsonRpcProvider(
+                  window.__lastWorkingRPC,
+                  {
+                    chainId: monadTestnet.id,
+                    name: monadTestnet.name
+                  }
+                );
+                setReadOnlyProvider(fallbackProvider);
+                console.log("Fallback provider initialized with last working RPC");
+              } catch (fallbackError) {
+                console.error("Error creating fallback provider:", fallbackError);
+              }
+            }
+          }
             }
     } catch (error) {
-      console.error("Error initializing provider:", error);
-    }
+        console.error("Error in provider initialization:", error);
+      }
     };
 
-    initializeProvider();
-  }, []);
+    // Don't await the initialization to prevent blocking
+    initializeProvider().catch(err => {
+      console.error("Provider initialization failed:", err);
+    });
+  }, [provider, isConnected, address, isInEdgeFallbackMode, contract, readOnlyProvider]);
 
   useEffect(() => {
     if (isInEdgeFallbackMode) {
@@ -491,6 +883,7 @@ export function Web3Provider({ children }) {
   }, [jumpTimer]);
 
   const updateScore = async (score, jumpCount) => {
+    try {
     console.log(`updateScore called with score: ${score}, jumpCount: ${jumpCount}`);
     
     if (!signer || !contract || !account) {
@@ -499,10 +892,23 @@ export function Web3Provider({ children }) {
         contract: !!contract, 
         account: !!account 
       });
+        
+        // Just record the jumps locally instead of trying to make a contract call
+        if (jumpCount > 0) {
+          setPendingJumps(prev => prev + jumpCount);
+          console.log(`Added ${jumpCount} jumps to pending jumps (total: ${pendingJumps + jumpCount})`);
+        }
+        
+        // Also update score locally if it's provided
+        if (score > 0) {
+          setCurrentGameScore(score);
+          await recordScore(score);
+        }
+        
       return false;
     }
 
-    if (jumpCount <= 0) {
+      if (!jumpCount || jumpCount <= 0) {
       console.log("No jumps to record, skipping transaction");
       return true; // Return true but don't send a transaction for 0 jumps
     }
@@ -523,6 +929,11 @@ export function Web3Provider({ children }) {
       const receipt = await tx.wait();
       console.log("Transaction confirmed in block:", receipt.blockNumber);
     
+        // Also update score locally if it's provided
+        if (score > 0) {
+          await recordScore(score);
+        }
+    
     return true;
     } catch (error) {
       console.error("Transaction error:", error);
@@ -530,6 +941,16 @@ export function Web3Provider({ children }) {
       if (error.message?.includes("insufficient funds")) {
         console.error("Insufficient funds on Monad testnet");
       }
+        
+        // Fall back to local tracking to avoid data loss
+        setPendingJumps(prev => prev + jumpCount);
+        console.log(`Added ${jumpCount} jumps to pending jumps after transaction error`);
+        
+        return false;
+      }
+    } catch (outerError) {
+      // Catch any other errors that might occur outside of the transaction
+      console.error("Unexpected error in updateScore:", outerError);
       return false;
     }
   };
@@ -597,146 +1018,101 @@ export function Web3Provider({ children }) {
     }
   }, [isConnected, address, provider]);
 
-  // Update the saveScore function to use Supabase
-  const saveScore = async (walletAddress, score) => {
-    if (!walletAddress || score <= 0 || !supabase) {
-      console.error('🏆 Invalid parameters for saving score');
-      return;
-    }
-    
-    try {
-      console.log(`🏆 SAVING SCORE: ${score} points for ${walletAddress}`);
-      const normalizedAddress = walletAddress.toLowerCase();
-      
-      // First ensure the user exists (required by foreign key constraint)
-      await ensureUserExists(normalizedAddress);
-      
-      // Get the current high score for this user
-      const { data: existingScore, error: fetchError } = await supabase
-        .from('scores')
-        .select('id, score')
-        .eq('wallet_address', normalizedAddress)
-        .order('score', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('🏆 Error fetching existing score:', fetchError);
-        return null;
-      }
-      
-      // Only save if this is a new high score
-      if (existingScore && score <= existingScore.score) {
-        console.log(`🏆 Current score (${score}) is not higher than existing high score (${existingScore.score}), not saving`);
-        return existingScore.score;
-      }
-      
-      // Insert the new score record (we always insert a new record, not update)
-      console.log(`🏆 Inserting new high score: ${score}`);
-      const { error: insertError } = await supabase
-        .from('scores')
-        .insert([{
-          wallet_address: normalizedAddress,
-          score: score
-        }]);
-      
-      if (insertError) {
-        console.error('🏆 Error inserting score:', insertError);
-        return null;
-      }
-      
-      console.log(`🏆 Successfully recorded new high score: ${score}`);
-      setPlayerHighScore(score);
-      
-      return score;
-    } catch (error) {
-      console.error('🏆 Unexpected error in saveScore:', error);
-      return null;
-    }
-  };
-
-  // Completely rewrite the fetchLeaderboard function to ensure one user appears only once
+  // Optimized fetchLeaderboard with caching to reduce DB queries
   const fetchLeaderboard = async () => {
     try {
-      console.log('Fetching leaderboard with unique users only');
+      console.log('Fetching leaderboard');
       
-      // First get all scores
-      const { data: allScores, error: scoreError } = await supabase
+      // Check for cached leaderboard
+      const cachedLeaderboard = localStorage.getItem('cached_leaderboard');
+      if (cachedLeaderboard) {
+        try {
+          const { data, timestamp } = JSON.parse(cachedLeaderboard);
+          // Use cache if less than 5 minutes old
+          if (Date.now() - timestamp < 300000) {
+            console.log('Using cached leaderboard data');
+            setLeaderboard(data);
+            return data;
+          }
+        } catch (e) {
+          // Invalid cache, ignore and continue
+        }
+      }
+      
+      // If no supabase client, or if we're in development and mocking is enabled, use mock data
+      if (!supabase || (import.meta.env.DEV && import.meta.env.VITE_MOCK_DATA === 'true')) {
+        console.log('Using mock leaderboard data');
+        const mockLeaderboard = Array.from({ length: 10 }, (_, i) => ({
+          player: `Player${i + 1}`,
+          address: `0x${i.toString().padStart(40, '0')}`,
+          score: 1000 - i * 100,
+          timestamp: new Date().toLocaleDateString()
+        }));
+        
+        setLeaderboard(mockLeaderboard);
+        return mockLeaderboard;
+      }
+      
+      // Fetch top 10 scores with unique users in a single query
+      const { data: scores, error: scoreError } = await supabase
         .from('scores')
-        .select('wallet_address, score, created_at')
-        .order('score', { ascending: false });
+        .select(`
+          id, 
+          score,
+          wallet_address,
+          created_at,
+          users:wallet_address(username)
+        `)
+        .order('score', { ascending: false })
+        .limit(100);  // Fetch more than needed to filter unique
       
       if (scoreError) throw scoreError;
-      console.log('Raw scores fetched:', allScores?.length || 0);
+      console.log('Raw scores fetched:', scores?.length || 0);
       
       // Process scores to keep only the highest score per user
       const uniqueAddresses = new Set();
-      const uniqueScores = [];
+      const formattedLeaderboard = [];
       
-      // This logic ensures we keep only the first (highest) score for each address
-      allScores.forEach(score => {
-        const address = score.wallet_address.toLowerCase();
+      scores?.forEach(item => {
+        const address = item.wallet_address.toLowerCase();
         if (!uniqueAddresses.has(address)) {
           uniqueAddresses.add(address);
-          uniqueScores.push(score);
-        }
-      });
-      
-      console.log('Filtered to unique users:', uniqueScores.length);
-      
-      // Get the top 10 scores only
-      const topScores = uniqueScores.slice(0, 10);
-      
-      // Get usernames for these addresses
-      const walletAddresses = topScores.map(item => item.wallet_address.toLowerCase());
-      
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('wallet_address, username')
-        .in('wallet_address', walletAddresses);
-      
-      if (userError) throw userError;
-      
-      // Create username lookup map
-      const usernameMap = {};
-      if (userData) {
-        userData.forEach(user => {
-          usernameMap[user.wallet_address.toLowerCase()] = user.username;
-        });
-      }
-      
-      // Format the leaderboard data
-      const formattedLeaderboard = topScores.map(item => {
-        const address = item.wallet_address.toLowerCase();
-        const username = usernameMap[address] || 
+          
+          // Format the entry (using username from the joined users table if available)
+          const username = item.users?.username || 
           `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
         
-        return {
+          formattedLeaderboard.push({
           player: username,
           address: address,
           score: item.score,
           timestamp: new Date(item.created_at).toLocaleDateString()
-        };
+          });
+          
+          // Only keep top 10
+          if (formattedLeaderboard.length >= 10) {
+            return;
+          }
+        }
       });
       
-      console.log('Final leaderboard with unique users:', formattedLeaderboard);
+      console.log('Final leaderboard with unique users:', formattedLeaderboard.length);
       
-      // Double-check uniqueness before setting state
-      const finalAddresses = new Set();
-      const finalLeaderboard = [];
+      // Cache the result
+      localStorage.setItem('cached_leaderboard', JSON.stringify({
+        data: formattedLeaderboard,
+        timestamp: Date.now()
+      }));
       
-      for (const entry of formattedLeaderboard) {
-        if (!finalAddresses.has(entry.address)) {
-          finalAddresses.add(entry.address);
-          finalLeaderboard.push(entry);
-        }
-      }
-      
-      setLeaderboard(finalLeaderboard);
+      setLeaderboard(formattedLeaderboard);
+      return formattedLeaderboard;
       
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
+      
+      // Return empty array on error
       setLeaderboard([]);
+      return [];
     }
   };
 
@@ -745,27 +1121,57 @@ export function Web3Provider({ children }) {
     if (!address) return;
 
     try {
+      console.log(`Fetching player stats for address ${address}`);
+      
+      // Get highest score by ordering and taking first result
       const { data, error } = await supabase
         .from('scores')
         .select('score')
         .eq('wallet_address', address.toLowerCase())
-        .single();
+        .order('score', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching player stats:', error);
         return;
       }
 
+      const highScore = data?.score || 0;
+      
+      console.log('Fetched player high score:', highScore);
+
       const stats = {
-        highScore: data?.score || 0,
+        highScore: highScore,
         address: address
       };
 
-      console.log('Fetched player stats:', stats);
+      console.log('Setting player stats:', stats);
       setPlayerStats(stats);
-      setPlayerHighScore(stats.highScore);
+      setPlayerHighScore(highScore);
+      
+      // Also check for scores in localStorage fallback
+      const localScoreKey = `player_score_${address.toLowerCase()}`;
+      const localScore = localStorage.getItem(localScoreKey);
+      
+      if (localScore && parseInt(localScore) > highScore) {
+        const parsedScore = parseInt(localScore);
+        console.log(`Found higher local score: ${parsedScore}, using instead of ${highScore}`);
+        setPlayerHighScore(parsedScore);
+      }
+      
     } catch (error) {
       console.error('Error in fetchPlayerStats:', error);
+      
+      // Try to use localStorage as fallback
+      const localScoreKey = `player_score_${address.toLowerCase()}`;
+      const localScore = localStorage.getItem(localScoreKey);
+      
+      if (localScore) {
+        const parsedScore = parseInt(localScore);
+        console.log(`Using fallback local score: ${parsedScore}`);
+        setPlayerHighScore(parsedScore);
+      }
     }
   };
 
@@ -973,847 +1379,189 @@ export function Web3Provider({ children }) {
     }
   };
 
-  // Update recordScore to ensure scores are saved properly
-  const recordScore = useCallback(async (score) => {
-    if (!isConnected || !address) {
-      console.log('Cannot record score: not connected');
-      return false;
-    }
-    
-    console.log(`🎮 Recording score: ${score}`);
-    
-    if (score > 0) {
-      // Always update the current game score
-      setCurrentGameScore(score);
+  // CONSOLIDATED EVENT HANDLERS: Replace multiple overlapping game event handlers with a single efficient one
+  useEffect(() => {
+    // Skip when not connected
+    if (!isConnected || !address) return;
+
+    // Debounce function for score updates to prevent rapid state changes
+    let scoreUpdateTimeout = null;
+    const debouncedScoreUpdate = (score) => {
+      if (scoreUpdateTimeout) clearTimeout(scoreUpdateTimeout);
+      scoreUpdateTimeout = setTimeout(() => {
+        recordScore(score).catch(e => console.error('Error recording score:', e));
+      }, 300);
+    };
+
+    // Rate limiter for jump events
+    let jumpProcessingTimer = null;
+    let pendingJumpCount = 0;
+
+    const processJumps = () => {
+      if (pendingJumpCount <= 0) return;
       
-      // Check if this is a new high score
-      if (score > playerHighScore) {
-        console.log(`🎮 New high score: ${score} > ${playerHighScore}`);
-        
-        // Update local state
-        setPlayerHighScore(score);
-        setHighScore(score);
-        
-        // Save to localStorage
-        localStorage.setItem(`highScore_${address.toLowerCase()}`, score);
-        
-        // Save to Supabase
-        try {
-          console.log(`🎮 Saving high score to Supabase: ${score}`);
-          const savedScore = await saveScore(address, score);
-          console.log(`🎮 High score saved to Supabase: ${savedScore}`);
-          return true;
-        } catch (error) {
-          console.error('🎮 Error saving high score:', error);
-          return false;
-        }
-      } else {
-        console.log(`🎮 Score ${score} not higher than current high score ${playerHighScore}`);
-        return true;
-      }
-    }
-    
-    return false;
-  }, [address, isConnected, playerHighScore]);
-
-  // Update the score event listener
-  useEffect(() => {
-    const handleGameScore = async (event) => {
-      const score = event.detail.score;
-      console.log("Received game score event:", score);
-      await recordScore(score);
-    };
-
-    window.addEventListener('gameScore', handleGameScore);
-    return () => window.removeEventListener('gameScore', handleGameScore);
-  }, [isConnected]); // Add isConnected to dependencies
-
-  // Add this to your existing useEffect hooks
-  useEffect(() => {
-    const handleGameOver = async (event) => {
-      const { finalScore, jumpCount } = event.detail;
-      console.log("Game Over - Processing score:", finalScore, "jumps:", jumpCount);
+      const jumpCount = pendingJumpCount;
+      pendingJumpCount = 0;
       
-      // Record the final score
-      await recordScore(finalScore);
-      
-      // Process any pending jumps
-      if (jumpCount > 0) {
-        await recordJump(jumpCount);
-      }
+      console.log(`Processing ${jumpCount} accumulated jumps`);
+      recordBundledJumps(jumpCount).catch(e => console.error('Error processing jumps:', e));
     };
 
-    const handleJump = async (event) => {
-      const { count } = event.detail;
-      console.log("Jump event received:", count);
-      await recordJump(count);
-    };
-
-    window.addEventListener('gameOver', handleGameOver);
-    window.addEventListener('gameJump', handleJump);
-    
-    return () => {
-      window.removeEventListener('gameOver', handleGameOver);
-      window.removeEventListener('gameJump', handleJump);
-    };
-  }, [isConnected]);
-
-  // Update the fetchScores function to run periodically
-  useEffect(() => {
-    // Initial fetch
-    fetchScores(address);
-    
-    // Set up periodic refresh
-    const interval = setInterval(fetchScores, 10000, address); // Refresh every 10 seconds
-    
-    return () => clearInterval(interval);
-  }, [isConnected, address]);
-
-  // Add this effect to handle iframe messages
-  useEffect(() => {
-    const handleIframeMessage = async (event) => {
-      // Check if the message is from our game iframe
-      if (event.data && event.data.type === 'gameScore') {
-        const score = event.data.score;
-        console.log("Received score from game iframe:", score);
+    // Single consolidated message handler for all game-related events
+    const handleGameMessages = async (event) => {
+      try {
+        // First check event types that don't need RPC calls
         
-        try {
-          if (!address) {
-            console.error('No wallet address available');
+        // Handle direct events from the game via custom events
+        if (event.type === 'gameScore') {
+          const score = event.detail?.score;
+          if (!score) return;
+          
+          console.log("🎮 Received game score event:", score);
+          debouncedScoreUpdate(score);
             return;
           }
 
-          // First ensure user exists
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('wallet_address')
-            .eq('wallet_address', address.toLowerCase())
-            .single();
-
-          if (!userData) {
-            // Create user if doesn't exist
-            const { error: insertError } = await supabase
-              .from('users')
-              .insert([{ 
-                wallet_address: address.toLowerCase(),
-                username: `Player_${address.slice(0, 6)}`
-              }]);
-
-            if (insertError) {
-              console.error('Error creating user:', insertError);
+        if (event.type === 'gameJump') {
+          const { count } = event.detail || {};
+          if (!count || count <= 0) return;
+          
+          // Add to pending jumps instead of making immediate RPC calls
+          pendingJumpCount += count;
+          
+          // Reset the timer for batch processing
+          if (jumpProcessingTimer) clearTimeout(jumpProcessingTimer);
+          jumpProcessingTimer = setTimeout(processJumps, 2000);
               return;
-            }
-          }
-
-          // Save the score
-          const { data, error } = await supabase
-            .from('scores')
-            .upsert([{
-              wallet_address: address.toLowerCase(),
-              score: parseInt(score),
-              timestamp: new Date().toISOString()
-            }], {
-              onConflict: 'wallet_address',
-              returning: true
-            });
-
-          if (error) throw error;
-
-          console.log('Score saved to Supabase:', data);
-          setPlayerHighScore(score);
-          fetchLeaderboard();
-
-        } catch (error) {
-          console.error('Error handling game score:', error);
         }
-      }
-    };
-
-    window.addEventListener('message', handleIframeMessage);
-    return () => window.removeEventListener('message', handleIframeMessage);
-  }, [address]);
-
-  // Update the game over handler
-  useEffect(() => {
-    const handleGameOver = async (event) => {
-      const { finalScore } = event.detail;
-      console.log("Game Over - Final score:", finalScore);
-      
-      // Send score via postMessage to ensure it's captured
-      window.postMessage({
-        type: 'gameScore',
-        score: finalScore
-      }, '*');
-    };
-
-    window.addEventListener('gameOver', handleGameOver);
-    return () => window.removeEventListener('gameOver', handleGameOver);
-  }, []);
-
-  // Fetch user's high score
-  const fetchHighScore = async () => {
-    if (!address) {
-      console.log('No address available for fetchHighScore');
+        
+        // Handle game over - this is one event we want to process immediately
+        if (event.type === 'gameOver') {
+          const { finalScore } = event.detail || {};
+          if (!finalScore) return;
+          
+          console.log("🎮 Game Over - Processing score:", finalScore);
+          
+          // Process the final score immediately
+          await recordScore(finalScore);
+          
+          // Process any pending jumps
+          processJumps();
       return;
     }
 
-    console.log('Fetching high score for address:', address.toLowerCase());
-
-    try {
-      // Get all scores for this user
-      const { data, error } = await supabase
-        .from('scores')
-        .select('score, created_at')
-        .eq('wallet_address', address.toLowerCase())
-        .order('score', { ascending: false })
-        .limit(5);
-
-      if (error) throw error;
-      
-      console.log('High score query results:', data);
-
-      if (data && data.length > 0) {
-        const highestScore = data[0].score;
-        console.log('Setting high score to:', highestScore);
-        setPlayerHighScore(highestScore);
-        setHighScore(highestScore);
-        
-        // Store in localStorage as backup
-        localStorage.setItem(`highScore_${address.toLowerCase()}`, highestScore);
-      } else {
-        console.log('No high scores found for this user');
-        setPlayerHighScore(0);
-        setHighScore(0);
-      }
-    } catch (error) {
-      console.error('Error fetching high score:', error);
-      
-      // Try to recover from localStorage
-      const cachedScore = localStorage.getItem(`highScore_${address.toLowerCase()}`);
-      if (cachedScore) {
-        console.log('Recovering high score from cache:', cachedScore);
-        setPlayerHighScore(parseInt(cachedScore));
-        setHighScore(parseInt(cachedScore));
-      } else {
-        setPlayerHighScore(0);
-        setHighScore(0);
-      }
-    }
-  };
-
-  // Record jumps
-  const recordJumps = async (count) => {
-    if (!address || !count) return;
-
-    try {
-      const { error } = await supabase
-        .from('jumps')
-        .insert([{
-          wallet_address: address.toLowerCase(),
-          count: count
-        }]);
-
-      if (error) throw error;
-      setTotalJumps(prev => prev + count);
-    } catch (error) {
-      console.error('Error recording jumps:', error);
-    }
-  };
-
-  // Initialize when wallet connects
-  useEffect(() => {
-    if (isConnected && address) {
-      checkAndLoadUsername(address)
-        .then(username => {
-          console.log('Username checked/loaded:', username);
-        })
-        .catch(err => {
-          console.error('Error checking username:', err);
-        });
-      fetchHighScore();
-      fetchLeaderboard();
-    }
-  }, [isConnected, address]);
-
-  // Listen for game events
-  useEffect(() => {
-    const handleGameScore = async (event) => {
-      if (event.data?.type === 'gameScore') {
-        await saveScore(address, event.data.score);
-      }
-    };
-
-    window.addEventListener('message', handleGameScore);
-    return () => window.removeEventListener('message', handleGameScore);
-  }, [address]);
-
-  // Add useEffect to monitor modal state changes
-  useEffect(() => {
-    console.log('Username modal state changed:', {
-      showUsernameModal,
-      username,
-      address,
-      isConnected
-    });
-  }, [showUsernameModal, username, address, isConnected]);
-
-  // Update the score handling effect
-  useEffect(() => {
-    const handleGameScore = async (event) => {
-      // Handle postMessage events
-      if (event.data?.type === 'gameScore') {
+        // Handle messages from iframe
+        if (event.data && typeof event.data === 'object') {
+          // Handle score updates from iframe
+          if (event.data.type === 'gameScore') {
         const score = event.data.score;
-        console.log('Received game score from postMessage:', score);
+            if (!score) return;
         
-        if (!address || !score) {
-          console.log('No address or score to save');
+            console.log("📊 Received score from game iframe:", score);
+            debouncedScoreUpdate(score);
           return;
         }
 
-        try {
-          console.log('Saving score to Supabase:', score, 'for address:', address);
-
-          // First ensure user exists
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('wallet_address')
-            .eq('wallet_address', address.toLowerCase())
-            .single();
-
-          if (!userData) {
-            // Create user if doesn't exist
-            const { error: insertError } = await supabase
-              .from('users')
-              .insert([{ 
-                wallet_address: address.toLowerCase(),
-                username: `Player_${address.slice(0, 6)}`
-              }]);
-
-            if (insertError) {
-              console.error('Error creating user:', insertError);
+          // Handle jump events from iframe - accumulate instead of immediate processing
+          if (event.data.type === 'JUMP_PERFORMED') {
+            const jumpCount = event.data.jumpCount || 1;
+            console.log("🦘 Jump received from iframe:", jumpCount);
+            
+            // Add to pending count
+            pendingJumpCount += jumpCount;
+            
+            // Reset the timer for batch processing
+            if (jumpProcessingTimer) clearTimeout(jumpProcessingTimer);
+            jumpProcessingTimer = setTimeout(processJumps, 2000);
               return;
+          }
+          
+          // Handle bundle jumps - process immediately as this is already a batch
+          if (event.data.type === 'BUNDLE_JUMPS' && event.data.data) {
+            const { score, jumpCount } = event.data.data || {};
+            if (!jumpCount || jumpCount <= 0) return;
+            
+            console.log("🎮 Bundle includes score:", score, "jumps:", jumpCount);
+            
+            // Record score first if provided
+            if (score > 0) {
+              await recordScore(score);
             }
-          }
-
-          // Save the score
-          const { data, error } = await supabase
-            .from('scores')
-            .insert([{
-              wallet_address: address.toLowerCase(),
-              score: parseInt(score),
-              created_at: new Date().toISOString()
-            }]);
-
-          if (error) throw error;
-
-          console.log('Score saved successfully:', data);
-          
-          // Get current high score to compare
-          const currentHighScore = Math.max(playerHighScore, highScore);
-          console.log('Current high score before update:', currentHighScore);
-          
-          // Update high score if needed
-          if (parseInt(score) > currentHighScore) {
-            console.log(`New high score! ${score} > ${currentHighScore}`);
-            const newHighScore = parseInt(score);
             
-            // Update both state variables to ensure consistency
-            setPlayerHighScore(newHighScore);
-            setHighScore(newHighScore);
-            
-            // Cache to localStorage
-            localStorage.setItem(`highScore_${address.toLowerCase()}`, newHighScore);
-          }
-          
-          // Trigger a fetch of all scores but don't override if we just set a high score
-          const shouldOverride = parseInt(score) <= currentHighScore;
-          await fetchScores(address);
-          fetchLeaderboard();
-
-        } catch (error) {
-          console.error('Error saving score to Supabase:', error);
-        }
-      }
-    };
-
-    window.addEventListener('message', handleGameScore);
-    
-    return () => {
-      window.removeEventListener('message', handleGameScore);
-    };
-  }, [address, playerHighScore, highScore]);
-
-  // Add this check to make sure we're not accidentally resetting the high score
-  useEffect(() => {
-    console.log('High score state changed:', {
-      playerHighScore,
-      highScore,
-      address: address?.toLowerCase()
-    });
-    
-    // Sanity check
-    if (playerHighScore > 0 && highScore === 0) {
-      console.error('Inconsistent state detected - recovering highScore from playerHighScore');
-      setHighScore(playerHighScore);
-    } else if (highScore > 0 && playerHighScore === 0) {
-      console.error('Inconsistent state detected - recovering playerHighScore from highScore');
-      setPlayerHighScore(highScore);
-    }
-  }, [playerHighScore, highScore]);
-
-  const recordBundledJumps = useCallback(async (jumpCount) => {
-    console.log(`Recording ${jumpCount} bundled jumps on the blockchain`);
-    
-    if (!isConnected || !address) {
-      console.error('Cannot record jumps: wallet not connected');
-      return false;
-    }
-    
-    try {
-      // Create contract instance (directly here, don't rely on context)
-      if (!window.ethereum) {
-        console.error('No Ethereum provider available');
-        return false;
-      }
-      
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      
-      // Get the contract address from environment or use a fallback
-      const jumpContractAddress = 
-        import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS || 
-        "0xfc84a3379e2d8bc9d80ab8391991ef091bd02ba6";
-      
-      console.log(`Using contract address: ${jumpContractAddress}`);
-      
-      // Minimal ABI for the jump function
-      const jumpContractABI = [
-        "function finalizeGame(uint256 _score, uint256 _jumps) external payable",
-        "function recordJump() external",
-        "function recordJumps(uint256 _jumps) external"
-      ];
-      
-      const jumpContract = new ethers.Contract(jumpContractAddress, jumpContractABI, signer);
-      
-      // First try recordJumps if it exists
-      let tx;
-      if (jumpContract.recordJumps) {
-        console.log(`Calling recordJumps(${jumpCount})`);
-        tx = await jumpContract.recordJumps(jumpCount, {
-          gasLimit: ethers.utils.hexlify(300000)
-        });
-      } else {
-        // Use finalizeGame with a score of 1 (just to record jumps)
-        console.log(`Calling finalizeGame(1, ${jumpCount})`);
-        
-        // Calculate jump cost (if needed)
-        const jumpCost = ethers.utils.parseEther("0.0001").mul(jumpCount);
-        
-        tx = await jumpContract.finalizeGame(1, jumpCount, {
-          value: jumpCost,
-          gasLimit: ethers.utils.hexlify(300000)
-        });
-      }
-      
-      console.log('Jump recording transaction sent:', tx.hash);
-      
-      // Wait for transaction to be mined
-      const receipt = await tx.wait();
-      console.log('Jump recording confirmed:', receipt);
-      
-      // Update local state
-      setTotalJumps(prev => prev + jumpCount);
-      return true;
-    } catch (error) {
-      console.error('Failed to record bundled jumps:', error);
-      
-      // Try to show more specific error message
-      if (error.code === 'ACTION_REJECTED') {
-        console.log('Transaction was rejected by user');
-      } else if (error.message.includes('user rejected transaction')) {
-        console.log('User rejected the transaction');
-      } else {
-        console.log('Error details:', error.message);
-      }
-      
-      return false;
-    }
-  }, [isConnected, address]);
-
-  // Add this function to track outgoing transactions and update UI immediately
-  const setupTransactionTracker = () => {
-    // Capture the original console.log
-    const originalConsoleLog = console.log;
-    console.log = function(...args) {
-      // Call the original console.log
-      originalConsoleLog.apply(console, args);
-      
-      // Check if this is a bundle transaction sent message
-      const message = args.join(' ');
-      if (message.includes('Bundle transaction sent:') || 
-          message.includes('✅ Bundle transaction sent:')) {
-        
-        // Extract transaction hash
-        const txHash = message.split(':')[1]?.trim();
-        if (txHash) {
-          console.log('Detected outgoing transaction:', txHash);
-          
-          // Immediately force UI update in the game iframe
-          try {
-            const gameFrame = document.querySelector('iframe');
-            if (gameFrame && gameFrame.contentWindow) {
-              // Force UI update to "Jumps recorded!"
-              gameFrame.contentWindow.postMessage({
-                type: 'TRANSACTION_SUCCESS',
-                data: { 
-                  type: 'jump', 
-                  status: 'confirmed',
-                  message: 'Jumps recorded!',
-                  hash: txHash
-                }
-              }, '*');
-              
-              // Also update any waiting approval UI
-              gameFrame.contentWindow.postMessage({
-                type: 'UPDATE_WAITING_APPROVAL',
-                data: { 
-                  newStatus: 'Jumps recorded!',
-                  hash: txHash
-                }
-              }, '*');
-            }
-          } catch (error) {
-            console.error('Error updating game UI:', error);
+            // Process the jumps
+            await recordBundledJumps(jumpCount);
+            return;
           }
         }
+      } catch (error) {
+        console.error("Error handling game message:", error);
+        // Don't re-throw to prevent component crashes
       }
     };
-    
-    return () => {
-      // Restore original console.log on cleanup
-      console.log = originalConsoleLog;
-    };
-  };
 
-  // Add this inside the useEffect where you set up events
-  useEffect(() => {
-    // Set up transaction tracker
-    const cleanupTracker = setupTransactionTracker();
-    
-    // Return cleanup function
-    return () => {
-      cleanupTracker();
-    };
-  }, []);
-
-  // Add this function to handle game over events correctly
-  const handleGameOver = (score, jumps) => {
-    console.log('Game over detected, score:', score, 'jumps:', jumps);
-    
-    // Always set the game iframe to "waiting" state initially
-    try {
-      const gameFrame = document.querySelector('iframe');
-      if (gameFrame && gameFrame.contentWindow) {
-        // Important: Send reset message to ensure "Waiting for approval" is shown
-        gameFrame.contentWindow.postMessage({
-          type: 'TX_RESET',
-          data: { type: 'jump' }
-        }, '*');
-        
-        // Also send explicit waiting state
-        gameFrame.contentWindow.postMessage({
-          type: 'TX_WAITING',
-          data: { type: 'jump' }
-        }, '*');
-      }
-    } catch (error) {
-      console.error('Error resetting transaction status:', error);
-    }
-    
-    // Continue with normal game over handling
-    // (recording score, etc.)
-  };
-
-  // Listen for game over events
-  useEffect(() => {
-    const handleGameOverMessage = (event) => {
-      if (event.data && event.data.type === 'GAME_OVER') {
-        const { finalScore } = event.data.data || { finalScore: 0 };
-        handleGameOver(finalScore, pendingJumps);
-      }
-    };
-    
-    window.addEventListener('message', handleGameOverMessage);
-    return () => {
-      window.removeEventListener('message', handleGameOverMessage);
-    };
-  }, [pendingJumps]);
-
-  // Ultra-simple implementation matching the exact table schema
-  const saveJumpsToSupabase = async (walletAddress, newJumps) => {
-    if (!walletAddress || newJumps <= 0 || !supabase) {
-      console.error('⛔ Invalid parameters for saving jumps');
-      return;
-    }
-    
-    try {
-      console.log(`🔵 SCHEMA-MATCHING JUMP SAVE: Adding ${newJumps} jumps for ${walletAddress}`);
-      const normalizedAddress = walletAddress.toLowerCase();
-      
-      // First ensure the user exists (required by foreign key constraint)
-      await ensureUserExists(normalizedAddress);
-      
-      // Check for existing record
-      const { data: existingRecord, error: fetchError } = await supabase
-        .from('jumps')
-        .select('id, count')
-        .eq('wallet_address', normalizedAddress)
-        .maybeSingle();
-      
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('⛔ Error fetching existing record:', fetchError);
-        return null;
-      }
-      
-      // Simple logic - if record exists, update it; otherwise create it
-      if (existingRecord) {
-        console.log(`🔵 Found existing record with count ${existingRecord.count}`);
-        const newTotal = existingRecord.count + newJumps;
-        console.log(`🔵 Updating to new total: ${newTotal}`);
-        
-        // Update existing record - match schema exactly
-        const { error: updateError } = await supabase
-          .from('jumps')
-          .update({ count: newTotal })
-          .eq('id', existingRecord.id);
-        
-        if (updateError) {
-          console.error('⛔ Error updating jumps:', updateError);
-          return null;
-        }
-        
-        console.log(`🔵 Successfully updated jump count to ${newTotal}`);
-        setTotalJumps(newTotal);
-        return newTotal;
-      } else {
-        console.log(`🔵 No existing record, creating new with count ${newJumps}`);
-        
-        // Insert new record - match schema exactly
-        const { error: insertError } = await supabase
-          .from('jumps')
-          .insert([{ 
-            wallet_address: normalizedAddress,
-            count: newJumps
-          }]);
-        
-        if (insertError) {
-          console.error('⛔ Error inserting jumps:', insertError);
-          return null;
-        }
-        
-        console.log(`🔵 Successfully created new jump record with count ${newJumps}`);
-        setTotalJumps(newJumps);
-        return newJumps;
-      }
-    } catch (error) {
-      console.error('⛔ Unexpected error in saveJumpsToSupabase:', error);
-      return null;
-    }
-  };
-
-  // Helper function to ensure user exists
-  const ensureUserExists = async (walletAddress) => {
-    try {
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('wallet_address')
-        .eq('wallet_address', walletAddress)
-        .maybeSingle();
-      
-      if (!existingUser) {
-        console.log('📊 Creating new user record for wallet:', walletAddress);
-        await supabase
-          .from('users')
-          .insert([{
-            wallet_address: walletAddress,
-            username: `Player_${walletAddress.slice(0, 6)}`
-          }]);
-      }
-    } catch (error) {
-      console.error('📊 Error ensuring user exists:', error);
-    }
-  };
-
-  // Add a dedicated function to fetch jumps
-  const fetchJumps = async (walletAddress) => {
-    if (!walletAddress || !supabase) return;
-    
-    try {
-      console.log('📊 Fetching jumps for wallet:', walletAddress);
-      const normalizedAddress = walletAddress.toLowerCase();
-      
-      // First check and clean up any duplicates
-      const { data: countData } = await supabase
-        .from('jumps')
-        .select('id')
-        .eq('wallet_address', normalizedAddress);
-      
-      if (countData && countData.length > 1) {
-        console.log(`📊 Found ${countData.length} records during fetch - cleaning up`);
-        
-        // Keep the first record, delete the rest
-        const keepId = countData[0].id;
-        const deleteIds = countData.slice(1).map(item => item.id);
-        
-        await supabase
-          .from('jumps')
-          .delete()
-          .in('id', deleteIds);
-      }
-      
-      // Now fetch the single record
-      const { data, error } = await supabase
-        .from('jumps')
-        .select('count')
-        .eq('wallet_address', normalizedAddress)
-        .maybeSingle();
-      
-      if (error && error.code !== 'PGRST116') {
-        console.error('📊 Error fetching jumps:', error);
-        return;
-      }
-      
-      const jumpCount = data?.count || 0;
-      console.log('📊 Fetched jumps from database:', jumpCount);
-      
-      // Update the state with the fetched value
-      setTotalJumps(jumpCount);
-      return jumpCount;
-    } catch (error) {
-      console.error('📊 Error in fetchJumps:', error);
-      return 0;
-    }
-  };
-
-  // Update fetchUserData to include jumps
-  const fetchUserData = async (address) => {
-    if (!address || !supabase) return;
-    
-    try {
-      console.log('📊 Fetching user data including jumps for:', address);
-      
-      // Fetch scores (existing code)
-      fetchScores(address);
-      
-      // Fetch jumps
-      await fetchJumps(address);
-      
-      console.log('📊 User data fetch complete');
-    } catch (error) {
-      console.error('📊 Error fetching user data:', error);
-    }
-  };
-
-  // Add useEffect to fetch jumps when user connects
-  useEffect(() => {
-    if (isConnected && address) {
-      console.log('📊 User connected, fetching jumps for:', address);
-      fetchJumps(address);
-    }
-  }, [isConnected, address]);
-
-  // Add explicit refresh function
-  const refreshJumps = () => {
-    if (isConnected && address) {
-      console.log('📊 Refreshing jumps data');
-      return fetchJumps(address);
-    }
-    return Promise.resolve(0);
-  };
-
-  // Update the game message handler to properly save high scores
-  useEffect(() => {
-    if (!isConnected || !address) return;
-
-    const handleGameMessages = (event) => {
-      if (!event.data) return;
-      
-      // Handle different message types
-      const { type, data, score } = event.data;
-      
-      if (type === 'gameScore') {
-        console.log(`🎮 Game score message received with score: ${score || data?.score}`);
-        
-        // Extract the score from the message
-        const gameScore = score || data?.score || 0;
-        
-        if (gameScore > 0) {
-          console.log(`🎮 Processing game score: ${gameScore}`);
-          
-          // Save the score to Supabase if it's higher than current high score
-          if (gameScore > playerHighScore) {
-            console.log(`🎮 New high score from game: ${gameScore} > ${playerHighScore}`);
-            
-            // Direct call to save the score
-            saveScore(address, gameScore)
-              .then(result => {
-                console.log(`🎮 Successfully saved new high score: ${result}`);
-                
-                // Force a refresh of the UI
-                setPlayerHighScore(gameScore);
-                setHighScore(gameScore);
-                
-                // Also update localStorage
-                localStorage.setItem(`highScore_${address.toLowerCase()}`, gameScore);
-              })
-              .catch(err => {
-                console.error('🎮 Failed to save high score:', err);
-              });
-          } else {
-            console.log(`🎮 Score ${gameScore} not higher than current high score ${playerHighScore}`);
-          }
-        }
-      }
-      
-      // Handle bundle jumps messages (they may also contain scores)
-      if (type === 'BUNDLE_JUMPS' && data) {
-        console.log('🎮 Bundle request received:', data);
-        
-        const bundleScore = data.score;
-        if (bundleScore && bundleScore > 0) {
-          console.log(`🎮 Bundle includes score: ${bundleScore}`);
-          
-          // Also check if this is a new high score
-          if (bundleScore > playerHighScore) {
-            console.log(`🎮 Bundle has new high score: ${bundleScore} > ${playerHighScore}`);
-            
-            // Save the high score
-            saveScore(address, bundleScore)
-              .then(() => {
-                console.log(`🎮 Saved bundle high score: ${bundleScore}`);
-                setPlayerHighScore(bundleScore);
-              })
-              .catch(err => {
-                console.error('🎮 Error saving bundle score:', err);
-              });
-          }
-        }
-      }
-    };
-    
+    // Add listeners for all event types
+    window.addEventListener('gameScore', handleGameMessages);
+    window.addEventListener('gameOver', handleGameMessages);
+    window.addEventListener('gameJump', handleGameMessages);
     window.addEventListener('message', handleGameMessages);
-    return () => window.removeEventListener('message', handleGameMessages);
-  }, [isConnected, address, playerHighScore]);
+    
+    // Clean up all listeners and timers on unmount
+    return () => {
+      window.removeEventListener('gameScore', handleGameMessages);
+      window.removeEventListener('gameOver', handleGameMessages);
+      window.removeEventListener('gameJump', handleGameMessages);
+      window.removeEventListener('message', handleGameMessages);
+      
+      if (scoreUpdateTimeout) clearTimeout(scoreUpdateTimeout);
+      if (jumpProcessingTimer) {
+        clearTimeout(jumpProcessingTimer);
+        processJumps(); // Process any remaining jumps
+      }
+    };
+  }, [isConnected, address, recordScore, recordBundledJumps]);
 
-  // Update the NFT verification logic with better error handling
+  // Update the NFT verification logic with improved resilience against rate limiting and network errors
   const checkNFT = async (address) => {
     try {
       setIsCheckingNFT(true);
       
-      if (!address || !provider) {
-        console.log('Missing address or provider for NFT check');
+      if (!address) {
+        console.log('Missing address for NFT check');
         setHasNFT(false);
-        return;
+      return false;
+    }
+    
+      // Check if we have cached NFT status for this address
+      const cachedStatus = localStorage.getItem(`nft_status_${address.toLowerCase()}`);
+      if (cachedStatus) {
+        try {
+          const { hasNFT, timestamp } = JSON.parse(cachedStatus);
+          // Use cache if less than 3 hours old (increased from 1 hour to reduce RPC calls)
+          if (Date.now() - timestamp < 10800000) {
+            console.log('Using cached NFT status:', hasNFT);
+            setHasNFT(hasNFT);
+            setIsCheckingNFT(false);
+            return hasNFT;
+          }
+        } catch (e) {
+          // Invalid cache, ignore and continue
+        }
+      }
+      
+      // Only run actual checks in production, mock in development to avoid rate limits
+      if (import.meta.env.DEV) {
+        console.log('DEV MODE: Mocking NFT check');
+        const mockResult = Math.random() > 0.5;
+        setHasNFT(mockResult);
+        
+        // Still cache the mock result
+        localStorage.setItem(`nft_status_${address.toLowerCase()}`, JSON.stringify({
+          hasNFT: mockResult,
+          timestamp: Date.now()
+        }));
+        
+        setIsCheckingNFT(false);
+        return mockResult;
       }
       
       // Complete ABI for the NFT contract's hasMinted function
@@ -1824,33 +1572,63 @@ export function Web3Provider({ children }) {
       ];
       
       const nftContractAddress = '0xbee3b1b8e62745f5e322a2953b365ef474d92d7b';
-      const nftContract = new ethers.Contract(
-        nftContractAddress,
-        nftContractABI,
-        provider
-      );
       
-      // First try the hasMinted function
-      try {
-        const hasMinted = await nftContract.hasMinted(address);
-        console.log('NFT check result:', hasMinted);
-        setHasNFT(hasMinted);
-        return;
-      } catch (contractError) {
-        console.warn('hasMinted check failed, falling back to balanceOf:', contractError);
+      // Use our new retry mechanism with backoff
+      const result = await executeWithBackoff(async (providerToUse) => {
+        if (!providerToUse) {
+          throw new Error('No provider available for NFT check');
+        }
         
-        // Fallback to checking balanceOf
-        const balance = await nftContract.balanceOf(address);
-        const hasNFT = balance.gt(0);
-        console.log('NFT balance check result:', hasNFT, 'Balance:', balance.toString());
-        setHasNFT(hasNFT);
-      }
+        const nftContract = new ethers.Contract(
+          nftContractAddress,
+          nftContractABI,
+          providerToUse
+        );
+        
+        // Try balanceOf first
+        try {
+          const balance = await nftContract.balanceOf(address);
+          const hasBalance = balance.gt(0);
+          console.log('NFT balance check result:', hasBalance, 'Balance:', balance.toString());
+          return hasBalance;
+        } catch (balanceError) {
+          console.warn('balanceOf check failed, trying hasMinted:', balanceError.message);
+          
+          // Fall back to hasMinted
+          const hasMinted = await nftContract.hasMinted(address);
+          console.log('NFT hasMinted check result:', hasMinted);
+          return hasMinted;
+        }
+      }, 3, 2000); // 3 retries with 2 second base delay
       
-    } catch (error) {
-      console.error('Error checking NFT:', error);
+      // Cache the result with longer validity
+      localStorage.setItem(`nft_status_${address.toLowerCase()}`, JSON.stringify({
+        hasNFT: result,
+        timestamp: Date.now()
+      }));
+      
+      setHasNFT(result);
+      return result;
+          } catch (error) {
+      console.error('Error checking NFT status:', error);
+      // Default to false on error, but don't update the cache
       setHasNFT(false);
+      return false;
     } finally {
       setIsCheckingNFT(false);
+    }
+  };
+
+  // Add the missing recordJumps function (wrapper for recordJump with multiple jumps)
+  const recordJumps = async (count) => {
+    if (!count || count <= 0) return false;
+    
+    console.log(`Recording ${count} jumps at once`);
+    try {
+      return await recordJump(count);
+    } catch (error) {
+      console.error('Error in recordJumps:', error);
+      return false;
     }
   };
 
@@ -1862,10 +1640,197 @@ export function Web3Provider({ children }) {
       
       // Check NFT status
       checkNFT(account);
-    } else {
+      } else {
       setHasNFT(false);
     }
   }, [account]);
+
+  // Add the missing fetchJumps function
+  const fetchJumps = async (walletAddress) => {
+    if (!walletAddress || !supabase) return 0;
+    
+    try {
+      console.log(`Fetching jumps for ${walletAddress}`);
+      const normalizedAddress = walletAddress.toLowerCase();
+      
+      const { data, error } = await supabase
+        .from('jumps')
+        .select('count')
+        .eq('wallet_address', normalizedAddress)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching jumps:', error);
+        return 0;
+      }
+      
+      const jumpCount = data?.count || 0;
+      console.log(`Found ${jumpCount} jumps for ${walletAddress}`);
+      setTotalJumps(jumpCount);
+      return jumpCount;
+    } catch (error) {
+      console.error('Error in fetchJumps:', error);
+      return 0;
+    }
+  };
+
+  // Add the missing fetchUserData function
+  const fetchUserData = async (userAddress) => {
+    if (!userAddress || !supabase) return;
+    
+    try {
+      console.log(`Fetching user data for ${userAddress}`);
+      const normalizedAddress = userAddress.toLowerCase();
+      
+      // Fetch scores
+      await fetchScores(normalizedAddress);
+      
+      // Fetch jumps
+      await fetchJumps(normalizedAddress);
+      
+      console.log(`User data fetched for ${userAddress}`);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
+  
+  // Add the missing refreshJumps function
+  const refreshJumps = async () => {
+    if (!address) return 0;
+    
+    console.log(`Refreshing jumps for ${address}`);
+    return await fetchJumps(address);
+  };
+
+  // Add a smarter RPC management system to handle rate limiting and network changes
+  useEffect(() => {
+    // Define a fallback RPC URLs array to use when primary fails
+    const FALLBACK_RPC_URLS = [
+      'https://prettiest-snowy-pine.monad-testnet.quiknode.pro/4fc856936286525197c30da74dd994d2c7710e93',
+      'https://rpc.ankr.com/monad_testnet',
+      'https://thirdweb.monad-testnet.titanrpc.io',
+      'https://rpc.monad.testnet.gateway.fm'
+    ];
+    
+    // This stores the last successful RPC endpoint
+    window.__lastWorkingRPC = localStorage.getItem('last_working_rpc') || FALLBACK_RPC_URLS[0];
+
+    // Function to create a provider with the current best RPC URL
+    const createProviderWithFallback = async (currentIndex = 0) => {
+      if (currentIndex >= FALLBACK_RPC_URLS.length) {
+        console.error('All RPC endpoints failed');
+        return null;
+      }
+      
+      const url = currentIndex === 0 ? window.__lastWorkingRPC : FALLBACK_RPC_URLS[currentIndex];
+      
+      try {
+        console.log(`Attempting to connect to RPC: ${url}`);
+        const provider = new ethers.providers.JsonRpcProvider(url, {
+          chainId: monadTestnet.id,
+          name: monadTestnet.name
+        });
+        
+        // Test the provider with a simple call
+        const blockNumber = await provider.getBlockNumber();
+        console.log(`Connected to RPC ${url} - block: ${blockNumber}`);
+        
+        // Save as last working RPC
+        window.__lastWorkingRPC = url;
+        localStorage.setItem('last_working_rpc', url);
+        
+        return provider;
+      } catch (error) {
+        console.warn(`RPC ${url} failed:`, error.message);
+        // Try the next URL
+        return createProviderWithFallback(currentIndex + 1);
+      }
+    };
+    
+    // Initialize the fallback provider system
+    if (!readOnlyProvider) {
+      console.log('Setting up fallback provider system');
+      createProviderWithFallback().then(provider => {
+        if (provider) {
+          setReadOnlyProvider(provider);
+          console.log('Fallback provider initialized successfully');
+        }
+      }).catch(err => {
+        console.error('Failed to initialize any fallback provider:', err);
+      });
+    }
+    
+    // Set up a network change listener
+    if (window.ethereum) {
+      const handleChainChanged = async (chainId) => {
+        console.log('Chain changed to:', chainId);
+        // Clear provider to force re-creation with new network
+        setProvider(null);
+        
+        // Wait a moment for things to settle
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      };
+      
+      window.ethereum.on('chainChanged', handleChainChanged);
+      
+      return () => {
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      };
+    }
+  }, [readOnlyProvider]);
+  
+  // Add a helper function to execute RPC calls with retry and backoff
+  const executeWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Use read-only provider as fallback if available
+        if (attempt > 0 && readOnlyProvider) {
+          console.log(`Retry ${attempt} using read-only provider`);
+          return await fn(readOnlyProvider);
+        }
+        
+        // Add random jitter to avoid thundering herd problem
+        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+        
+        if (attempt > 0) {
+          console.log(`Retry ${attempt} after ${delay.toFixed(0)}ms delay`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        // Try the function with the current provider
+        return await fn(attempt === 0 ? provider : readOnlyProvider);
+        
+    } catch (error) {
+        lastError = error;
+        
+        // Check if this is a rate limit (429) error or network changed error
+        const isRateLimit = error.message?.includes('429') || 
+                           error.message?.includes('rate-limited') ||
+                           error.message?.includes('too many requests');
+                           
+        const isNetworkChanged = error.message?.includes('network changed') ||
+                                 error.message?.includes('wrong network');
+        
+        if (isRateLimit) {
+          console.warn('Rate limit detected, backing off before retry');
+          // Longer backoff for rate limits
+          await new Promise(resolve => setTimeout(resolve, baseDelay * 2 * Math.pow(2, attempt)));
+        } else if (isNetworkChanged && readOnlyProvider) {
+          console.warn('Network mismatch, switching to read-only provider');
+          // On next iteration we'll use the read-only provider
+    } else {
+          console.error(`Attempt ${attempt + 1} failed:`, error);
+        }
+      }
+    }
+    
+    console.error(`All ${maxRetries} attempts failed`);
+    throw lastError;
+  };
 
   const value = {
     account,

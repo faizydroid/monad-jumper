@@ -420,22 +420,7 @@ export default function AdminDashboard() {
         </button>
       </div>
       
-      <div className="p-6">
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-2xl font-bold mb-4">Transaction Statistics</h2>
-          {isLoading ? (
-            <div className="animate-pulse">Loading statistics...</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-blue-800">Total Micro-Transactions</h3>
-                <p className="text-3xl font-bold text-blue-600">{totalTransactions}</p>
-                <p className="text-sm text-blue-500">Total jumps recorded on blockchain</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+   
     </div>
   );
 } 

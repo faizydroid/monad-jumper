@@ -35,6 +35,8 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
+import { FaXTwitter, FaDiscord } from "react-icons/fa6";
+import { monadTestnet } from './config/chains';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -394,13 +396,49 @@ function LoadingSpinner({ isMobile }) {
 
 // Horizontal Stats Component
 function HorizontalStats() {
-  const { playerHighScore, totalJumps, username, setUserUsername } = useWeb3();
+  const { playerHighScore, totalJumps, username, setUserUsername, fetchPlayerStats, fetchJumps, leaderboard } = useWeb3();
   const { isConnected, address } = useAccount();
   const [newUsername, setNewUsername] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   
-  console.log("HorizontalStats render - Connected:", isConnected, "Address:", address, "Username:", username, "Score:", playerHighScore);
+  console.log("HorizontalStats render - Connected:", isConnected, "Address:", address, "Username:", username, 
+    "Score:", playerHighScore, typeof playerHighScore, "Jumps:", totalJumps);
+  
+  // Get player rank from leaderboard
+  const getPlayerRank = () => {
+    if (!address || !leaderboard || leaderboard.length === 0) return "N/A";
+    
+    // Find player's position in leaderboard
+    const playerAddress = address.toLowerCase();
+    const playerIndex = leaderboard.findIndex(entry => entry.address.toLowerCase() === playerAddress);
+    
+    // If player is in top 10
+    if (playerIndex >= 0) {
+      return `#${playerIndex + 1}`;
+    }
+    
+    // If player is not in top 10 but has a score
+    if (playerHighScore > 0) {
+      return "10+";
+    }
+    
+    return "N/A";
+  };
+  
+  // Fetch player stats when component mounts or address changes
+  useEffect(() => {
+    if (isConnected && address) {
+      console.log("Fetching updated player stats");
+      fetchPlayerStats();
+      fetchJumps(address);
+    }
+  }, [isConnected, address, fetchPlayerStats, fetchJumps]);
+  
+  // Log when playerHighScore changes
+  useEffect(() => {
+    console.log("Player high score changed:", playerHighScore, typeof playerHighScore);
+  }, [playerHighScore]);
   
   // Handle username submission directly with Web3Context
   const handleSubmitUsername = async (e) => {
@@ -539,43 +577,32 @@ function HorizontalStats() {
       
       <div className="stats-grid-horizontal">
         <div className="stat-item-horizontal">
-          <div className="stat-value">{playerHighScore || '0'}</div>
           <div className="stat-label">Hi-Score</div>
+          <div className="stat-value">{playerHighScore !== undefined ? Number(playerHighScore).toLocaleString() : '0'}</div>
         </div>
         
         <div className="stat-item-horizontal">
-          <div className="stat-value">{totalJumps || 0}</div>
           <div className="stat-label">Total Jumps</div>
+          <div className="stat-value">{totalJumps !== undefined ? Number(totalJumps).toLocaleString() : '0'}</div>
         </div>
         
         <div className="stat-item-horizontal">
-          <div className="stat-value">{Math.max(1, Math.floor((playerHighScore || 0) / 100))}</div>
           <div className="stat-label">Level</div>
+          <div className="stat-value">{Math.max(1, Math.floor(Number(playerHighScore || 0) / 100))}</div>
         </div>
         
         <div className="stat-item-horizontal">
-          <div className="stat-value">{getRank(playerHighScore || 0)}</div>
           <div className="stat-label">Rank</div>
+          <div className="stat-value">{getPlayerRank()}</div>
         </div>
       </div>
     </div>
   );
 }
 
-// Helper function to determine player rank based on score
-function getRank(score) {
-  if (score === 0) return 'Newbie';
-  if (score < 300) return 'Beginner';
-  if (score < 800) return 'Jumper';
-  if (score < 2000) return 'Pro Jumper';
-  if (score < 5000) return 'Master';
-  return 'Legend';
-}
-
 // Helper function to get random loading tips
 function getRandomTip() {
   const tips = [
-    "Collect coins for extra points!",
     "Jump on platforms to climb higher!",
     "Watch out for moving platforms!",
     "The higher you climb, the harder it gets!",
@@ -586,7 +613,7 @@ function getRandomTip() {
     "Try to beat your friends on the leaderboard!",
     "Each jump is recorded on the blockchain!",
     "Higher scores earn better ranks!",
-    "Challenge yourself to reach Legend rank!"
+    "Challenge yourself to reach #1 rank!"
   ];
   return tips[Math.floor(Math.random() * tips.length)];
 }
@@ -611,7 +638,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     updateScore,
     recordJump,
     providerError,
-    signer
+    signer,
+    leaderboard
   } = web3Context || {};
   
   const [username, setUsername] = useState(webUsername || null);
@@ -632,7 +660,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   
   const [showMintModal, setShowMintModal] = useState(false);
   const [hasMintedCharacter, setHasMintedCharacter] = useState(false);
-  const [isCheckingMint, setIsCheckingMint] = useState(true);
+  const [isCheckingMint, setIsCheckingMint] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
   const [mintError, setMintError] = useState(null);
   
@@ -703,7 +731,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 console.log("✅ Found username:", data.username);
                 setUsername(data.username);
                 setShowModal(false); // Hide modal when username exists
-            } else {
+    } else {
                 console.log("❌ No username found for current wallet - username input form will be shown");
                 setUsername(null);
                 setShowModal(true);
@@ -824,66 +852,188 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }
   }, [showGame]);
 
-  // REMOVE duplicate NFT checking functions, use only this consolidated version:
-  const checkNFTOwnership = useCallback(async (userAddress) => {
-    if (!userAddress || !publicClient) return false;
+  // Fix the checkNFTOwnership function to use web3Context properly and be more efficient
+  // Find it and replace it with the following:
+
+  const checkNFTOwnership = useCallback(async (walletAddress) => {
+    if (!walletAddress) return false;
     
     try {
-      // Single NFT check using publicClient
-      const balance = await publicClient.readContract({
-        address: import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS,
-        abi: [{
-          "inputs": [{"internalType": "address", "name": "owner", "type": "address"}],
-          "name": "balanceOf",
-          "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-          "stateMutability": "view",
-          "type": "function"
-        }],
-        functionName: "balanceOf",
-        args: [userAddress],
-      });
+      // First check if the result is cached
+      const cachedStatus = localStorage.getItem(`nft_ownership_${walletAddress.toLowerCase()}`);
+      if (cachedStatus) {
+        try {
+          const { hasNFT, timestamp } = JSON.parse(cachedStatus);
+          // Use cache if less than 6 hours old - extended from 3 hours to reduce calls further
+          if (Date.now() - timestamp < 21600000) {
+            console.log('Using cached NFT ownership status:', hasNFT);
+            return hasNFT;
+          }
+        } catch (e) {
+          // Invalid cache, ignore and continue
+        }
+      }
       
-      return Number(balance) > 0;
-    } catch (error) {
-      console.error("Error checking NFT:", error);
+      // For development, use a mock result to avoid API calls
+      if (import.meta.env.DEV) {
+        console.log('DEV MODE: Using mock NFT ownership status');
+        const mockHasNFT = Math.random() > 0.5; // 50% chance of true/false
+        
+        // Cache the mock result
+        localStorage.setItem(`nft_ownership_${walletAddress.toLowerCase()}`, JSON.stringify({
+          hasNFT: mockHasNFT,
+          timestamp: Date.now()
+        }));
+        
+        return mockHasNFT;
+      }
+      
+      // If we make it here, actually check the NFT (via web3Context if available)
+      if (web3?.checkNFTStatus) {
+        // Use the optimized context function that has its own caching
+        console.log('Using web3Context.checkNFTStatus for ownership check');
+        return await web3.checkNFTStatus(walletAddress);
+      }
+      
+      // Fallback for when context is not available - direct Viem call with caching
+      console.log('Fallback: Direct contract check for NFT ownership');
+      
+      // Use the previously created publicClient or create a new one
+      const client = publicClient || (createPublicClient && 
+        createPublicClient({
+          chain: monadTestnet,
+          transport: http()
+        }));
+      
+      if (!client) {
+        console.error('No client available for NFT check');
       return false;
     }
-  }, [publicClient]);
+      
+      // Define the NFT contract addresses - make sure these are correct and match Web3Context
+      const nftContractAddress = '0xbee3b1b8e62745f5e322a2953b365ef474d92d7b';
+      
+      // Try to check balance first - most reliable method
+      const balanceResult = await client.readContract({
+        address: nftContractAddress,
+        abi: [
+          {
+            name: 'balanceOf',
+            inputs: [{ type: 'address', name: 'owner' }],
+            outputs: [{ type: 'uint256' }],
+            stateMutability: 'view',
+            type: 'function'
+          }
+        ],
+        functionName: 'balanceOf',
+        args: [walletAddress]
+      });
+      
+      // If balance > 0, they own the NFT
+      const hasNFT = balanceResult > 0n;
+      
+      // Cache the result for 6 hours
+      localStorage.setItem(`nft_ownership_${walletAddress.toLowerCase()}`, JSON.stringify({
+        hasNFT,
+        timestamp: Date.now()
+      }));
+      
+      console.log('NFT balance check result:', hasNFT);
+      return hasNFT;
+        } catch (error) {
+      console.error('Error checking NFT ownership:', error);
+      
+      // Don't update cache on error - keep previous value if it exists
+      return false;
+    }
+  }, [publicClient]); // Only depends on publicClient which rarely changes
 
-  // Update useEffect to use the new function
+  // Replace the checkMintStatus function with a memoized version
+  // that only runs when the address changes
+  const checkMintStatus = useMemo(() => {
+    // Return a function that uses our cached result when possible
+    return async (address) => {
+      if (!address) return false;
+      
+      // Check for cached result first (3 hour validity)
+      const cachedNFT = localStorage.getItem(`nft_status_${address.toLowerCase()}`);
+      if (cachedNFT) {
+        try {
+          const { hasNFT, timestamp } = JSON.parse(cachedNFT);
+          // Use cache if less than 3 hours old
+          if (Date.now() - timestamp < 10800000) {
+            console.log('Using cached NFT status from localStorage:', hasNFT);
+            return hasNFT;
+          }
+        } catch (e) {
+          // Invalid cache, ignore and continue
+        }
+      }
+      
+      // If we're in development mode, use a mock result to avoid rate limiting
+      if (import.meta.env.DEV) {
+        console.log('DEV MODE: Returning mock NFT status');
+        const mockResult = Math.random() > 0.5;
+        
+        // Cache the mock result
+        localStorage.setItem(`nft_status_${address.toLowerCase()}`, JSON.stringify({
+          hasNFT: mockResult,
+          timestamp: Date.now()
+        }));
+        
+        return mockResult;
+      }
+      
+      // Only check the actual contract if we need to
+      try {
+        console.log('Checking NFT status for address:', address);
+        const hasNFT = await checkNFTOwnership(address);
+        console.log('NFT status check completed:', hasNFT);
+        return hasNFT;
+      } catch (error) {
+        console.error('Error checking NFT:', error);
+        return false;
+      }
+    };
+  }, [checkNFTOwnership]); // Empty dependency array means this is created only once
+
+  // Find and replace the useEffect that calls checkMintStatus
+  // with an optimized version that only runs when address changes
   useEffect(() => {
-    const checkMintStatus = async () => {
-    if (isConnected && address) {
+    // Only run this effect when we have an address and are connected
+    if (address && isConnected) {
+      // Use a ref to track if this is the first run for this address
+      const addressKey = `nft_check_${address.toLowerCase()}`;
+      
+      if (!window.__checkedAddresses) {
+        window.__checkedAddresses = new Set();
+      }
+      
+      // Only check if we haven't checked this address before
+      if (!window.__checkedAddresses.has(addressKey)) {
+        window.__checkedAddresses.add(addressKey);
+        
+        console.log('Checking NFT for newly connected address:', address);
+        
+        // Set loading state
         setIsCheckingMint(true);
         
-        try {
-          // Set a timeout to prevent infinite loading if checks fail
-          const timeoutPromise = new Promise(resolve => {
-            setTimeout(() => resolve(false), 3000);
+        // Run the check and update state
+        checkMintStatus(address)
+          .then(result => {
+            console.log('Final NFT ownership result:', result);
+            setHasMintedCharacter(result);
+          })
+          .catch(err => {
+            console.error('NFT check failed:', err);
+            setHasMintedCharacter(false);
+          })
+          .finally(() => {
+            setIsCheckingMint(false);
           });
-          
-          // Race between the actual check and the timeout
-          const result = await Promise.race([
-            checkNFTOwnership(address),
-            timeoutPromise
-          ]);
-          
-          console.log("Final NFT ownership result:", result);
-          setHasMintedCharacter(result);
-        } catch (error) {
-          console.error("Error in mint status check:", error);
-          setHasMintedCharacter(false);
-        } finally {
-          setIsCheckingMint(false);
-        }
-    } else {
-        setHasMintedCharacter(false);
-        setIsCheckingMint(false);
+      }
     }
-    };
-
-    checkMintStatus();
-  }, [isConnected, address, checkNFTOwnership]);
+  }, [address, isConnected, checkMintStatus]); // Only run when address or connection status changes
 
   // Update the wallet connection status effect
   useEffect(() => {
@@ -1135,7 +1285,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             setShowPlayAgain(true); // Allow retry?
             return;
           }
-
+          
           try {
             // Set transaction as pending
             setTransactionPending(true);
@@ -1143,7 +1293,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Use the correct contract address
             
             // Define ABI in the correct JSON format
-            const contractAbi = [
+              const contractAbi = [
               {
                 "inputs": [
                   {
@@ -1160,10 +1310,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             ];
             
             console.log("Wagmi transaction preparation:", {
-              contractAddress,
+                contractAddress,
               account: address,
-              jumpCount
-            });
+                jumpCount
+              });
               
             // Submit the transaction using walletClient
             const hash = await walletClient.writeContract({
@@ -1178,13 +1328,13 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             
             // Wait for confirmation using publicClient
             const receipt = await publicClient.waitForTransactionReceipt({ hash });
-            console.log("Transaction confirmed in block:", receipt.blockNumber);
+              console.log("Transaction confirmed in block:", receipt.blockNumber);
               
-            // Complete handling
-            setTransactionPending(false);
-            setShowPlayAgain(true);
+              // Complete handling
+              setTransactionPending(false);
+              setShowPlayAgain(true);
 
-          } catch (error) {
+        } catch (error) {
             console.error('Transaction error:', error);
             setTransactionPending(false);
             setShowPlayAgain(true);
@@ -1194,7 +1344,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           console.log('No jumps to record, skipping transaction');
           setShowPlayAgain(true);
         } // End of if (jumpCount > 0)
-
+      
       } // End of if (event.data?.type === 'BUNDLE_JUMPS')
       
       // Handle other message types if necessary
@@ -1372,42 +1522,42 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           />
         ) : (
           <>
-          <BackgroundElements />
+        <BackgroundElements />
           <div className="home-container">
-            <h1 className="game-title">MONAD JUMPER</h1>
+              <h1 className="game-title">MONAD JUMPER</h1>
             <p className="game-subtitle">Jump to the MOON! </p>
-            
+          
             <div className="character-container animated">
-              <img 
-                src="/images/monad0.png" 
-                alt="Game Character" 
-                className="character" 
-              />
+                <img 
+                  src="/images/monad0.png" 
+                  alt="Game Character" 
+                  className="character" 
+                />
               <div className="shadow"></div>
-            </div>
-            
+          </div>
+          
             <div className="connect-container">
               <p className="connect-instructions">Connect your wallet to play the game!</p>
               <div className="wallet-connect">
                 <ConnectButton label="CONNECT" />
-              </div>
-            </div>
-            
-            <div className="game-facts">
-              <div className="fact-bubble fact-bubble-1">
-                <span>🚀</span>
-                <p>Play & Earn!</p>
-              </div>
-              <div className="fact-bubble fact-bubble-2">
-                <span>🎮</span>
-                <p>Fun Gameplay!</p>
-              </div>
-              <div className="fact-bubble fact-bubble-3">
-                <span>⛓️</span>
-                <p>Powered by Monad!</p>
-              </div>
             </div>
           </div>
+          
+          <div className="game-facts">
+            <div className="fact-bubble fact-bubble-1">
+              <span>🚀</span>
+              <p>Play & Earn!</p>
+            </div>
+            <div className="fact-bubble fact-bubble-2">
+              <span>🎮</span>
+              <p>Fun Gameplay!</p>
+            </div>
+            <div className="fact-bubble fact-bubble-3">
+              <span>⛓️</span>
+              <p>Powered by Monad!</p>
+            </div>
+          </div>
+        </div>
           </>
         )}
       </>
@@ -1417,31 +1567,31 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Game is ready to play, but hasn't started yet
   if (!showGame && !walletLoading) {
     return (
-      <div className="container">
+        <div className="container">
         <BackgroundElements />
         
-        <header>
+          <header>
           <h1 className="title">MONAD JUMPER</h1>
           <p className="subtitle">Jump to the MOON! 🚀</p>
-        </header>
-        
+          </header>
+          
         <div className="game-content">
           <div className="game-main">
-            <div className="character-container">
+          <div className="character-container">
               <div className="character-glow"></div>
-              <div className="character"></div>
+            <div className="character"></div>
               <div className="shadow"></div>
               <div className="character-effect character-effect-1">⭐</div>
               <div className="character-effect character-effect-2">↑</div>
               <div className="character-effect character-effect-3">⚡</div>
+          </div>
+          
+            {isCheckingMint ? (
+            <div className="loading-nft-check">
+              <p>Checking NFT ownership...</p>
+              <div className="loading-spinner"></div>
             </div>
-            
-            {isNftLoading ? (
-              <div className="loading-nft-check">
-                <p>Checking NFT ownership...</p>
-                <div className="loading-spinner"></div>
-              </div>
-            ) : hasMintedNft ? (
+            ) : hasMintedCharacter ? (
               <div 
                 className={`play-button ${!username ? 'disabled-button' : ''}`} 
                 onClick={username ? handlePlayClick : null}
@@ -1450,31 +1600,29 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 <span className="play-icon">▶</span>
               </div>
             ) : (
-              <button 
-                className="mint-to-play-button"
-                onClick={onOpenMintModal}
-              >
+            <button 
+              className="mint-to-play-button"
+                onClick={() => window.open('https://opensea.io/collection/monaddoodle', '_blank')}
+            >
                 <span className="mint-button-text">MINT TO PLAY</span>
                 <span className="mint-button-icon">🪙</span>
-              </button>
-            )}
-            
+            </button>
+          )}
+          
             <div className="stats-row">
               <HorizontalStats />
             </div>
             
             <GameCards />
-          </div>
-          
-          <div className="leaderboard-column">
-            <Leaderboard />
-          </div>
+            </div>
+            
+            <div className="leaderboard-column">
+              <Leaderboard />
+            </div>
         </div>
+          
         
-        <footer className="footer">
-          <p>Developed with 💖 by The Monad Team</p>
-        </footer>
-      </div>
+        </div>
     );
   }
 
@@ -1524,19 +1672,19 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   return (
     <div className="app">
       {/* Game loading screen - only show when both showGame and isLoading are true */}
-      {isLoading && showGame && (
+        {isLoading && showGame && (
         <div className="loading-screen game-begin-screen">
           <h1 className="game-title">Monad Jumper</h1>
           <div className="character-container">
             <div className="character"></div>
             <div className="shadow"></div>
           </div>
-          <div className="loading-bar-container">
-            <div className="loading-bar"></div>
-          </div>
+            <div className="loading-bar-container">
+              <div className="loading-bar"></div>
+            </div>
           <div className="loading-tips">
             <p>{getRandomTip()}</p>
-          </div>
+            </div>
           
           {/* Play button for loading screen - only show after delay */}
           {showPlayButton && (
@@ -1573,14 +1721,16 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 }}
               ></div>
             ))}
+            </div>
           </div>
-        </div>
-      )}
-      
+        )}
+        
       <div className="game-container">
         {/* Remove the separate start screen that shows the Play button */}
         
-        {/* Always render the iframe but control visibility */}
+        {/* Wrapper div with background image */}
+        <div className="iframe-background">
+          {/* Always render the iframe but control visibility */}
         <iframe 
           key={`game-${gameId}`}
           ref={iframeRef}
@@ -1590,20 +1740,21 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           allow="autoplay"
           frameBorder="0"
           tabIndex="0"
-          style={{ visibility: isLoading ? 'hidden' : 'visible', opacity: isLoading ? 0 : 1 }}
-          onLoad={() => {
-            // Only auto-hide the loading screen if not already hidden by the Play button
-            if (isLoading) {
-              // Wait some time before auto-hiding to allow manual click
-              setTimeout(() => {
-                // Only auto-hide if still loading (not already clicked)
-                if (isLoading) {
-                  setIsLoading(false);
-                }
-              }, 3000);
-            }
-          }}
-        />
+            style={{ visibility: isLoading ? 'hidden' : 'visible', opacity: isLoading ? 0 : 1 }}
+            onLoad={() => {
+              // Only auto-hide the loading screen if not already hidden by the Play button
+              if (isLoading) {
+                // Wait some time before auto-hiding to allow manual click
+                setTimeout(() => {
+                  // Only auto-hide if still loading (not already clicked)
+                  if (isLoading) {
+                    setIsLoading(false);
+                  }
+                }, 3000);
+              }
+            }}
+          />
+        </div>
       </div>
       
       <TransactionNotifications />
@@ -1767,7 +1918,7 @@ function App() {
             <GameComponent 
               hasMintedNft={hasMintedNft} 
               isNftLoading={isNftBalanceLoading}
-              onOpenMintModal={() => setShowMintModal(!0)}
+              onOpenMintModal={() => setShowMintModal(true)}
             />
           </ErrorBoundary>
         } />
@@ -1777,10 +1928,20 @@ function App() {
 
       {showMintModal && (
         <NFTMintModal 
-          isOpen={!0} 
-          onClose={()=>setShowMintModal(!1)} 
+          isOpen={true} 
+          onClose={()=>setShowMintModal(false)} 
         />
       )}
+
+      {/* Social Media Links - Bottom Left (Ensure this is the ONLY instance) */}
+      <div className="social-links">
+        <a href="https://x.com/Monadjumper" target="_blank" rel="noopener noreferrer" aria-label="Follow us on X">
+          <FaXTwitter size={24} /> 
+        </a>
+        <a href="https://discord.gg/AxYUSmQw" target="_blank" rel="noopener noreferrer" aria-label="Join our Discord">
+          <FaDiscord size={24} />
+        </a>
+      </div>
     </Web3Provider>
   );
 }
