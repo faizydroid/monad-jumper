@@ -3,6 +3,37 @@
  * This prevents the app from crashing when wallet extensions are disabled
  */
 export function getSafeProvider() {
+  // Check if we're in Edge with potential wallet problems
+  const isEdgeWithIssues = () => {
+    return navigator.userAgent.indexOf("Edg") !== -1 && 
+           (!window.ethereum || !window.okxwallet);
+  }
+
+  // If in Edge with issues, return a mock provider
+  if (isEdgeWithIssues()) {
+    return {
+      isMetaMask: false,
+      _isMockProvider: true,
+      request: function(args) {
+        console.log('Mock provider request:', args);
+        if (args.method === 'eth_chainId') {
+          return Promise.resolve('0x278f');  // Monad testnet chainId
+        }
+        if (args.method === 'eth_accounts' || args.method === 'eth_requestAccounts') {
+          return Promise.resolve([]);
+        }
+        return Promise.reject(new Error('Not connected'));
+      },
+      on: function(event, handler) {
+        console.log('Mock ethereum.on:', event);
+        return;
+      },
+      removeListener: function() {
+        return;
+      }
+    };
+  }
+
   // Return a proxy object that safely handles missing ethereum provider
   return new Proxy({}, {
     get: (target, prop) => {
@@ -40,6 +71,16 @@ export function createSafeEthersProvider() {
   if (!ethers) {
     console.error('Ethers.js not found');
     return null;
+  }
+  
+  // If in Edge with issues, use fallback RPC
+  if (navigator.userAgent.indexOf("Edg") !== -1 && (!window.ethereum || !window.okxwallet)) {
+    try {
+      return new ethers.providers.JsonRpcProvider('https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5');
+    } catch (error) {
+      console.error('Failed to create fallback JsonRpcProvider:', error);
+      return null;
+    }
   }
   
   // If ethereum provider exists, use it

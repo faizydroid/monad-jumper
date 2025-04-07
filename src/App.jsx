@@ -651,79 +651,19 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Add this hook near your other hook declarations
   const { openConnectModal } = useConnectModal();
   
-  // Detect Microsoft Edge browser
-  const isEdgeBrowser = useRef(
-    typeof navigator !== 'undefined' && 
-    (navigator.userAgent.indexOf("Edge") > -1 || 
-     navigator.userAgent.indexOf("Edg/") > -1)
-  ).current;
-  
-  // Log browser detection on component mount
-  useEffect(() => {
-    console.log("Browser detection:", { 
-      isEdgeBrowser,
-      hasEthereum: typeof window.ethereum !== 'undefined',
-      hasWalletConnect: typeof window.WalletConnectProvider !== 'undefined'
-    });
-    
-    // Add special handling for Edge browser
-    if (isEdgeBrowser) {
-      console.log("Microsoft Edge detected - using enhanced wallet compatibility mode");
-    }
-  }, [isEdgeBrowser]);
-  
-  // When using ethers in Edge, use this wrapped function
-  const getSafeEthereumProvider = useCallback(() => {
-    if (!window.ethereum) return null;
-    
-    try {
-      // For Edge, we need to be extra careful
-      if (isEdgeBrowser) {
-        // Connect first to ensure accounts are available
-        window.ethereum.request({ method: 'eth_requestAccounts' })
-          .catch(e => console.log("Could not request accounts:", e));
-          
-        // Create provider with special Edge handling
-        return {
-          provider: new ethers.providers.Web3Provider(window.ethereum),
-          getSignerAddress: async () => {
-            try {
-              // Try the normal way first
-              const signer = new ethers.providers.Web3Provider(window.ethereum).getSigner();
-              return await signer.getAddress();
-            } catch (e) {
-              // Fallback for Edge
-              const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-              return accounts[0];
-            }
-          }
-        };
-      }
-      
-      // Normal provider for other browsers
-      return {
-        provider: new ethers.providers.Web3Provider(window.ethereum),
-        getSignerAddress: async () => {
-          const signer = new ethers.providers.Web3Provider(window.ethereum).getSigner();
-          return await signer.getAddress();
-        }
-      };
-    } catch (e) {
-      console.error("Error creating Ethereum provider:", e);
-      return null;
-    }
-  }, [isEdgeBrowser]);
-  
   // Initialize fallback provider for offline mode
   useEffect(() => {
     // Create a fallback provider if we don't have one from web3
     if (!provider) {
       console.log("Creating fallback provider for offline mode");
       try {
-        // For ethers v5 (correct syntax)
-        const offlineProvider = new ethers.providers.JsonRpcProvider(
+        // For ethers v6
+        const offlineProvider = new ethers.JsonRpcProvider(
           "https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"
         );
+        
+        // Or alternatively for older ethers v5 (if needed)
+        // const offlineProvider = new ethers.providers.JsonRpcProvider(...)
         
         console.log("Fallback provider created successfully");
         setFallbackProvider(offlineProvider);
@@ -815,106 +755,29 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 console.log('Final jump count from game:', jumpCount);
 
                 if (typeof finalScore !== 'number') {
-                  console.warn('Invalid final score, converting to number:', finalScore);
-                  finalScore = Number(finalScore) || 0;
+                  throw new Error('Invalid final score: ' + finalScore);
                 }
                 
                 // Mark transaction as pending before sending
                 setTransactionPending(true);
                 
-                console.log('Game over detected, score:', finalScore, 'jumps:', jumpCount);
+                // Bundle all jumps into one transaction
+                console.log('Sending bundled transaction with jumps:', jumpCount, 'score:', finalScore);
+                const success = await updateScore(finalScore, jumpCount);
                 
-                // For Firefox compatibility, ensure the b_ object exists
-                if (navigator.userAgent.indexOf("Firefox") !== -1) {
-                  console.log('Firefox detected, ensuring compatibility...');
-                  window.b_ = window.b_ || {};
-                  if (typeof globalThis !== 'undefined') {
-                    globalThis.b_ = globalThis.b_ || {};
-                  }
-                }
-                
-                // If we have updateScore from web3context, use it
-                if (typeof updateScore === 'function') {
-                  console.log('Using Web3Context updateScore function');
-                  
-                  try {
-                    // Forward the score to our context for processing
-                    // This will update the high score and send the transaction
-                    const success = await updateScore(finalScore, jumpCount);
-                    console.log('Transaction result:', success);
-                    
-                    if (success) {
-                      console.log('✅ Score recorded successfully on blockchain');
-                    } else {
-                      console.warn('⚠️ Could not record score on blockchain, but game can continue');
-                      // Show error message in console only
-                    }
-                    
-                    // Show play again button
-                    setShowPlayAgain(true);
-                  } catch (txError) {
-                    console.error('Transaction error:', txError);
-                    
-                    // Implement fallback for transaction failure
-                    console.log('Saving score locally due to transaction failure');
-                    
-                    try {
-                      // Still save the score to localStorage as a backup
-                      const currentHighScore = localStorage.getItem('highScore') || 0;
-                      if (finalScore > currentHighScore) {
-                        localStorage.setItem('highScore', finalScore);
-                        localStorage.setItem('pendingJumps', jumpCount);
-                        console.log('Score saved locally:', finalScore);
-                      }
-                    } catch (localError) {
-                      console.error('Error saving score locally:', localError);
-                    }
-                    
-                    // Show play again button
-                    setShowPlayAgain(true);
-                  }
+                if (success) {
+                  console.log('Score and jumps saved successfully');
+                  // Show play again button after successful save
+                  setShowPlayAgain(true);
                 } else {
-                  console.error('updateScore function not available, trying direct contract call');
-                  
-                  // Attempt direct contract call as fallback
-                  if (contract && contract.recordJumps) {
-                    try {
-                      const tx = await contract.recordJumps(jumpCount, {
-                        gasLimit: 300000
-                      });
-                      console.log('Direct contract call successful:', tx.hash);
-                      
-                      // Wait for confirmation (but don't block UI)
-                      tx.wait()
-                        .then(() => console.log('Transaction confirmed'))
-                        .catch(err => console.error('Transaction confirmation error:', err));
-                        
-                      setShowPlayAgain(true);
-                    } catch (directError) {
-                      console.error('Direct contract call failed:', directError);
-                      setShowPlayAgain(true);
-                    }
-                  } else {
-                    console.error('Both updateScore and direct contract access not available');
-                    
-                    // Save locally as last resort
-                    try {
-                      const currentHighScore = localStorage.getItem('highScore') || 0;
-                      if (finalScore > currentHighScore) {
-                        localStorage.setItem('highScore', finalScore);
-                        localStorage.setItem('pendingJumps', jumpCount);
-                      }
-                    } catch (e) {
-                      console.error('Local storage error:', e);
-                    }
-                    
-                    setShowPlayAgain(true);
-                  }
+                  console.error('Failed to save score and jumps');
+                  // Show play again even on failed transaction to let the user try again
+                  setShowPlayAgain(true);
                 }
                 
                 // Mark transaction as complete regardless of success
                 setTransactionPending(false);
-                return true;
+                return success;
               } catch (error) {
                 console.error('Error in game over handler:', error);
                 // Mark transaction as complete on error
@@ -1265,142 +1128,85 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         if (jumpCount > 0) {
           console.log(`🎮 Bundle includes score: ${score}`);
           
+          // Ensure address and walletClient are available
+          if (!address || !walletClient) {
+            console.error("Wallet not connected or client not available for transaction.");
+            setTransactionPending(false);
+            setShowPlayAgain(true); // Allow retry?
+            return;
+          }
+
           try {
             // Set transaction as pending
             setTransactionPending(true);
             
-            // Check if we can use Wagmi hooks first (more reliable across browsers)
-            if (walletClient && address) {
-              console.log("Using Wagmi for transaction");
-              
-              try {
-                // Contract address - use the known value
-                const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
-                
-                // Submit transaction using Wagmi
-                const hash = await walletClient.writeContract({
-                  address: contractAddress,
-                  abi: [
-                    {
-                      name: "recordJumps",
-                      type: "function",
-                      stateMutability: "nonpayable",
-                      inputs: [{ name: "_jumps", type: "uint256" }],
-                      outputs: []
-                    }
-                  ],
-                  functionName: "recordJumps",
-                  args: [BigInt(jumpCount)]
-                });
-                
-                console.log("Transaction submitted via Wagmi:", hash);
-                
-                // Wait for confirmation using publicClient
-                const receipt = await publicClient.waitForTransactionReceipt({ hash });
-                console.log("Transaction confirmed in block:", receipt.blockNumber);
-                
-                // Complete handling
-                setTransactionPending(false);
-                setShowPlayAgain(true);
-              } catch (wagmiError) {
-                console.error("Wagmi transaction failed, falling back to window.ethereum:", wagmiError);
-                // Fall back to window.ethereum if Wagmi fails
-                fallbackToWindowEthereum();
-              }
-            } else {
-              // Fallback to window.ethereum
-              fallbackToWindowEthereum();
-            }
+            const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Use the correct contract address
             
-            // Fallback function to use window.ethereum directly
-            async function fallbackToWindowEthereum() {
-              // Check if window.ethereum is available
-              if (window.ethereum) {
-                try {
-                  // Use our safe provider wrapper
-                  const safeProvider = getSafeEthereumProvider();
-                  if (!safeProvider) {
-                    throw new Error("Could not create safe provider");
+            // Define ABI in the correct JSON format
+            const contractAbi = [
+              {
+                "inputs": [
+                  {
+                    "internalType": "uint256",
+                    "name": "_jumps",
+                    "type": "uint256"
                   }
-                  
-                  // Get the provider and account
-                  const { provider, getSignerAddress } = safeProvider;
-                  const providerSigner = provider.getSigner();
-                  const userAccount = await getSignerAddress();
-                  
-                  if (!userAccount) {
-                    throw new Error("No connected account available");
-                  }
-                  
-                  // Contract address - use the known value
-                  const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
-                  
-                  // Minimal ABI for recordJumps function
-                  const contractAbi = [
-                    "function recordJumps(uint256 _jumps) external",
-                    "function getPlayerJumps(address _player) external view returns (uint256)",
-                    "function getMyJumps() external view returns (uint256)"
-                  ];
-                  
-                  // Create contract instance
-                  const contractInstance = new ethers.Contract(
-                    contractAddress,
-                    contractAbi,
-                    providerSigner
-                  );
-                  
-                  console.log("Direct contract transaction preparation:", {
-                    contractAddress,
-                    account: userAccount,
-                    jumpCount
-                  });
-                  
-                  // Submit the transaction
-                  const tx = await contractInstance.recordJumps(jumpCount, {
-                    gasLimit: 300000 // Set appropriate gas limit for Monad
-                  });
-                  
-                  console.log("Transaction submitted:", tx.hash);
-                  
-                  // Wait for confirmation
-                  const receipt = await tx.wait();
-                  console.log("Transaction confirmed in block:", receipt.blockNumber);
-                  
-                  // Complete handling
-                  setTransactionPending(false);
-                  setShowPlayAgain(true);
-                } catch (error) {
-                  console.error('Direct Ethereum transaction error:', error);
-                  setTransactionPending(false);
-                  setShowPlayAgain(true);
-                }
-              } else {
-                console.error("No Ethereum provider available");
-                setTransactionPending(false);
-                setShowPlayAgain(true);
+                ],
+                "name": "recordJumps",
+                "outputs": [],
+                "stateMutability": "nonpayable", // Assuming it's nonpayable unless stated otherwise
+                "type": "function"
               }
-            }
+            ];
+            
+            console.log("Wagmi transaction preparation:", {
+              contractAddress,
+              account: address,
+              jumpCount
+            });
+              
+            // Submit the transaction using walletClient
+            const hash = await walletClient.writeContract({
+              address: contractAddress,
+              abi: contractAbi,
+              functionName: 'recordJumps',
+              args: [BigInt(jumpCount)],
+              account: address,
+            });
+              
+            console.log("Transaction submitted via wagmi:", hash);
+            
+            // Wait for confirmation using publicClient
+            const receipt = await publicClient.waitForTransactionReceipt({ hash });
+            console.log("Transaction confirmed in block:", receipt.blockNumber);
+              
+            // Complete handling
+            setTransactionPending(false);
+            setShowPlayAgain(true);
+
           } catch (error) {
             console.error('Transaction error:', error);
             setTransactionPending(false);
             setShowPlayAgain(true);
-          }
-        } else {
+          } // End of try-catch block
+
+        } else { // This else corresponds to if (jumpCount > 0)
           console.log('No jumps to record, skipping transaction');
           setShowPlayAgain(true);
-        }
-      }
+        } // End of if (jumpCount > 0)
+
+      } // End of if (event.data?.type === 'BUNDLE_JUMPS')
       
-      // Also handle regular game over messages
+      // Handle other message types if necessary
       else if (event.data?.type === 'GAME_OVER' && event.data.data) {
         const { finalScore, jumpCount } = event.data.data;
-        console.log(`Game over message received with score ${finalScore} and ${jumpCount} jumps`);
+        console.log(`(handleGameMessages) Game over message received with score ${finalScore} and ${jumpCount} jumps`);
       }
-    };
+    }; // End of handleGameMessages function
     
     window.addEventListener('message', handleGameMessages);
     return () => window.removeEventListener('message', handleGameMessages);
-  }, [setTransactionPending, setShowPlayAgain]);
+  }, [address, walletClient, publicClient, setTransactionPending, setShowPlayAgain]);
 
   // Add a function to handle game over transactions
   const handleGameOver = useCallback(async (score) => {
@@ -1510,7 +1316,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       
       return () => {
         clearTimeout(timer);
-      };
+      }
     } else {
       // Reset loading state when returning to home
       setIsLoading(false);
@@ -1598,7 +1404,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               </div>
               <div className="fact-bubble fact-bubble-3">
                 <span>⛓️</span>
-                <p>Built on Monad!</p>
+                <p>Powered by Monad!</p>
               </div>
             </div>
           </div>
