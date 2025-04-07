@@ -1,4 +1,7 @@
-export const monadTestnet = {
+import { defineChain } from 'viem';
+
+// Define Monad Testnet with multiple RPC endpoints for better fallback
+export const monadTestnet = defineChain({
   id: 10143,
   name: 'Monad Testnet',
   network: 'monad-testnet',
@@ -8,11 +11,25 @@ export const monadTestnet = {
     symbol: 'MON',
   },
   rpcUrls: {
-    public: { http: ['https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5'] },
-    default: { http: ['https://monad-testnet.g.alchemy.com/v2/PTox95CrPhqgSRASB8T4ogM_2K-4_Sf5'] },
+    default: {
+      http: [
+        'https://testnet-rpc.monad.xyz',
+        'https://rpc.ankr.com/monad_testnet',
+        'https://thirdweb.monad-testnet.titanrpc.io',
+        'https://rpc.monad.testnet.gateway.fm'
+      ]
+    },
+    public: {
+      http: [
+        'https://testnet-rpc.monad.xyz',
+        'https://rpc.ankr.com/monad_testnet',
+        'https://thirdweb.monad-testnet.titanrpc.io',
+        'https://rpc.monad.testnet.gateway.fm'
+      ]
+    },
   },
   blockExplorers: {
     default: { name: 'Monad Explorer', url: 'https://explorer.monad.xyz' },
   },
   testnet: true,
-}; 
+}); 

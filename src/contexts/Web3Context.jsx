@@ -1523,99 +1523,89 @@ export function Web3Provider({ children }) {
   // Update the NFT verification logic with improved resilience against rate limiting and network errors
   const checkNFT = async (address) => {
     try {
-      setIsCheckingNFT(true);
-      
-      if (!address) {
-        console.log('Missing address for NFT check');
-        setHasNFT(false);
-      return false;
-    }
-    
-      // Check if we have cached NFT status for this address
-      const cachedStatus = localStorage.getItem(`nft_status_${address.toLowerCase()}`);
-      if (cachedStatus) {
-        try {
-          const { hasNFT, timestamp } = JSON.parse(cachedStatus);
-          // Use cache if less than 3 hours old (increased from 1 hour to reduce RPC calls)
-          if (Date.now() - timestamp < 10800000) {
-            console.log('Using cached NFT status:', hasNFT);
-            setHasNFT(hasNFT);
-            setIsCheckingNFT(false);
-            return hasNFT;
-          }
-        } catch (e) {
-          // Invalid cache, ignore and continue
-        }
-      }
-      
-      // Only run actual checks in production, mock in development to avoid rate limits
-      if (import.meta.env.DEV) {
-        console.log('DEV MODE: Mocking NFT check');
-        const mockResult = Math.random() > 0.5;
-        setHasNFT(mockResult);
+        if (!address) return false;
         
-        // Still cache the mock result
-        localStorage.setItem(`nft_status_${address.toLowerCase()}`, JSON.stringify({
-          hasNFT: mockResult,
-          timestamp: Date.now()
+        // Check if we're in a cooldown period due to rate limiting
+        const cooldownUntilStr = localStorage.getItem('nft_check_cooldown');
+        if (cooldownUntilStr) {
+            const cooldownUntil = parseInt(cooldownUntilStr);
+            if (Date.now() < cooldownUntil) {
+                console.log(`NFT check in cooldown until ${new Date(cooldownUntil).toLocaleTimeString()}, using cached result`);
+                // During cooldown, use cached result if available
+                const cachedStatusStr = localStorage.getItem(`nft_status_${address}`);
+                if (cachedStatusStr) {
+                    try {
+                        const { hasNFT, timestamp } = JSON.parse(cachedStatusStr);
+                        // Cache valid for 6 hours during cooldown periods
+                        if (Date.now() - timestamp < 6 * 60 * 60 * 1000) {
+                            return hasNFT;
+                        }
+                    } catch (e) {
+                        console.error("Error parsing cached NFT status", e);
+                    }
+                }
+                return false; // Default to false if no valid cache during cooldown
+            } else {
+                // Cooldown expired, remove it
+                localStorage.removeItem('nft_check_cooldown');
+            }
+        }
+        
+        // Check cache first (valid for 3 hours instead of 1 to reduce RPC calls)
+        const cachedStatusStr = localStorage.getItem(`nft_status_${address}`);
+        if (cachedStatusStr) {
+            try {
+                const { hasNFT, timestamp } = JSON.parse(cachedStatusStr);
+                if (Date.now() - timestamp < 3 * 60 * 60 * 1000) {
+                    console.log("Using cached NFT status");
+                    return hasNFT;
+                }
+            } catch (e) {
+                console.error("Error parsing cached NFT status", e);
+            }
+        }
+
+        // Proceed with NFT check
+        console.log(`Checking NFT for address: ${address}`);
+        let result = false;
+        
+        try {
+            const provider = createProviderWithFallback();
+            const contract = new ethers.Contract(BOOSTER_CONTRACT, BOOSTER_ABI, provider);
+            const balance = await contract.balanceOf(address);
+            result = balance.toNumber() > 0;
+            console.log(`NFT check result: ${result ? "Has NFT" : "No NFT"}`);
+        } catch (e) {
+            console.error("Error checking NFT balance:", e);
+            // If we get a rate limit error, set a cooldown period (1 minute)
+            if (e.message && (e.message.includes('rate limit') || e.message.includes('429'))) {
+                const cooldownTime = Date.now() + 60000; // 1 minute cooldown
+                localStorage.setItem('nft_check_cooldown', cooldownTime.toString());
+                console.log(`Rate limit detected, setting NFT check cooldown until ${new Date(cooldownTime).toLocaleTimeString()}`);
+            }
+            
+            // Use cached result if available when error occurs
+            if (cachedStatusStr) {
+                try {
+                    const { hasNFT } = JSON.parse(cachedStatusStr);
+                    console.log("Using cached NFT status due to error");
+                    result = hasNFT;
+                } catch {
+                    result = false;
+                }
+            }
+        }
+        
+        // Cache the result
+        localStorage.setItem(`nft_status_${address}`, JSON.stringify({
+            hasNFT: result,
+            timestamp: Date.now()
         }));
         
-        setIsCheckingNFT(false);
-        return mockResult;
-      }
-      
-      // Complete ABI for the NFT contract's hasMinted function
-      const nftContractABI = [
-        "function balanceOf(address owner) view returns (uint256)",
-        "function hasMinted(address) view returns (bool)",
-        "function ownerOf(uint256 tokenId) view returns (address)"
-      ];
-      
-      const nftContractAddress = '0xbee3b1b8e62745f5e322a2953b365ef474d92d7b';
-      
-      // Use our new retry mechanism with backoff
-      const result = await executeWithBackoff(async (providerToUse) => {
-        if (!providerToUse) {
-          throw new Error('No provider available for NFT check');
-        }
-        
-        const nftContract = new ethers.Contract(
-          nftContractAddress,
-          nftContractABI,
-          providerToUse
-        );
-        
-        // Try balanceOf first
-        try {
-          const balance = await nftContract.balanceOf(address);
-          const hasBalance = balance.gt(0);
-          console.log('NFT balance check result:', hasBalance, 'Balance:', balance.toString());
-          return hasBalance;
-        } catch (balanceError) {
-          console.warn('balanceOf check failed, trying hasMinted:', balanceError.message);
-          
-          // Fall back to hasMinted
-          const hasMinted = await nftContract.hasMinted(address);
-          console.log('NFT hasMinted check result:', hasMinted);
-          return hasMinted;
-        }
-      }, 3, 2000); // 3 retries with 2 second base delay
-      
-      // Cache the result with longer validity
-      localStorage.setItem(`nft_status_${address.toLowerCase()}`, JSON.stringify({
-        hasNFT: result,
-        timestamp: Date.now()
-      }));
-      
-      setHasNFT(result);
-      return result;
-          } catch (error) {
-      console.error('Error checking NFT status:', error);
-      // Default to false on error, but don't update the cache
-      setHasNFT(false);
-      return false;
-    } finally {
-      setIsCheckingNFT(false);
+        return result;
+    } catch (error) {
+        console.error('Error in checkNFT:', error);
+        return false;
     }
   };
 
@@ -1717,34 +1707,47 @@ export function Web3Provider({ children }) {
 
     // Function to create a provider with the current best RPC URL
     const createProviderWithFallback = async (currentIndex = 0) => {
-      if (currentIndex >= FALLBACK_RPC_URLS.length) {
-        console.error('All RPC endpoints failed');
+      // Circuit breaker - prevent excessive attempts
+      const lastAttemptTime = parseInt(localStorage.getItem('rpc_last_attempt') || '0');
+      const attemptThrottle = 10000; // 10 seconds between full retry cycles
+      
+      if (Date.now() - lastAttemptTime < attemptThrottle && lastAttemptTime > 0) {
+        console.log('RPC connection attempts throttled, using cached value if available');
         return null;
       }
       
-      const url = currentIndex === 0 ? window.__lastWorkingRPC : FALLBACK_RPC_URLS[currentIndex];
+      // Set last attempt timestamp
+      localStorage.setItem('rpc_last_attempt', Date.now().toString());
       
-      try {
-        console.log(`Attempting to connect to RPC: ${url}`);
-        const provider = new ethers.providers.JsonRpcProvider(url, {
-          chainId: monadTestnet.id,
-          name: monadTestnet.name
-        });
+      // Non-recursive implementation to prevent call stack issues
+      for (let i = currentIndex; i < FALLBACK_RPC_URLS.length; i++) {
+        const url = i === 0 ? window.__lastWorkingRPC : FALLBACK_RPC_URLS[i];
         
-        // Test the provider with a simple call
-        const blockNumber = await provider.getBlockNumber();
-        console.log(`Connected to RPC ${url} - block: ${blockNumber}`);
-        
-        // Save as last working RPC
-        window.__lastWorkingRPC = url;
-        localStorage.setItem('last_working_rpc', url);
-        
-        return provider;
-      } catch (error) {
-        console.warn(`RPC ${url} failed:`, error.message);
-        // Try the next URL
-        return createProviderWithFallback(currentIndex + 1);
+        try {
+          console.log(`Attempting to connect to RPC: ${url}`);
+          const provider = new ethers.providers.JsonRpcProvider(url, {
+            chainId: monadTestnet.id,
+            name: monadTestnet.name
+          });
+          
+          // Test the provider with a simple call
+          const blockNumber = await provider.getBlockNumber();
+          console.log(`Connected to RPC ${url} - block: ${blockNumber}`);
+          
+          // Save as last working RPC
+          window.__lastWorkingRPC = url;
+          localStorage.setItem('last_working_rpc', url);
+          
+          return provider;
+        } catch (error) {
+          console.warn(`RPC ${url} failed:`, error.message);
+          // Continue to next URL without recursion
+          continue;
+        }
       }
+      
+      console.error('All RPC endpoints failed');
+      return null;
     };
     
     // Initialize the fallback provider system
@@ -1781,54 +1784,63 @@ export function Web3Provider({ children }) {
     }
   }, [readOnlyProvider]);
   
-  // Add a helper function to execute RPC calls with retry and backoff
-  const executeWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
+  // Enhanced executeWithBackoff with rate limit handling and global cooldown
+  const executeWithBackoff = async (fn, maxRetries = 5, baseDelay = 1000) => {
     let lastError;
     
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        // Use read-only provider as fallback if available
-        if (attempt > 0 && readOnlyProvider) {
-          console.log(`Retry ${attempt} using read-only provider`);
-          return await fn(readOnlyProvider);
+        // Check if we're in a global rate limit cooldown
+        const cooldownUntilStr = localStorage.getItem('rpc_rate_limit_cooldown');
+        if (cooldownUntilStr) {
+          const cooldownUntil = parseInt(cooldownUntilStr);
+          if (Date.now() < cooldownUntil) {
+            console.warn(`RPC in rate limit cooldown until ${new Date(cooldownUntil).toLocaleTimeString()}`);
+            throw new Error('Rate limit cooldown active, skipping request');
+          } else {
+            // Cooldown expired, remove it
+            localStorage.removeItem('rpc_rate_limit_cooldown');
+          }
         }
         
-        // Add random jitter to avoid thundering herd problem
-        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
-        
-        if (attempt > 0) {
-          console.log(`Retry ${attempt} after ${delay.toFixed(0)}ms delay`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        
-        // Try the function with the current provider
-        return await fn(attempt === 0 ? provider : readOnlyProvider);
-        
-    } catch (error) {
+        // Create a new provider for each attempt to avoid stale connections
+        const provider = createProviderWithFallback();
+        return await fn(provider);
+      } catch (error) {
         lastError = error;
         
-        // Check if this is a rate limit (429) error or network changed error
-        const isRateLimit = error.message?.includes('429') || 
-                           error.message?.includes('rate-limited') ||
-                           error.message?.includes('too many requests');
-                           
-        const isNetworkChanged = error.message?.includes('network changed') ||
-                                 error.message?.includes('wrong network');
-        
-        if (isRateLimit) {
-          console.warn('Rate limit detected, backing off before retry');
-          // Longer backoff for rate limits
-          await new Promise(resolve => setTimeout(resolve, baseDelay * 2 * Math.pow(2, attempt)));
-        } else if (isNetworkChanged && readOnlyProvider) {
-          console.warn('Network mismatch, switching to read-only provider');
-          // On next iteration we'll use the read-only provider
-    } else {
-          console.error(`Attempt ${attempt + 1} failed:`, error);
+        // Don't retry if we hit a global cooldown
+        if (error.message && error.message.includes('cooldown active')) {
+          break;
         }
+        
+        // Check for rate limit errors
+        const isRateLimit = error.message && (
+          error.message.includes('rate limit') || 
+          error.message.includes('429') || 
+          error.message.includes('too many requests')
+        );
+        
+        // Set a global cooldown if rate limited
+        if (isRateLimit) {
+          const cooldownTime = Date.now() + 60000; // 1 minute cooldown
+          localStorage.setItem('rpc_rate_limit_cooldown', cooldownTime.toString());
+          console.warn(`Rate limit detected, setting global RPC cooldown until ${new Date(cooldownTime).toLocaleTimeString()}`);
+          break; // Don't retry if rate limited
+        }
+        
+        if (attempt === maxRetries) {
+          console.error(`Max retries (${maxRetries}) exceeded:`, error);
+          break;
+        }
+        
+        // Exponential backoff with jitter
+        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+        console.warn(`Attempt ${attempt + 1} failed, retrying in ${Math.round(delay)}ms:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
     
-    console.error(`All ${maxRetries} attempts failed`);
     throw lastError;
   };
 
