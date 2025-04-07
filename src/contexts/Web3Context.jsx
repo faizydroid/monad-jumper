@@ -7,6 +7,10 @@ import GameScoreABI from '../abis/GameScore.json';
 import { gameContractABI } from '../contracts/abi';
 import { CONTRACT_ADDRESSES } from '../contracts/config';
 
+// Near the top of the file, add NFT contract constants
+const BOOSTER_CONTRACT = '0xbee3b1b8e62745f5e322a2953b365ef474d92d7b';
+const BOOSTER_ABI = ["function balanceOf(address owner) view returns (uint256)"];
+
 const Web3Context = createContext();
 
 // Use import.meta.env for Vite
@@ -75,6 +79,23 @@ const detectProviders = () => {
   
   console.log('Detected providers:', providers);
   return providers;
+};
+
+// Add safe wrapper function to prevent proxy recursion
+const createSafeEthereumWrapper = () => {
+  // If ethereum not available, return null
+  if (!window.ethereum) return null;
+  
+  // Create a simple object with only the methods we need
+  // This prevents proxy-related infinite recursion
+  return {
+    request: (...args) => window.ethereum.request(...args),
+    on: (event, handler) => window.ethereum.on(event, handler),
+    removeListener: (event, handler) => window.ethereum.removeListener(event, handler),
+    selectedAddress: window.ethereum.selectedAddress,
+    isMetaMask: window.ethereum.isMetaMask,
+    chainId: window.ethereum.chainId
+  };
 };
 
 const isEdgeBrowser = () => {
@@ -395,143 +416,150 @@ export function Web3Provider({ children }) {
             
             // Check if window.ethereum exists
             if (typeof window.ethereum !== 'undefined') {
-          // Create a cached provider to avoid repeated initialization
-          let initProvider;
-          try {
-            // Set network options with more robust configuration
-            const networkOptions = {
-              name: 'Monad Network',
-              chainId: monadTestnet.id,
-              // Critical options to prevent network errors:
-              allowUnlimitedContractSize: true,
-              polling: false,
-              staticNetwork: true,
-              // Add more tolerance for network errors:
-              ignoreNetworkError: true,
-              cacheTimeout: 5 * 60 * 1000 // 5 minute cache to reduce RPC calls
-            };
-            
-            // Create provider with more robust options
-            initProvider = new ethers.providers.Web3Provider(
-              window.ethereum, 
-              networkOptions
-            );
-            
-                console.log("Provider initialized successfully");
-            setProvider(initProvider);
-            
-            // Request the network switch first to ensure we're on the right chain
-            try {
-              // This chain ID format needs to be in hex with 0x prefix
-              const chainIdHex = `0x${monadTestnet.id.toString(16)}`;
-              
-              console.log(`Requesting switch to chain: ${chainIdHex}`);
-              await window.ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: chainIdHex }],
-              });
-              
-              console.log("Successfully switched to Monad network");
-            } catch (switchError) {
-              console.warn("Network switch request failed:", switchError.message);
-              
-              // If the chain isn't added, try to add it
-              if (switchError.code === 4902) {
-                try {
-                  await window.ethereum.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [
-                      {
-                        chainId: `0x${monadTestnet.id.toString(16)}`,
-                        chainName: monadTestnet.name,
-                        nativeCurrency: monadTestnet.nativeCurrency,
-                        rpcUrls: [monadTestnet.rpcUrls.default.http[0]],
-                        blockExplorerUrls: [monadTestnet.blockExplorers?.default.url],
-                      },
-                    ],
-                  });
-                  console.log("Monad network added to wallet");
-                } catch (addError) {
-                  console.error('Failed to add Monad network:', addError);
-                }
+              // Create a safe wrapper for ethereum to prevent recursion issues
+              const safeEthereum = createSafeEthereumWrapper();
+              if (!safeEthereum) {
+                console.error("Failed to create safe ethereum wrapper");
+                return;
               }
-            }
-            
-            // Initialize signer only if we're connected
-            if (isConnected && address) {
+              
+              // Create a cached provider to avoid repeated initialization
+              let initProvider;
               try {
-                const signer = initProvider.getSigner();
-                    setSigner(signer);
-                console.log("Signer initialized successfully");
+                // Set network options with more robust configuration
+                const networkOptions = {
+                  name: 'Monad Network',
+                  chainId: monadTestnet.id,
+                  // Critical options to prevent network errors:
+                  allowUnlimitedContractSize: true,
+                  polling: false,
+                  staticNetwork: true,
+                  // Add more tolerance for network errors:
+                  ignoreNetworkError: true,
+                  cacheTimeout: 5 * 60 * 1000 // 5 minute cache to reduce RPC calls
+                };
                 
-                // Initialize contract if we have an address - do this only once
-                const contractAddress = import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS || 
-                                      '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Fallback address
-                                       
-                if (contractAddress && !contract) {
-                  try {
-                    const gameContract = new ethers.Contract(
-                      contractAddress,
-                      gameContractABI,
-                      signer
-                    );
-                    setContract(gameContract);
-                    console.log("Game contract initialized successfully:", contractAddress);
-                  } catch (contractError) {
-                    console.error("Error initializing contract:", contractError);
-                  }
-                }
-              } catch (signerError) {
-                console.error("Error getting signer:", signerError);
-              }
-            }
-            
-            // Instead of getNetwork(), which makes an RPC call, just set the network
-            try {
-              // Override the getNetwork() method to always return our expected network
-              initProvider.network = {
-                chainId: monadTestnet.id,
-                name: monadTestnet.name,
-                ensAddress: null
-              };
-              
-              // Save configured network to help with troubleshooting
-              console.log("Using configured network:", JSON.stringify({
-                name: monadTestnet.name,
-                chainId: monadTestnet.id
-              }));
-            } catch (networkError) {
-              console.warn("Could not set network info:", networkError);
-            }
-          } catch (providerError) {
-            console.error("Error creating provider:", providerError);
-                }
-            } else {
-          console.log("No ethereum object found in window - using fallback provider");
-          // Don't recreate the provider if we already have one
-          if (!readOnlyProvider) {
-            // Use our fallback RPC system instead of hardcoding an RPC endpoint
-            if (window.__lastWorkingRPC) {
-              try {
-                const fallbackProvider = new ethers.providers.JsonRpcProvider(
-                  window.__lastWorkingRPC,
-                  {
-                    chainId: monadTestnet.id,
-                    name: monadTestnet.name
-                  }
+                // Create provider with more robust options and safe ethereum wrapper
+                initProvider = new ethers.providers.Web3Provider(
+                  safeEthereum, 
+                  networkOptions
                 );
-                setReadOnlyProvider(fallbackProvider);
-                console.log("Fallback provider initialized with last working RPC");
-              } catch (fallbackError) {
-                console.error("Error creating fallback provider:", fallbackError);
+                
+                console.log("Provider initialized successfully");
+                setProvider(initProvider);
+                
+                // Request the network switch first to ensure we're on the right chain
+                try {
+                  // This chain ID format needs to be in hex with 0x prefix
+                  const chainIdHex = `0x${monadTestnet.id.toString(16)}`;
+                  
+                  console.log(`Requesting switch to chain: ${chainIdHex}`);
+                  await safeEthereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: chainIdHex }],
+                  });
+                  
+                  console.log("Successfully switched to Monad network");
+                } catch (switchError) {
+                  console.warn("Network switch request failed:", switchError.message);
+                  
+                  // If the chain isn't added, try to add it
+                  if (switchError.code === 4902) {
+                    try {
+                      await safeEthereum.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [
+                          {
+                            chainId: `0x${monadTestnet.id.toString(16)}`,
+                            chainName: monadTestnet.name,
+                            nativeCurrency: monadTestnet.nativeCurrency,
+                            rpcUrls: [monadTestnet.rpcUrls.default.http[0]],
+                            blockExplorerUrls: [monadTestnet.blockExplorers?.default.url],
+                          },
+                        ],
+                      });
+                      console.log("Monad network added to wallet");
+                    } catch (addError) {
+                      console.error('Failed to add Monad network:', addError);
+                    }
+                  }
+                }
+                
+                // Initialize signer only if we're connected
+                if (isConnected && address) {
+                  try {
+                    const signer = initProvider.getSigner();
+                        setSigner(signer);
+                    console.log("Signer initialized successfully");
+                    
+                    // Initialize contract if we have an address - do this only once
+                    const contractAddress = import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS || 
+                                          '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Fallback address
+                                         
+                    if (contractAddress && !contract) {
+                      try {
+                        const gameContract = new ethers.Contract(
+                          contractAddress,
+                          gameContractABI,
+                          signer
+                        );
+                        setContract(gameContract);
+                        console.log("Game contract initialized successfully:", contractAddress);
+                      } catch (contractError) {
+                        console.error("Error initializing contract:", contractError);
+                      }
+                    }
+                  } catch (signerError) {
+                    console.error("Error getting signer:", signerError);
+                  }
+                }
+                
+                // Instead of getNetwork(), which makes an RPC call, just set the network
+                try {
+                  // Override the getNetwork() method to always return our expected network
+                  initProvider.network = {
+                    chainId: monadTestnet.id,
+                    name: monadTestnet.name,
+                    ensAddress: null
+                  };
+                  
+                  // Save configured network to help with troubleshooting
+                  console.log("Using configured network:", JSON.stringify({
+                    name: monadTestnet.name,
+                    chainId: monadTestnet.id
+                  }));
+                } catch (networkError) {
+                  console.warn("Could not set network info:", networkError);
+                }
+              } catch (providerError) {
+                console.error("Error creating provider:", providerError);
+                    }
+                } else {
+              console.log("No ethereum object found in window - using fallback provider");
+              // Don't recreate the provider if we already have one
+              if (!readOnlyProvider) {
+                // Use our fallback RPC system instead of hardcoding an RPC endpoint
+                if (window.__lastWorkingRPC) {
+                  try {
+                    const fallbackProvider = new ethers.providers.JsonRpcProvider(
+                      window.__lastWorkingRPC,
+                      {
+                        chainId: monadTestnet.id,
+                        name: monadTestnet.name
+                      }
+                    );
+                    setReadOnlyProvider(fallbackProvider);
+                    console.log("Fallback provider initialized with last working RPC");
+                  } catch (fallbackError) {
+                    console.error("Error creating fallback provider:", fallbackError);
+                  }
+                }
               }
-            }
+                }
+        } catch (error) {
+            console.error("Error in provider initialization:", error);
           }
-            }
-    } catch (error) {
-        console.error("Error in provider initialization:", error);
-      }
-    };
+      };
 
     // Don't await the initialization to prevent blocking
     initializeProvider().catch(err => {
@@ -625,7 +653,15 @@ export function Web3Provider({ children }) {
         return false;
       }
       
-      await window.ethereum.request({ method: "eth_requestAccounts" });
+      // Create safe wrapper for ethereum
+      const safeEthereum = createSafeEthereumWrapper();
+      if (!safeEthereum) {
+        console.error("Failed to create safe ethereum wrapper");
+        setProviderError("Error connecting to wallet. Please refresh and try again.");
+        return false;
+      }
+      
+      await safeEthereum.request({ method: "eth_requestAccounts" });
       console.log("Wallet connected!");
       
       if (directAddress) {
@@ -637,7 +673,7 @@ export function Web3Provider({ children }) {
       
       // Request chain switch/add if needed
       try {
-        await window.ethereum.request({
+        await safeEthereum.request({
           method: 'wallet_switchEthereumChain',
           params: [{ chainId: `0x${monadTestnet.id.toString(16)}` }],
         });
@@ -645,7 +681,7 @@ export function Web3Provider({ children }) {
         // This error code indicates the chain hasn't been added to MetaMask
         if (switchError.code === 4902) {
           try {
-            await window.ethereum.request({
+            await safeEthereum.request({
               method: 'wallet_addEthereumChain',
               params: [
                 {
@@ -668,7 +704,7 @@ export function Web3Provider({ children }) {
       }
 
       // Request account access
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const accounts = await safeEthereum.request({ method: 'eth_requestAccounts' });
       if (accounts.length > 0) {
         await handleAccountChange(accounts[0]);
       }
@@ -819,12 +855,20 @@ export function Web3Provider({ children }) {
       if (!provider || !contract || !account) {
         console.log("Missing provider, contract, or account in recordJump");
         
-        // Try to recover by using window.ethereum directly if available
-        if (window.ethereum && window.ethereum.selectedAddress) {
-          console.log("Attempting to recover using window.ethereum");
+        // Try to recover by using safe ethereum wrapper if available
+        if (window.ethereum) {
+          console.log("Attempting to recover using safe ethereum wrapper");
           
           try {
-            const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+            const safeEthereum = createSafeEthereumWrapper();
+            if (!safeEthereum) {
+              console.error("Failed to create safe ethereum wrapper");
+              // Track jump count locally for recovery later
+              setPendingJumps(prev => prev + 1);
+              return false;
+            }
+            
+            const ethersProvider = new ethers.providers.Web3Provider(safeEthereum);
             const signer = ethersProvider.getSigner();
             const connectedAddress = await signer.getAddress();
             
@@ -1570,11 +1614,65 @@ export function Web3Provider({ children }) {
         let result = false;
         
         try {
-            const provider = createProviderWithFallback();
-            const contract = new ethers.Contract(BOOSTER_CONTRACT, BOOSTER_ABI, provider);
-            const balance = await contract.balanceOf(address);
-            result = balance.toNumber() > 0;
-            console.log(`NFT check result: ${result ? "Has NFT" : "No NFT"}`);
+            // First attempt with provider if available
+            if (provider) {
+                try {
+                    console.log("Using connected provider for NFT check");
+                    const contract = new ethers.Contract(BOOSTER_CONTRACT, BOOSTER_ABI, provider);
+                    const balance = await contract.balanceOf(address);
+                    result = balance.toNumber() > 0;
+                    console.log(`NFT check result with provider: ${result ? "Has NFT" : "No NFT"}`);
+                    
+                    // Cache the result
+                    localStorage.setItem(`nft_status_${address}`, JSON.stringify({
+                        hasNFT: result,
+                        timestamp: Date.now()
+                    }));
+                    
+                    setHasNFT(result);
+                    return result;
+                } catch (providerError) {
+                    console.error("Error checking NFT with provider:", providerError);
+                    // Fall through to fallback approach
+                }
+            }
+            
+            // Fallback to read-only provider
+            if (readOnlyProvider) {
+                try {
+                    console.log("Using read-only provider for NFT check");
+                    const BOOSTER_CONTRACT = '0xbee3b1b8e62745f5e322a2953b365ef474d92d7b';
+                    const BOOSTER_ABI = ["function balanceOf(address owner) view returns (uint256)"];
+                    
+                    const contract = new ethers.Contract(BOOSTER_CONTRACT, BOOSTER_ABI, readOnlyProvider);
+                    const balance = await contract.balanceOf(address);
+                    result = balance.toNumber() > 0;
+                    console.log(`NFT check result with read-only provider: ${result ? "Has NFT" : "No NFT"}`);
+                } catch (roError) {
+                    console.error("Error checking NFT with read-only provider:", roError);
+                    // Fall through to last resort RPC approach
+                }
+            }
+            
+            // Last resort: try with a direct JsonRpcProvider
+            if (!result) {
+                try {
+                    console.log("Attempting last resort NFT check with direct RPC");
+                    // Use first RPC from the chain config
+                    const rpcUrl = monadTestnet.rpcUrls.default.http[0];
+                    const directProvider = new ethers.providers.JsonRpcProvider(rpcUrl);
+                    
+                    const BOOSTER_CONTRACT = '0xbee3b1b8e62745f5e322a2953b365ef474d92d7b';
+                    const BOOSTER_ABI = ["function balanceOf(address owner) view returns (uint256)"];
+                    
+                    const contract = new ethers.Contract(BOOSTER_CONTRACT, BOOSTER_ABI, directProvider);
+                    const balance = await contract.balanceOf(address);
+                    result = balance.toNumber() > 0;
+                    console.log(`NFT check result with direct RPC: ${result ? "Has NFT" : "No NFT"}`);
+                } catch (directError) {
+                    console.error("Error with direct RPC NFT check:", directError);
+                }
+            }
         } catch (e) {
             console.error("Error checking NFT balance:", e);
             // If we get a rate limit error, set a cooldown period (1 minute)
@@ -1602,6 +1700,7 @@ export function Web3Provider({ children }) {
             timestamp: Date.now()
         }));
         
+        setHasNFT(result);
         return result;
     } catch (error) {
         console.error('Error in checkNFT:', error);
@@ -1765,22 +1864,25 @@ export function Web3Provider({ children }) {
     
     // Set up a network change listener
     if (window.ethereum) {
-      const handleChainChanged = async (chainId) => {
-        console.log('Chain changed to:', chainId);
-        // Clear provider to force re-creation with new network
-        setProvider(null);
+      const safeEthereum = createSafeEthereumWrapper();
+      if (safeEthereum) {
+        const handleChainChanged = async (chainId) => {
+          console.log('Chain changed to:', chainId);
+          // Clear provider to force re-creation with new network
+          setProvider(null);
+          
+          // Wait a moment for things to settle
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        };
         
-        // Wait a moment for things to settle
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      };
-      
-      window.ethereum.on('chainChanged', handleChainChanged);
-      
-      return () => {
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
-      };
+        safeEthereum.on('chainChanged', handleChainChanged);
+        
+        return () => {
+          safeEthereum.removeListener('chainChanged', handleChainChanged);
+        };
+      }
     }
   }, [readOnlyProvider]);
   
