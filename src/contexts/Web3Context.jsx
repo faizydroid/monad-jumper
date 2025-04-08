@@ -82,24 +82,79 @@ const detectProviders = () => {
 };
 
 const customWalletProvider = () => {
-  // If no window object or ethereum is available, return null
-  if (typeof window === 'undefined' || !window.ethereum) {
+  // Don't access window.ethereum at all if we're in a recursion situation
+  if (window.__ethereum_access_error || typeof window === 'undefined') {
+    console.log('Wallet access disabled due to previous errors');
     return null;
   }
   
   try {
-    // Create a simple wrapper to avoid circular references
-    // Only expose the minimal methods needed
+    // Create a minimal copy of required properties WITHOUT accessing them directly
+    let hasEthereum = false;
+    let selectedAddress = null;
+    let chainId = null;
+    let isMetaMask = false;
+    
+    // Use a try/catch for each property access to prevent recursion
+    try { hasEthereum = !!window.ethereum; } catch (e) { window.__ethereum_access_error = true; return null; }
+    if (!hasEthereum) return null;
+    
+    // Define methods that use Function.prototype.call to avoid proxy recursion
+    const safeRequest = async (...args) => {
+      try {
+        // Use Function.prototype.call to avoid proxy handler recursion
+        return await Function.prototype.call.call(window.ethereum.request, window.ethereum, ...args);
+      } catch (e) {
+        console.error('Safe request error:', e);
+        throw e;
+      }
+    };
+    
+    const safeOn = (event, handler) => {
+      try {
+        if (typeof window.ethereum.on !== 'function') return;
+        // Use Function.prototype.call to avoid proxy handler recursion
+        return Function.prototype.call.call(window.ethereum.on, window.ethereum, event, handler);
+      } catch (e) {
+        console.error('Safe on error:', e);
+      }
+    };
+    
+    const safeRemoveListener = (event, handler) => {
+      try {
+        if (typeof window.ethereum.removeListener !== 'function') return;
+        // Use Function.prototype.call to avoid proxy handler recursion
+        return Function.prototype.call.call(window.ethereum.removeListener, window.ethereum, event, handler);
+      } catch (e) {
+        console.error('Safe removeListener error:', e);
+      }
+    };
+    
+    // Create minimal interface without accessing any properties directly
     return {
-      request: (...args) => window.ethereum.request(...args),
-      on: (event, handler) => window.ethereum.on(event, handler),
-      removeListener: (event, handler) => window.ethereum.removeListener(event, handler),
-      selectedAddress: window.ethereum.selectedAddress,
-      isMetaMask: !!window.ethereum.isMetaMask,
-      chainId: window.ethereum.chainId
+      // Methods
+      request: safeRequest,
+      on: safeOn,
+      removeListener: safeRemoveListener,
+      
+      // Static properties (don't access them directly to avoid proxy traps)
+      get selectedAddress() { 
+        try { return window.ethereum.selectedAddress; } 
+        catch (e) { return null; }
+      },
+      get chainId() { 
+        try { return window.ethereum.chainId; } 
+        catch (e) { return null; } 
+      },
+      get isMetaMask() { 
+        try { return !!window.ethereum.isMetaMask; } 
+        catch (e) { return false; } 
+      }
     };
   } catch (error) {
     console.error("Error creating wallet provider:", error);
+    // Mark as having an error to prevent future access attempts
+    window.__ethereum_access_error = true;
     return null;
   }
 };
@@ -421,167 +476,123 @@ export function Web3Provider({ children }) {
     }
   };
 
-  // Update the provider initialization in Web3Context.jsx with better network detection
+  // Update the provider initialization to avoid window.ethereum on page load
   useEffect(() => {
     // Skip initialization if we already have a provider or if we're in fallback mode
     if (provider || isInEdgeFallbackMode) return;
     
     const initializeProvider = async () => {
-        try {
-            console.log("Initializing Web3 provider...");
+      try {
+        console.log("Initializing Web3 provider...");
+        
+        // Don't directly access window.ethereum - use our safe checking function
+        if (window.__RECOVERY_MODE) {
+          console.log("Recovery mode active - using RPC provider only");
+          setupFallbackProviderOnly();
+          return;
+        }
+        
+        // Only try to use window.ethereum if it seems available and we haven't encountered errors
+        if (isWalletAvailable() && !window.__ethereum_access_error) {
+          console.log("Wallet appears available - attempting safe initialization");
+          
+          // Create safe wrapper - this might return null if any recursion is detected
+          const safeEthereum = customWalletProvider();
+          
+          if (safeEthereum) {
+            console.log("Successfully created safe wrapper for wallet");
             
-            // Check if window.ethereum exists
-            if (typeof window.ethereum !== 'undefined') {
-              // Create a safe wrapper for ethereum to prevent recursion issues
-              const safeEthereum = customWalletProvider();
-              if (!safeEthereum) {
-                console.error("Failed to create safe ethereum wrapper");
-                return;
-              }
-              
-              // Create a cached provider to avoid repeated initialization
-              let initProvider;
-              try {
-                // Set network options with more robust configuration
-                const networkOptions = {
+            try {
+              // Now create a provider using our safe wrapper
+              const web3Provider = new ethers.providers.Web3Provider(
+                safeEthereum,
+                {
                   name: 'Monad Network',
-                  chainId: monadTestnet.id,
-                  // Critical options to prevent network errors:
-                  allowUnlimitedContractSize: true,
-                  polling: false,
-                  staticNetwork: true,
-                  // Add more tolerance for network errors:
-                  ignoreNetworkError: true,
-                  cacheTimeout: 5 * 60 * 1000 // 5 minute cache to reduce RPC calls
-                };
-                
-                // Create provider with more robust options and safe ethereum wrapper
-                initProvider = new ethers.providers.Web3Provider(
-                  safeEthereum, 
-                  networkOptions
-                );
-                
-                console.log("Provider initialized successfully");
-                setProvider(initProvider);
-                
-                // Request the network switch first to ensure we're on the right chain
-                try {
-                  // This chain ID format needs to be in hex with 0x prefix
-                  const chainIdHex = `0x${monadTestnet.id.toString(16)}`;
-                  
-                  console.log(`Requesting switch to chain: ${chainIdHex}`);
-                  await safeEthereum.request({
-                    method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: chainIdHex }],
-                  });
-                  
-                  console.log("Successfully switched to Monad network");
-                } catch (switchError) {
-                  console.warn("Network switch request failed:", switchError.message);
-                  
-                  // If the chain isn't added, try to add it
-                  if (switchError.code === 4902) {
-                    try {
-                      await safeEthereum.request({
-                        method: 'wallet_addEthereumChain',
-                        params: [
-                          {
-                            chainId: `0x${monadTestnet.id.toString(16)}`,
-                            chainName: monadTestnet.name,
-                            nativeCurrency: monadTestnet.nativeCurrency,
-                            rpcUrls: [monadTestnet.rpcUrls.default.http[0]],
-                            blockExplorerUrls: [monadTestnet.blockExplorers?.default.url],
-                          },
-                        ],
-                      });
-                      console.log("Monad network added to wallet");
-                    } catch (addError) {
-                      console.error('Failed to add Monad network:', addError);
-                    }
-                  }
+                  chainId: monadTestnet.id
                 }
-                
-                // Initialize signer only if we're connected
-                if (isConnected && address) {
-                  try {
-                    const signer = initProvider.getSigner();
-                    setSigner(signer);
-                    console.log("Signer initialized successfully");
-                    
-                    // Initialize contract if we have an address - do this only once
-                    const contractAddress = import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS || 
-                                          '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Fallback address
-                                         
-                    if (contractAddress && !contract) {
-                      try {
-                        const gameContract = new ethers.Contract(
-                          contractAddress,
-                          gameContractABI,
-                          signer
-                        );
-                        setContract(gameContract);
-                        console.log("Game contract initialized successfully:", contractAddress);
-                      } catch (contractError) {
-                        console.error("Error initializing contract:", contractError);
-                      }
-                    }
-                  } catch (signerError) {
-                    console.error("Error getting signer:", signerError);
-                  }
-                }
-                
-                // Instead of getNetwork(), which makes an RPC call, just set the network
-                try {
-                  // Override the getNetwork() method to always return our expected network
-                  initProvider.network = {
-                    chainId: monadTestnet.id,
-                    name: monadTestnet.name,
-                    ensAddress: null
-                  };
-                  
-                  // Save configured network to help with troubleshooting
-                  console.log("Using configured network:", JSON.stringify({
-                    name: monadTestnet.name,
-                    chainId: monadTestnet.id
-                  }));
-                } catch (networkError) {
-                  console.warn("Could not set network info:", networkError);
-                }
-              } catch (providerError) {
-                console.error("Error creating provider:", providerError);
-                }
-            } else {
-              console.log("No ethereum object found in window - using fallback provider");
-              // Don't recreate the provider if we already have one
-              if (!readOnlyProvider) {
-                // Use our fallback RPC system instead of hardcoding an RPC endpoint
-                if (window.__lastWorkingRPC) {
-                  try {
-                    const fallbackProvider = new ethers.providers.JsonRpcProvider(
-                      window.__lastWorkingRPC,
-                      {
-                        chainId: monadTestnet.id,
-                        name: monadTestnet.name
-                      }
-                    );
-                    setReadOnlyProvider(fallbackProvider);
-                    console.log("Fallback provider initialized with last working RPC");
-                  } catch (fallbackError) {
-                    console.error("Error creating fallback provider:", fallbackError);
-                  }
-                }
-              }
+              );
+              
+              setProvider(web3Provider);
+              console.log("Provider initialized successfully using safe wrapper");
+              
+              // Don't try to switch networks on initial load - let the user trigger that
+              // to avoid any potential recursion issues
+              return;
+            } catch (providerError) {
+              console.error("Error creating web3 provider:", providerError);
+              // Continue to fallback
             }
-    } catch (error) {
-            console.error("Error in provider initialization:", error);
+          } else {
+            console.log("Could not safely access wallet - using fallback");
           }
-      };
+        } else {
+          console.log("No wallet detected or access disabled - using RPC provider");
+        }
+        
+        // Always set up a fallback provider as well
+        setupFallbackProviderOnly();
+        
+      } catch (error) {
+        console.error("Error in provider initialization:", error);
+        // Set recovery mode if we encounter errors
+        window.__RECOVERY_MODE = true;
+        setupFallbackProviderOnly();
+      }
+    };
+    
+    // Separate function to set up the fallback provider only
+    const setupFallbackProviderOnly = async () => {
+      if (readOnlyProvider) return; // Already set up
+      
+      try {
+        // Try primary RPC URL
+        const primaryProvider = createFallbackRpcProvider('https://testnet-rpc.monad.xyz');
+        
+        if (primaryProvider) {
+          try {
+            // Test the provider
+            await primaryProvider.getBlockNumber();
+            setReadOnlyProvider(primaryProvider);
+            console.log("Fallback provider initialized successfully");
+            return;
+          } catch (e) {
+            console.warn("Primary RPC failed, trying fallbacks");
+          }
+        }
+        
+        // Try fallbacks in sequence
+        const fallbackUrls = [
+          'https://rpc.ankr.com/monad_testnet',
+          'https://thirdweb.monad-testnet.titanrpc.io',
+          'https://rpc.monad.testnet.gateway.fm'
+        ];
+        
+        for (const url of fallbackUrls) {
+          try {
+            const fallbackProvider = createFallbackRpcProvider(url);
+            if (fallbackProvider) {
+              await fallbackProvider.getBlockNumber();
+              setReadOnlyProvider(fallbackProvider);
+              console.log(`Fallback provider initialized successfully using ${url}`);
+              return;
+            }
+          } catch (e) {
+            console.warn(`Fallback RPC ${url} failed`);
+          }
+        }
+        
+        console.error("All RPCs failed");
+      } catch (error) {
+        console.error("Error setting up fallback provider:", error);
+      }
+    };
 
     // Don't await the initialization to prevent blocking
     initializeProvider().catch(err => {
       console.error("Provider initialization failed:", err);
+      window.__RECOVERY_MODE = true;
     });
-  }, [provider, isConnected, address, isInEdgeFallbackMode, contract, readOnlyProvider]);
+  }, [provider, isInEdgeFallbackMode, readOnlyProvider]);
 
   useEffect(() => {
     if (isInEdgeFallbackMode) {
@@ -660,14 +671,19 @@ export function Web3Provider({ children }) {
     }
   }, [provider]);
 
-  // Modified to accept direct address from RainbowKit
+  // Modified to use the safer approach for wallet connections
   const connectWallet = useCallback(async (directAddress) => {
     try {
-      if (!window.ethereum) {
+      // Use our safer checker function
+      if (!isWalletAvailable()) {
         console.warn("No wallet detected.");
         setProviderError("No wallet detected. Please install MetaMask.");
         return false;
       }
+      
+      // Reset error flags - user is explicitly requesting connection
+      window.__ethereum_access_error = false;
+      window.__RECOVERY_MODE = false;
       
       // Create safe wrapper for ethereum
       const safeEthereum = customWalletProvider();
@@ -677,54 +693,45 @@ export function Web3Provider({ children }) {
         return false;
       }
       
+      // Request accounts without additional network operations
       await safeEthereum.request({ method: "eth_requestAccounts" });
       console.log("Wallet connected!");
       
+      // Initialize provider with the connected wallet
+      try {
+        const web3Provider = new ethers.providers.Web3Provider(
+          safeEthereum,
+          {
+            name: 'Monad Network',
+            chainId: monadTestnet.id
+          }
+        );
+        
+        setProvider(web3Provider);
+        console.log("Provider initialized with connected wallet");
+        
+        // Get connected accounts
+        const accounts = await web3Provider.listAccounts();
+        const connectedAddress = accounts[0] || directAddress;
+        
+        if (connectedAddress) {
+          await handleAccountChange(connectedAddress);
+          return true;
+        }
+      } catch (providerError) {
+        console.error("Error initializing provider:", providerError);
+        // Continue with fallback approach
+      }
+      
+      // If direct address was provided, use it
       if (directAddress) {
-        // Direct connection when address is provided from RainbowKit
-        console.log("Direct address provided:", directAddress);
+        console.log("Using direct address:", directAddress);
         await handleAccountChange(directAddress);
         return true;
       }
       
-      // Request chain switch/add if needed
-      try {
-        await safeEthereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: `0x${monadTestnet.id.toString(16)}` }],
-        });
-      } catch (switchError) {
-        // This error code indicates the chain hasn't been added to MetaMask
-        if (switchError.code === 4902) {
-          try {
-            await safeEthereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [
-                {
-                  chainId: `0x${monadTestnet.id.toString(16)}`,
-                  chainName: monadTestnet.name,
-                  nativeCurrency: monadTestnet.nativeCurrency,
-                  rpcUrls: [monadTestnet.rpcUrls.default.http[0]],
-                  blockExplorerUrls: [monadTestnet.blockExplorers?.default.url],
-                },
-              ],
-            });
-          } catch (addError) {
-            console.error('Error adding chain:', addError);
-            throw addError;
-          }
-        } else {
-          console.error('Error switching chain:', switchError);
-          throw switchError;
-        }
-      }
-
-      // Request account access
-      const accounts = await safeEthereum.request({ method: 'eth_requestAccounts' });
-      if (accounts.length > 0) {
-        await handleAccountChange(accounts[0]);
-      }
-      return true;
+      console.error("Failed to get connected account");
+      return false;
     } catch (error) {
       console.error("Error connecting wallet:", error);
       return false;
@@ -1889,6 +1896,47 @@ export function Web3Provider({ children }) {
     
     console.error('All RPC endpoints failed');
     return null;
+  };
+
+  // Completely avoid window.ethereum access on page load
+  const isWalletAvailable = () => {
+    if (window.__ethereum_access_error || typeof window === 'undefined') {
+      return false;
+    }
+    
+    try {
+      // Just check existence without accessing any properties
+      return typeof window.ethereum !== 'undefined';
+    } catch (e) {
+      console.warn('Error checking wallet availability:', e);
+      window.__ethereum_access_error = true;
+      return false;
+    }
+  };
+
+  // Safe function to check ethereum network
+  const safeGetChainId = () => {
+    if (window.__ethereum_access_error || !isWalletAvailable()) {
+      return null;
+    }
+    
+    try {
+      return window.ethereum.chainId;
+    } catch (e) {
+      console.warn('Error getting chainId:', e);
+      return null;
+    }
+  };
+
+  // Initialize without accessing window.ethereum on load
+  const createFallbackRpcProvider = (rpcUrl) => {
+    try {
+      // This doesn't use window.ethereum at all
+      return new ethers.providers.JsonRpcProvider(rpcUrl);
+    } catch (error) {
+      console.error('Error creating fallback provider:', error);
+      return null;
+    }
   };
 
   const value = {
