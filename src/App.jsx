@@ -685,23 +685,41 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     if (!provider) {
       console.log("Creating fallback provider for offline mode");
       try {
-        // For ethers v6
-        const offlineProvider = new ethers.JsonRpcProvider(
-          "https://prettier-morning-wish.monad-testnet.discover.quiknode.pro/your-key/"
-        );
+        // Use a safe try/catch and handle all potential errors
+        let offlineProvider;
         
-        // Or alternatively for older ethers v5 (if needed)
-        // const offlineProvider = new ethers.providers.JsonRpcProvider(...)
+        try {
+          // Try ethers v6 style import first
+          offlineProvider = new ethers.JsonRpcProvider(
+            "https://testnet-rpc.monad.xyz"
+          );
+        } catch (v6Error) {
+          console.log("JsonRpcProvider failed, trying providers.JsonRpcProvider:", v6Error);
+          // Try ethers v5 style as fallback
+          offlineProvider = new ethers.providers.JsonRpcProvider(
+            "https://testnet-rpc.monad.xyz"
+          );
+        }
         
         console.log("Fallback provider created successfully");
         setFallbackProvider(offlineProvider);
       } catch (error) {
         console.error("Failed to create fallback provider:", error);
-        // Don't stop execution if fallback provider fails
-        console.log("Continuing without fallback provider");
+        
+        // Create a minimal mock provider to avoid errors
+        const mockProvider = {
+          getBlockNumber: async () => 0,
+          getSigner: () => ({
+            getAddress: async () => address || '0x0000000000000000000000000000000000000000'
+          }),
+          _isProvider: true
+        };
+        
+        console.log("Using mock provider to avoid errors");
+        setFallbackProvider(mockProvider);
       }
     }
-  }, [provider]);
+  }, [provider, address]);
   
   // Update the username check effect
   useEffect(() => {

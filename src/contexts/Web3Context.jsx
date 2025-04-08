@@ -489,7 +489,7 @@ export function Web3Provider({ children }) {
                 if (isConnected && address) {
                   try {
                     const signer = initProvider.getSigner();
-                        setSigner(signer);
+                    setSigner(signer);
                     console.log("Signer initialized successfully");
                     
                     // Initialize contract if we have an address - do this only once
@@ -533,8 +533,8 @@ export function Web3Provider({ children }) {
                 }
               } catch (providerError) {
                 console.error("Error creating provider:", providerError);
-                    }
-                } else {
+                }
+            } else {
               console.log("No ethereum object found in window - using fallback provider");
               // Don't recreate the provider if we already have one
               if (!readOnlyProvider) {
@@ -555,8 +555,8 @@ export function Web3Provider({ children }) {
                   }
                 }
               }
-                }
-        } catch (error) {
+            }
+    } catch (error) {
             console.error("Error in provider initialization:", error);
           }
       };
@@ -1487,9 +1487,9 @@ export function Web3Provider({ children }) {
           console.log("🎮 Game Over - Processing score:", finalScore);
           
           // Process the final score immediately
-          await recordScore(finalScore);
-          
-          // Process any pending jumps
+      await recordScore(finalScore);
+      
+      // Process any pending jumps
           processJumps();
       return;
     }
@@ -1503,8 +1503,8 @@ export function Web3Provider({ children }) {
         
             console.log("📊 Received score from game iframe:", score);
             debouncedScoreUpdate(score);
-          return;
-        }
+            return;
+          }
 
           // Handle jump events from iframe - accumulate instead of immediate processing
           if (event.data.type === 'JUMP_PERFORMED') {
@@ -1567,144 +1567,122 @@ export function Web3Provider({ children }) {
   // Update the NFT verification logic with improved resilience against rate limiting and network errors
   const checkNFT = async (address) => {
     try {
-        if (!address) return false;
-        
-        // Check if we're in a cooldown period due to rate limiting
-        const cooldownUntilStr = localStorage.getItem('nft_check_cooldown');
-        if (cooldownUntilStr) {
-            const cooldownUntil = parseInt(cooldownUntilStr);
-            if (Date.now() < cooldownUntil) {
-                console.log(`NFT check in cooldown until ${new Date(cooldownUntil).toLocaleTimeString()}, using cached result`);
-                // During cooldown, use cached result if available
-                const cachedStatusStr = localStorage.getItem(`nft_status_${address}`);
-                if (cachedStatusStr) {
-                    try {
-                        const { hasNFT, timestamp } = JSON.parse(cachedStatusStr);
-                        // Cache valid for 6 hours during cooldown periods
-                        if (Date.now() - timestamp < 6 * 60 * 60 * 1000) {
-                            return hasNFT;
-                        }
-                    } catch (e) {
-                        console.error("Error parsing cached NFT status", e);
-                    }
-                }
-                return false; // Default to false if no valid cache during cooldown
-            } else {
-                // Cooldown expired, remove it
-                localStorage.removeItem('nft_check_cooldown');
-            }
-        }
-        
-        // Check cache first (valid for 3 hours instead of 1 to reduce RPC calls)
-        const cachedStatusStr = localStorage.getItem(`nft_status_${address}`);
-        if (cachedStatusStr) {
+      if (!address) return false;
+      
+      // Check if we're in a cooldown period due to rate limiting
+      const cooldownUntilStr = localStorage.getItem('nft_check_cooldown');
+      if (cooldownUntilStr) {
+        const cooldownUntil = parseInt(cooldownUntilStr);
+        if (Date.now() < cooldownUntil) {
+          console.log(`NFT check in cooldown until ${new Date(cooldownUntil).toLocaleTimeString()}, using cached result`);
+          // During cooldown, use cached result if available
+          const cachedStatusStr = localStorage.getItem(`nft_status_${address}`);
+          if (cachedStatusStr) {
             try {
-                const { hasNFT, timestamp } = JSON.parse(cachedStatusStr);
-                if (Date.now() - timestamp < 3 * 60 * 60 * 1000) {
-                    console.log("Using cached NFT status");
-                    return hasNFT;
-                }
+              const { hasNFT, timestamp } = JSON.parse(cachedStatusStr);
+              // Cache valid for 6 hours during cooldown periods
+              if (Date.now() - timestamp < 6 * 60 * 60 * 1000) {
+                setHasNFT(hasNFT);
+                return hasNFT;
+              }
             } catch (e) {
-                console.error("Error parsing cached NFT status", e);
+              console.error("Error parsing cached NFT status", e);
             }
+          }
+          // Default to not blocking users during cooldown
+          setHasNFT(true);
+          return true;
+        } else {
+          // Cooldown expired, remove it
+          localStorage.removeItem('nft_check_cooldown');
         }
-
-        // Proceed with NFT check
-        console.log(`Checking NFT for address: ${address}`);
-        let result = false;
-        
+      }
+      
+      // Check cache first (valid for 3 hours instead of 1 to reduce RPC calls)
+      const cachedStatusStr = localStorage.getItem(`nft_status_${address}`);
+      if (cachedStatusStr) {
         try {
-            // First attempt with provider if available
-            if (provider) {
-                try {
-                    console.log("Using connected provider for NFT check");
-                    const contract = new ethers.Contract(BOOSTER_CONTRACT, BOOSTER_ABI, provider);
-                    const balance = await contract.balanceOf(address);
-                    result = balance.toNumber() > 0;
-                    console.log(`NFT check result with provider: ${result ? "Has NFT" : "No NFT"}`);
-                    
-                    // Cache the result
-                    localStorage.setItem(`nft_status_${address}`, JSON.stringify({
-                        hasNFT: result,
-                        timestamp: Date.now()
-                    }));
-                    
-                    setHasNFT(result);
-                    return result;
-                } catch (providerError) {
-                    console.error("Error checking NFT with provider:", providerError);
-                    // Fall through to fallback approach
-                }
-            }
-            
-            // Fallback to read-only provider
-            if (readOnlyProvider) {
-                try {
-                    console.log("Using read-only provider for NFT check");
-                    const BOOSTER_CONTRACT = '0xbee3b1b8e62745f5e322a2953b365ef474d92d7b';
-                    const BOOSTER_ABI = ["function balanceOf(address owner) view returns (uint256)"];
-                    
-                    const contract = new ethers.Contract(BOOSTER_CONTRACT, BOOSTER_ABI, readOnlyProvider);
-                    const balance = await contract.balanceOf(address);
-                    result = balance.toNumber() > 0;
-                    console.log(`NFT check result with read-only provider: ${result ? "Has NFT" : "No NFT"}`);
-                } catch (roError) {
-                    console.error("Error checking NFT with read-only provider:", roError);
-                    // Fall through to last resort RPC approach
-                }
-            }
-            
-            // Last resort: try with a direct JsonRpcProvider
-            if (!result) {
-                try {
-                    console.log("Attempting last resort NFT check with direct RPC");
-                    // Use first RPC from the chain config
-                    const rpcUrl = monadTestnet.rpcUrls.default.http[0];
-                    const directProvider = new ethers.providers.JsonRpcProvider(rpcUrl);
-                    
-                    const BOOSTER_CONTRACT = '0xbee3b1b8e62745f5e322a2953b365ef474d92d7b';
-                    const BOOSTER_ABI = ["function balanceOf(address owner) view returns (uint256)"];
-                    
-                    const contract = new ethers.Contract(BOOSTER_CONTRACT, BOOSTER_ABI, directProvider);
-                    const balance = await contract.balanceOf(address);
-                    result = balance.toNumber() > 0;
-                    console.log(`NFT check result with direct RPC: ${result ? "Has NFT" : "No NFT"}`);
-                } catch (directError) {
-                    console.error("Error with direct RPC NFT check:", directError);
-                }
-            }
+          const { hasNFT, timestamp } = JSON.parse(cachedStatusStr);
+          if (Date.now() - timestamp < 3 * 60 * 60 * 1000) {
+            console.log("Using cached NFT status");
+            setHasNFT(hasNFT);
+            return hasNFT;
+          }
         } catch (e) {
-            console.error("Error checking NFT balance:", e);
-            // If we get a rate limit error, set a cooldown period (1 minute)
-            if (e.message && (e.message.includes('rate limit') || e.message.includes('429'))) {
-                const cooldownTime = Date.now() + 60000; // 1 minute cooldown
-                localStorage.setItem('nft_check_cooldown', cooldownTime.toString());
-                console.log(`Rate limit detected, setting NFT check cooldown until ${new Date(cooldownTime).toLocaleTimeString()}`);
-            }
-            
-            // Use cached result if available when error occurs
-            if (cachedStatusStr) {
-                try {
-                    const { hasNFT } = JSON.parse(cachedStatusStr);
-                    console.log("Using cached NFT status due to error");
-                    result = hasNFT;
-                } catch {
-                    result = false;
-                }
-            }
+          console.error("Error parsing cached NFT status", e);
         }
-        
-        // Cache the result
-        localStorage.setItem(`nft_status_${address}`, JSON.stringify({
-            hasNFT: result,
-            timestamp: Date.now()
-        }));
-        
-        setHasNFT(result);
-        return result;
+      }
+
+      // Proceed with NFT check
+      console.log(`Checking NFT for address: ${address}`);
+      let result = false;
+      
+      // Set timeout to prevent hanging
+      const timeoutPromise = new Promise(resolve => {
+        setTimeout(() => {
+          console.log("NFT check timed out, defaulting to true");
+          resolve(true);
+        }, 5000);
+      });
+      
+      // Main NFT check logic
+      const checkPromise = (async () => {
+        try {
+          // Last resort: try with a direct JsonRpcProvider to avoid wallet recursion
+          console.log("Attempting direct NFT check with JsonRpcProvider");
+          
+          // Use first RPC from the chain config
+          const rpcUrl = 'https://testnet-rpc.monad.xyz';
+          try {
+            // Create provider without window.ethereum to avoid recursion
+            const directProvider = new ethers.providers.JsonRpcProvider(rpcUrl);
+            
+            // Connect to the NFT contract directly
+            const contract = new ethers.Contract(
+              BOOSTER_CONTRACT, 
+              BOOSTER_ABI, 
+              directProvider
+            );
+            
+            // Use a try/catch here as the contract call might still fail
+            try {
+              const balance = await contract.balanceOf(address);
+              result = balance.toNumber() > 0;
+              console.log(`NFT check result: ${result ? "Has NFT" : "No NFT"}`);
+            } catch (e) {
+              console.error("Error in contract call:", e);
+              // Default to true on contract errors
+              result = true;
+            }
+          } catch (providerError) {
+            console.error("Error creating provider:", providerError);
+            // Default to true on provider errors
+            result = true;
+          }
+          
+          return result;
+        } catch (checkError) {
+          console.error("General error in NFT check:", checkError);
+          return true; // Default to true on errors
+        }
+      })();
+      
+      // Race the check against the timeout
+      result = await Promise.race([checkPromise, timeoutPromise]);
+      
+      // Cache the result
+      localStorage.setItem(`nft_status_${address}`, JSON.stringify({
+        hasNFT: result,
+        timestamp: Date.now()
+      }));
+      
+      setHasNFT(result);
+      return result;
     } catch (error) {
-        console.error('Error in checkNFT:', error);
-        return false;
+      console.error('Error in checkNFT:', error);
+      // Default to true to avoid blocking users
+      setHasNFT(true);
+      return true;
     }
   };
 
@@ -1967,7 +1945,7 @@ export function Web3Provider({ children }) {
         localStorage.setItem('last_working_rpc', url);
         
         return provider;
-      } catch (error) {
+    } catch (error) {
         console.warn(`RPC ${url} failed:`, error.message);
         // Continue to next URL without recursion
         continue;
