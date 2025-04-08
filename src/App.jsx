@@ -1045,7 +1045,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
 }, [isConnected, address, openConnectModal]);
 
-  // Add this function inside your GameComponent before the return statement
+  // Update the handlePlayAgain function to reset the game session
   const handlePlayAgain = useCallback(() => {
     console.log("🔄 Play Again clicked");
     
@@ -1056,11 +1056,34 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     setTransactionPending(false);
     
     // Force a new game session
-    const newGameId = Date.now();
+    const newGameId = Date.now().toString();
     setGameId(newGameId);
     
+    // Set the new session ID
+    window.__currentGameSessionId = newGameId;
+    window.__jumpCount = 0;
+    console.log("📢 Created new game session ID:", newGameId);
+    
+    // Store in session storage
+    try {
+      sessionStorage.setItem('current_game_session', newGameId);
+    } catch (e) {
+      console.warn("Could not store game session in sessionStorage:", e);
+    }
+    
     // Force iframe reload - use the existing function
-    forceReloadIframe(iframeRef, newGameId);
+    const newIframe = forceReloadIframe(iframeRef, newGameId);
+    
+    // Pass session ID to iframe after a short delay to ensure it's loaded
+    setTimeout(() => {
+      if (newIframe && newIframe.contentWindow) {
+        newIframe.contentWindow.postMessage({
+          type: 'GAME_SESSION_ID',
+          sessionId: newGameId
+        }, '*');
+        console.log("📢 Sent session ID to reloaded iframe:", newGameId);
+      }
+    }, 1000);
     
     console.log("🎮 Game reset complete with new session ID:", newGameId);
   }, [setGameScore]);
@@ -1142,108 +1165,22 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }, 500);
   }, [username]);
 
-  // Comment out or remove this useEffect that's causing conflicts (around line 626-650)
-  /*
-  useEffect(() => {
-    const handleJumpMessages = (event) => {
-      if (event.data && event.data.type === 'jumpCount') {
-        console.log("Received jump count event:", event.data.count);
-        
-        // If available, track jump in Supabase
-        if (isConnected && address && updateScore) {
-          updateScore(0, event.data.count)
-            .then(() => console.log("Recorded jump in Supabase"))
-            .catch(err => console.error("Failed to record jump:", err));
-        }
-        
-        // Also add to pending jumps for eventual blockchain recording
-        if (updateScore) {
-          updateScore(0, event.data.count)
-            .then(success => {
-              if (success) {
-                console.log("Jump recorded successfully");
-              } else {
-                console.log("Jump recording failed, but gameplay continues");
-              }
-            })
-            .catch(err => {
-              console.error("Failed to record jump:", err);
-            });
-        }
-      }
-    };
-    
-    window.addEventListener('message', handleJumpMessages);
-    return () => window.removeEventListener('message', handleJumpMessages);
-  }, [isConnected, address, updateScore]);
-  */
-
-  useEffect(() => {
-    // Create a global function that the iframe can call
-    window.handleJumpTransaction = async (platformType) => {
-      console.log("Jump transaction request received from game");
-      
-      try {
-        // Don't increment locally - let the game do it
-        // Just return success
-        return true;
-                } catch (error) {
-        console.error("Error in handleJumpTransaction:", error);
-        return false;
-      }
-    };
-    
-    // Also set up a listener for game over events
-    const handleGameOver = (event) => {
-      if (event.data && (event.data.type === 'gameOver' || event.data.type === 'GAME_OVER')) {
-        console.log("Game over event received:", event.data);
-        
-        // Extract the jump count directly from the game over message
-        const finalScore = event.data.score || (event.data.data && event.data.data.finalScore) || 0;
-        const jumpCount = event.data.jumpCount || (event.data.data && event.data.data.jumpCount) || 0;
-        
-        console.log("Processing game over with score:", finalScore, "jumps:", jumpCount);
-        
-        if (jumpCount > 0 && provider && provider.updateScore) {
-          console.log("Sending transaction with jumps:", jumpCount);
-          
-          // Set transaction pending
-          setTransactionPending(true);
-          
-          provider.updateScore(finalScore, jumpCount)
-            .then(success => {
-              console.log("Game over transaction result:", success);
-              setTransactionPending(false);
-              setShowPlayAgain(true);
-            })
-            .catch(err => {
-              console.error("Game over transaction error:", err);
-              setTransactionPending(false);
-              setShowPlayAgain(true);
-            });
-            } else {
-          console.log("No jumps to record or updateScore not available");
-          setShowPlayAgain(true);
-            }
-        }
-    };
-    
-    window.addEventListener('message', handleGameOver);
-    
-    // Cleanup
-    return () => {
-      delete window.handleJumpTransaction;
-      window.removeEventListener('message', handleGameOver);
-    };
-  }, [provider, setTransactionPending, setShowPlayAgain]);
-
-  // Update the message handler in your GameComponent (around line 930-970)
+  // Modify the game message handler to support transactions at game over
   useEffect(() => {
     const handleGameMessages = async (event) => {
       // Check for bundled jumps message for blockchain transaction
       if (event.data?.type === 'BUNDLE_JUMPS' && event.data.data) {
-        const { score, jumpCount, saveId } = event.data.data;
-        console.log(`🎮 Bundle request received:`, event.data.data);
+        // Use a specific format for the saveId to avoid duplicates
+        const originalData = event.data.data;
+        
+        // Ensure we have a saveId and it's unique for this game session
+        if (!originalData.saveId) {
+          originalData.saveId = `game_${gameId}_${Date.now()}`;
+          console.log(`Added missing saveId to BUNDLE_JUMPS: ${originalData.saveId}`);
+        }
+        
+        const { score, jumpCount, saveId } = originalData;
+        console.log(`🎮 Bundle request received:`, originalData);
         
         if (jumpCount > 0) {
           console.log(`🎮 Bundle includes score: ${score}`);
@@ -1251,8 +1188,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           // Ensure address and walletClient are available
           if (!address || !walletClient) {
             console.error("Wallet not connected or client not available for transaction.");
-            setTransactionPending(false);
-            setShowPlayAgain(true); // Allow retry?
             return;
           }
           
@@ -1263,7 +1198,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Use the correct contract address
             
             // Define ABI in the correct JSON format
-              const contractAbi = [
+            const contractAbi = [
               {
                 "inputs": [
                   {
@@ -1274,16 +1209,16 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 ],
                 "name": "recordJumps",
                 "outputs": [],
-                "stateMutability": "nonpayable", // Assuming it's nonpayable unless stated otherwise
+                "stateMutability": "nonpayable",
                 "type": "function"
               }
             ];
             
             console.log("Wagmi transaction preparation:", {
-                contractAddress,
+              contractAddress,
               account: address,
-                jumpCount
-              });
+              jumpCount
+            });
               
             // Submit the transaction using walletClient
             const hash = await walletClient.writeContract({
@@ -1298,35 +1233,26 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             
             // Wait for confirmation using publicClient
             const receipt = await publicClient.waitForTransactionReceipt({ hash });
-              console.log("Transaction confirmed in block:", receipt.blockNumber);
-              
-              // Complete handling
-              setTransactionPending(false);
-              setShowPlayAgain(true);
-
-        } catch (error) {
+            console.log("Transaction confirmed in block:", receipt.blockNumber);
+            
+            // Complete handling
+            setTransactionPending(false);
+            setShowPlayAgain(true);
+          } catch (error) {
             console.error('Transaction error:', error);
             setTransactionPending(false);
             setShowPlayAgain(true);
-          } // End of try-catch block
-
-        } else { // This else corresponds to if (jumpCount > 0)
+          }
+        } else {
           console.log('No jumps to record, skipping transaction');
           setShowPlayAgain(true);
-        } // End of if (jumpCount > 0)
-      
-      } // End of if (event.data?.type === 'BUNDLE_JUMPS')
-      
-      // Handle other message types if necessary
-      else if (event.data?.type === 'GAME_OVER' && event.data.data) {
-        const { finalScore, jumpCount } = event.data.data;
-        console.log(`(handleGameMessages) Game over message received with score ${finalScore} and ${jumpCount} jumps`);
+        }
       }
-    }; // End of handleGameMessages function
+    };
     
     window.addEventListener('message', handleGameMessages);
     return () => window.removeEventListener('message', handleGameMessages);
-  }, [address, walletClient, publicClient, setTransactionPending, setShowPlayAgain]);
+  }, [address, walletClient, publicClient, setTransactionPending, setShowPlayAgain, gameId]);
 
   // Add a function to handle game over transactions
   const handleGameOver = useCallback(async (score) => {
@@ -1443,6 +1369,47 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       setShowPlayButton(false);
     }
   }, [showGame]);
+
+  // Add game session initialization to GameComponent
+  useEffect(() => {
+    // Generate a unique session ID for this game instance
+    const newGameId = Date.now().toString();
+    window.__currentGameSessionId = newGameId;
+    console.log("📢 Created new game session ID:", newGameId);
+    
+    // Reset jump counters for new session
+    window.__jumpCount = 0;
+    
+    // Store the session ID in sessionStorage to maintain it through refreshes
+    try {
+      sessionStorage.setItem('current_game_session', newGameId);
+    } catch (e) {
+      console.warn("Could not store game session in sessionStorage:", e);
+    }
+    
+    // Pass session ID to the iframe when it loads
+    const sendSessionToIframe = () => {
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.postMessage({
+          type: 'GAME_SESSION_ID',
+          sessionId: newGameId
+        }, '*');
+        console.log("📢 Sent session ID to iframe:", newGameId);
+      }
+    };
+    
+    // Try to send immediately if iframe exists
+    sendSessionToIframe();
+    
+    // Also try again after a delay to ensure iframe is loaded
+    const timer = setTimeout(sendSessionToIframe, 1000);
+    
+    return () => {
+      clearTimeout(timer);
+      // Clear session when component unmounts
+      window.__currentGameSessionId = null;
+    };
+  }, []);
 
   if (providerError) {
     return (
