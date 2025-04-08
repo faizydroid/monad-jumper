@@ -1793,68 +1793,12 @@ export function Web3Provider({ children }) {
 
   // Add a smarter RPC management system to handle rate limiting and network changes
   useEffect(() => {
-    // Define a fallback RPC URLs array to use when primary fails
-    const FALLBACK_RPC_URLS = [
-      'https://prettiest-snowy-pine.monad-testnet.quiknode.pro/4fc856936286525197c30da74dd994d2c7710e93',
-      'https://rpc.ankr.com/monad_testnet',
-      'https://thirdweb.monad-testnet.titanrpc.io',
-      'https://rpc.monad.testnet.gateway.fm'
-    ];
-    
-    // This stores the last successful RPC endpoint
-    window.__lastWorkingRPC = localStorage.getItem('last_working_rpc') || FALLBACK_RPC_URLS[0];
-
-    // Function to create a provider with the current best RPC URL
-    const createProviderWithFallback = async (currentIndex = 0) => {
-      // Circuit breaker - prevent excessive attempts
-      const lastAttemptTime = parseInt(localStorage.getItem('rpc_last_attempt') || '0');
-      const attemptThrottle = 10000; // 10 seconds between full retry cycles
-      
-      if (Date.now() - lastAttemptTime < attemptThrottle && lastAttemptTime > 0) {
-        console.log('RPC connection attempts throttled, using cached value if available');
-        return null;
-      }
-      
-      // Set last attempt timestamp
-      localStorage.setItem('rpc_last_attempt', Date.now().toString());
-      
-      // Non-recursive implementation to prevent call stack issues
-      for (let i = currentIndex; i < FALLBACK_RPC_URLS.length; i++) {
-        const url = i === 0 ? window.__lastWorkingRPC : FALLBACK_RPC_URLS[i];
-        
-        try {
-          console.log(`Attempting to connect to RPC: ${url}`);
-          const provider = new ethers.providers.JsonRpcProvider(url, {
-            chainId: monadTestnet.id,
-            name: monadTestnet.name
-          });
-          
-          // Test the provider with a simple call
-          const blockNumber = await provider.getBlockNumber();
-          console.log(`Connected to RPC ${url} - block: ${blockNumber}`);
-          
-          // Save as last working RPC
-          window.__lastWorkingRPC = url;
-          localStorage.setItem('last_working_rpc', url);
-          
-          return provider;
-        } catch (error) {
-          console.warn(`RPC ${url} failed:`, error.message);
-          // Continue to next URL without recursion
-          continue;
-        }
-      }
-      
-      console.error('All RPC endpoints failed');
-      return null;
-    };
-    
     // Initialize the fallback provider system
     if (!readOnlyProvider) {
       console.log('Setting up fallback provider system');
-      createProviderWithFallback().then(provider => {
-        if (provider) {
-          setReadOnlyProvider(provider);
+      createProviderWithFallback().then(fallbackProvider => {
+        if (fallbackProvider) {
+          setReadOnlyProvider(fallbackProvider);
           console.log('Fallback provider initialized successfully');
         }
       }).catch(err => {
@@ -1862,11 +1806,11 @@ export function Web3Provider({ children }) {
       });
     }
     
-    // Set up a network change listener
+    // Set up a network change listener - use safe wrapper to avoid recursion
     if (window.ethereum) {
       const safeEthereum = createSafeEthereumWrapper();
       if (safeEthereum) {
-        const handleChainChanged = async (chainId) => {
+        const handleChainChanged = (chainId) => {
           console.log('Chain changed to:', chainId);
           // Clear provider to force re-creation with new network
           setProvider(null);
@@ -1877,6 +1821,7 @@ export function Web3Provider({ children }) {
           }, 1000);
         };
         
+        // Use the safe wrapper instead of direct window.ethereum
         safeEthereum.on('chainChanged', handleChainChanged);
         
         return () => {
@@ -1905,9 +1850,23 @@ export function Web3Provider({ children }) {
           }
         }
         
+        // Try with an existing provider first
+        if (readOnlyProvider) {
+          try {
+            return await fn(readOnlyProvider);
+          } catch (providerError) {
+            console.warn("Read-only provider error, will try fallback:", providerError.message);
+            // Continue to create new provider
+          }
+        }
+        
         // Create a new provider for each attempt to avoid stale connections
-        const provider = createProviderWithFallback();
-        return await fn(provider);
+        const fallbackProvider = await createProviderWithFallback();
+        if (!fallbackProvider) {
+          throw new Error("Failed to create provider for RPC call");
+        }
+        
+        return await fn(fallbackProvider);
       } catch (error) {
         lastError = error;
         
@@ -1944,6 +1903,79 @@ export function Web3Provider({ children }) {
     }
     
     throw lastError;
+  };
+
+  // Function to create a provider with the current best RPC URL
+  const createProviderWithFallback = async (currentIndex = 0) => {
+    // Circuit breaker - prevent excessive attempts
+    const lastAttemptTime = parseInt(localStorage.getItem('rpc_last_attempt') || '0');
+    const attemptThrottle = 10000; // 10 seconds between full retry cycles
+    
+    if (Date.now() - lastAttemptTime < attemptThrottle && lastAttemptTime > 0) {
+      console.log('RPC connection attempts throttled, using cached value if available');
+      
+      // Use last working RPC from cache rather than returning null
+      const cachedRPC = localStorage.getItem('last_working_rpc');
+      if (cachedRPC) {
+        try {
+          return new ethers.providers.JsonRpcProvider(cachedRPC, {
+            chainId: monadTestnet.id,
+            name: monadTestnet.name
+          });
+        } catch (err) {
+          console.warn('Failed to create provider from cached RPC:', err);
+          // Continue to normal flow
+        }
+      }
+      return null;
+    }
+    
+    // Set last attempt timestamp
+    localStorage.setItem('rpc_last_attempt', Date.now().toString());
+    
+    // Define fallback RPC URLs here to avoid accessing window global
+    const FALLBACK_RPC_URLS = [
+      'https://prettiest-snowy-pine.monad-testnet.quiknode.pro/4fc856936286525197c30da74dd994d2c7710e93',
+      'https://rpc.ankr.com/monad_testnet',
+      'https://thirdweb.monad-testnet.titanrpc.io',
+      'https://rpc.monad.testnet.gateway.fm',
+      ...monadTestnet.rpcUrls.default.http
+    ];
+    
+    // Filter out duplicates
+    const uniqueRPCs = [...new Set(FALLBACK_RPC_URLS)];
+    
+    // Get cached last working RPC
+    const lastWorkingRPC = localStorage.getItem('last_working_rpc') || uniqueRPCs[0];
+    
+    // Non-recursive implementation to prevent call stack issues
+    for (let i = currentIndex; i < uniqueRPCs.length; i++) {
+      const url = i === 0 ? lastWorkingRPC : uniqueRPCs[i];
+      
+      try {
+        console.log(`Attempting to connect to RPC: ${url}`);
+        const provider = new ethers.providers.JsonRpcProvider(url, {
+          chainId: monadTestnet.id,
+          name: monadTestnet.name
+        });
+        
+        // Test the provider with a simple call
+        const blockNumber = await provider.getBlockNumber();
+        console.log(`Connected to RPC ${url} - block: ${blockNumber}`);
+        
+        // Save as last working RPC
+        localStorage.setItem('last_working_rpc', url);
+        
+        return provider;
+      } catch (error) {
+        console.warn(`RPC ${url} failed:`, error.message);
+        // Continue to next URL without recursion
+        continue;
+      }
+    }
+    
+    console.error('All RPC endpoints failed');
+    return null;
   };
 
   const value = {
