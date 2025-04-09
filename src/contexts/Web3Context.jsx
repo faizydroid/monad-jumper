@@ -328,89 +328,97 @@ export function Web3Provider({ children }) {
     return false;
   }, [address, isConnected, playerHighScore, saveScore]);
 
-  // Add the function that is referenced in useEffect early on to prevent reference errors
-  const recordBundledJumps = async (jumpCount) => {
+  // Update recordBundledJumps to use session tracking
+  const recordBundledJumps = async (jumpCount, gameSessionId) => {
     if (!jumpCount || jumpCount <= 0) {
-      console.log('No jumps to record, skipping transaction');
-      return true; // Don't process zero jumps
+      console.log("No jumps to record");
+      return false;
     }
     
     console.log(`Recording ${jumpCount} bundled jumps`);
     
-    // First track locally in Supabase - this ensures we have a record even if the blockchain call fails
     try {
+      // Make sure we have a session ID
+      const sessionId = gameSessionId || window.__currentGameSessionId || Date.now().toString();
+      
+      // First save to Supabase (this is reliable and doesn't require wallet)
+      const account = address || window.walletAddress;
       if (account) {
-        await saveJumpsToSupabase(account, jumpCount);
-      }
-    } catch (dbError) {
-      console.error('Failed to record jumps in database:', dbError);
-      // Continue to blockchain call anyway
-    }
-    
-    // If we're in development mode with mocking enabled, just update the local state
-    if (import.meta.env.DEV && import.meta.env.VITE_MOCK_TRANSACTIONS === 'true') {
-      console.log("DEV MODE: Mocking bundled jumps transaction");
-      setPendingJumps(prev => Math.max(0, prev - jumpCount));
-      return true;
-    }
-    
-    try {
-      // Check for required dependencies
-      if (!signer || !contract || !account) {
-        console.log('Missing dependencies for blockchain transaction, storing jumps locally');
-        setPendingJumps(prev => prev + jumpCount);
-        return false;
+        await saveJumpsToSupabase(account, jumpCount, sessionId);
       }
       
-      // Update the local state even before making the RPC call
-      const newPendingJumps = Math.max(0, pendingJumps - jumpCount);
-      setPendingJumps(newPendingJumps);
-      
-      // Rate limit to avoid too many RPC calls - if we have a transaction in flight, wait
-      if (window.__jumpTransactionInProgress) {
-        console.log('Jump transaction already in progress, will try later');
-        return true;
-      }
-      
-      // Set transaction flag
-      window.__jumpTransactionInProgress = true;
-      
-      try {
-        console.log(`Submitting transaction to record ${jumpCount} jumps`);
-        
-        // Submit the transaction with explicit gasLimit
-        const tx = await contract.recordJumps(jumpCount, {
-          gasLimit: 300000 // Set a specific gas limit for Monad testnet
-        });
-        
-        console.log("Transaction submitted:", tx.hash);
-        return true;
-      } catch (txError) {
-        console.error("Transaction error:", txError);
-        
-        // Re-add to pending if transaction failed
-        setPendingJumps(prev => prev + jumpCount);
-        return false;
-      } finally {
-        // Clear transaction flag after a delay to prevent rapid retries
-        setTimeout(() => {
-          window.__jumpTransactionInProgress = false;
-        }, 5000);
+      // Only attempt blockchain transaction if all dependencies are available
+      if (provider && signer && contract) {
+        try {
+          console.log(`Sending ${jumpCount} jumps to blockchain contract`);
+          
+          // Check if contract has the recordJumps function
+          if (typeof contract.recordJumps !== 'function') {
+            console.error("Contract doesn't have recordJumps function");
+            return false;
+          }
+          
+          // Execute the transaction
+          const tx = await contract.recordJumps(jumpCount, {
+            gasLimit: 300000
+          });
+          
+          console.log("Jump transaction sent:", tx.hash);
+          
+          // Wait for confirmation
+          const receipt = await tx.wait();
+          console.log("Jump transaction confirmed in block:", receipt.blockNumber);
+          return true;
+        } catch (txError) {
+          console.error("Error sending jump transaction to blockchain:", txError);
+          return false;
+        }
+      } else {
+        console.log("Missing dependencies for blockchain transaction, storing jumps locally");
+        return true; // Return true since we saved to Supabase
       }
     } catch (error) {
       console.error("Unexpected error in recordBundledJumps:", error);
-      
-      // Store jumps for later retry
-      setPendingJumps(prev => prev + jumpCount);
       return false;
     }
   };
   
-  // Add the saveJumpsToSupabase function early since recordBundledJumps depends on it
-  const saveJumpsToSupabase = async (walletAddress, jumpCount) => {
+  // Replace the saveJumpsToSupabase function with this improved version
+  const saveJumpsToSupabase = async (walletAddress, jumpCount, gameSessionId) => {
     if (!walletAddress || jumpCount <= 0 || !supabase) {
       console.error('Invalid parameters for saving jumps to Supabase');
       return false;
+    }
+    
+    // Use a game session ID to prevent duplicate submissions from the same game
+    const sessionKey = gameSessionId || window.__currentGameSessionId || Date.now().toString();
+    
+    // If this session already has recorded jumps, only record the difference
+    const sessionStorageKey = `jump_session_${walletAddress.toLowerCase()}_${sessionKey}`;
+    let previouslyRecorded = 0;
+    
+    try {
+      const storedData = sessionStorage.getItem(sessionStorageKey);
+      if (storedData) {
+        previouslyRecorded = parseInt(storedData, 10) || 0;
+        
+        // If we've already recorded these jumps, don't record them again
+        if (jumpCount <= previouslyRecorded) {
+          console.log(`Skipping ${jumpCount} jumps - already recorded ${previouslyRecorded} jumps for this session`);
+          return true;
+        }
+        
+        // Only record the difference between what we've already recorded and the new total
+        const newJumps = jumpCount - previouslyRecorded;
+        console.log(`Only recording ${newJumps} new jumps (${jumpCount} total - ${previouslyRecorded} previously recorded)`);
+        jumpCount = newJumps;
+      }
+      
+      // Mark these jumps as recorded for this session
+      sessionStorage.setItem(sessionStorageKey, Math.max(previouslyRecorded, jumpCount).toString());
+    } catch (storageError) {
+      console.warn('Error accessing session storage:', storageError);
+      // Continue anyway
     }
     
     try {
@@ -457,6 +465,7 @@ export function Web3Provider({ children }) {
           .eq('id', existingJumps.id);
           
         setTotalJumps(newTotal);
+        console.log(`Updated jump count in Supabase: ${existingJumps.count} + ${jumpCount} = ${newTotal}`);
         return true;
       } else {
         // Create new record
@@ -468,6 +477,7 @@ export function Web3Provider({ children }) {
           });
           
         setTotalJumps(jumpCount);
+        console.log(`Created new jump record in Supabase with ${jumpCount} jumps`);
         return true;
       }
     } catch (error) {
@@ -482,9 +492,9 @@ export function Web3Provider({ children }) {
     if (provider || isInEdgeFallbackMode) return;
     
     const initializeProvider = async () => {
-      try {
-        console.log("Initializing Web3 provider...");
-        
+        try {
+            console.log("Initializing Web3 provider...");
+            
         // Don't directly access window.ethereum - use our safe checking function
         if (window.__RECOVERY_MODE) {
           console.log("Recovery mode active - using RPC provider only");
@@ -521,8 +531,8 @@ export function Web3Provider({ children }) {
             } catch (providerError) {
               console.error("Error creating web3 provider:", providerError);
               // Continue to fallback
-            }
-          } else {
+                }
+            } else {
             console.log("Could not safely access wallet - using fallback");
           }
         } else {
@@ -532,7 +542,7 @@ export function Web3Provider({ children }) {
         // Always set up a fallback provider as well
         setupFallbackProviderOnly();
         
-      } catch (error) {
+    } catch (error) {
         console.error("Error in provider initialization:", error);
         // Set recovery mode if we encounter errors
         window.__RECOVERY_MODE = true;
@@ -577,7 +587,9 @@ export function Web3Provider({ children }) {
               return;
             }
           } catch (e) {
-            console.warn(`Fallback RPC ${url} failed`);
+            console.warn(`RPC ${url} failed:`, e.message);
+            // Continue to next URL without recursion
+            continue;
           }
         }
         
@@ -727,7 +739,7 @@ export function Web3Provider({ children }) {
       if (directAddress) {
         console.log("Using direct address:", directAddress);
         await handleAccountChange(directAddress);
-        return true;
+      return true;
       }
       
       console.error("Failed to get connected account");
@@ -1085,26 +1097,10 @@ export function Web3Provider({ children }) {
     }
   }, [isConnected, address, provider]);
 
-  // Optimized fetchLeaderboard with caching to reduce DB queries
+  // Modify fetchLeaderboard to be more reactive
   const fetchLeaderboard = async () => {
     try {
       console.log('Fetching leaderboard');
-      
-      // Check for cached leaderboard
-      const cachedLeaderboard = localStorage.getItem('cached_leaderboard');
-      if (cachedLeaderboard) {
-        try {
-          const { data, timestamp } = JSON.parse(cachedLeaderboard);
-          // Use cache if less than 5 minutes old
-          if (Date.now() - timestamp < 300000) {
-            console.log('Using cached leaderboard data');
-            setLeaderboard(data);
-            return data;
-          }
-        } catch (e) {
-          // Invalid cache, ignore and continue
-        }
-      }
       
       // If no supabase client, or if we're in development and mocking is enabled, use mock data
       if (!supabase || (import.meta.env.DEV && import.meta.env.VITE_MOCK_DATA === 'true')) {
@@ -1164,12 +1160,6 @@ export function Web3Provider({ children }) {
       });
       
       console.log('Final leaderboard with unique users:', formattedLeaderboard.length);
-      
-      // Cache the result
-      localStorage.setItem('cached_leaderboard', JSON.stringify({
-        data: formattedLeaderboard,
-        timestamp: Date.now()
-      }));
       
       setLeaderboard(formattedLeaderboard);
       return formattedLeaderboard;
@@ -1464,103 +1454,103 @@ export function Web3Provider({ children }) {
     let jumpProcessingTimer = null;
     let pendingJumpCount = 0;
 
-    const processJumps = () => {
+    const processJumps = (sessionId) => {
       if (pendingJumpCount <= 0) return;
       
       const jumpCount = pendingJumpCount;
       pendingJumpCount = 0;
       
-      console.log(`Processing ${jumpCount} accumulated jumps`);
-      recordBundledJumps(jumpCount).catch(e => console.error('Error processing jumps:', e));
+      console.log(`Processing ${jumpCount} accumulated jumps for session ${sessionId || 'unknown'}`);
+      recordBundledJumps(jumpCount, sessionId).catch(e => console.error('Error processing jumps:', e));
     };
 
     // Single consolidated message handler for all game-related events
     const handleGameMessages = async (event) => {
       try {
-        // First check event types that don't need RPC calls
+        // ONLY handle direct score updates and BUNDLE_JUMPS, ignore all other jump-related events
         
-        // Handle direct events from the game via custom events
+        // Track processed events to avoid duplicates
+        const eventId = event.data?.data?.saveId || event.data?.saveId || 'unknown';
+        const eventType = event.data?.type || event.type || 'unknown';
+        const eventKey = `${eventType}_${eventId}`;
+        
+        if (window.__processedEvents && window.__processedEvents[eventKey]) {
+          console.log(`⚠️ Ignoring duplicate event: ${eventKey}`);
+          return;
+        }
+        
+        // Initialize event tracking
+        if (!window.__processedEvents) {
+          window.__processedEvents = {};
+        }
+        
+        // Handle score updates from direct events
         if (event.type === 'gameScore') {
           const score = event.detail?.score;
           if (!score) return;
           
           console.log("🎮 Received game score event:", score);
           debouncedScoreUpdate(score);
-            return;
-          }
-
-        if (event.type === 'gameJump') {
-          const { count } = event.detail || {};
-          if (!count || count <= 0) return;
-          
-          // Add to pending jumps instead of making immediate RPC calls
-          pendingJumpCount += count;
-          
-          // Reset the timer for batch processing
-          if (jumpProcessingTimer) clearTimeout(jumpProcessingTimer);
-          jumpProcessingTimer = setTimeout(processJumps, 2000);
-              return;
+          return;
         }
         
-        // Handle game over - this is one event we want to process immediately
+        // Handle game over with direct score only
         if (event.type === 'gameOver') {
           const { finalScore } = event.detail || {};
-          if (!finalScore) return;
-          
-          console.log("🎮 Game Over - Processing score:", finalScore);
-          
-          // Process the final score immediately
-      await recordScore(finalScore);
-      
-      // Process any pending jumps
-          processJumps();
-      return;
-    }
+          if (finalScore) {
+            console.log("🎮 Game Over - Processing score:", finalScore);
+            await recordScore(finalScore);
+          }
+          return;
+        }
 
-        // Handle messages from iframe
+        // Handle messages from iframe - ONLY process BUNDLE_JUMPS, ignore other jump events
         if (event.data && typeof event.data === 'object') {
           // Handle score updates from iframe
           if (event.data.type === 'gameScore') {
-        const score = event.data.score;
+            const score = event.data.score;
             if (!score) return;
-        
+            
             console.log("📊 Received score from game iframe:", score);
             debouncedScoreUpdate(score);
             return;
           }
-
-          // Handle jump events from iframe - accumulate instead of immediate processing
-          if (event.data.type === 'JUMP_PERFORMED') {
-            const jumpCount = event.data.jumpCount || 1;
-            console.log("🦘 Jump received from iframe:", jumpCount);
-            
-            // Add to pending count
-            pendingJumpCount += jumpCount;
-            
-            // Reset the timer for batch processing
-            if (jumpProcessingTimer) clearTimeout(jumpProcessingTimer);
-            jumpProcessingTimer = setTimeout(processJumps, 2000);
-              return;
+          
+          // IGNORE all jump-related events except BUNDLE_JUMPS
+          if (event.data.type === 'JUMP_PERFORMED' || 
+              event.data.type === 'FINAL_JUMP_COUNT' ||
+              event.data.type === 'SAVE_JUMPS') {
+            console.log(`⏭️ Ignoring event type: ${event.data.type} - jumps will be processed by BUNDLE_JUMPS only`);
+            return;
           }
           
-          // Handle bundle jumps - process immediately as this is already a batch
+          // ONLY process jumps from BUNDLE_JUMPS - the single source of truth
           if (event.data.type === 'BUNDLE_JUMPS' && event.data.data) {
-            const { score, jumpCount } = event.data.data || {};
-            if (!jumpCount || jumpCount <= 0) return;
+            const { score, jumpCount, saveId } = event.data.data || {};
             
-            console.log("🎮 Bundle includes score:", score, "jumps:", jumpCount);
+            // Mark this event as processed to avoid duplicates
+            window.__processedEvents[eventKey] = Date.now();
+            
+            // Skip if no jumps to record
+            if (!jumpCount || jumpCount <= 0) {
+              console.log("⚠️ No jumps to record in BUNDLE_JUMPS event");
+            return;
+          }
+
+            console.log(`🎮 SINGLE SOURCE OF TRUTH: Processing ${jumpCount} jumps with session ID: ${saveId || 'N/A'}`);
             
             // Record score first if provided
             if (score > 0) {
               await recordScore(score);
             }
             
-            // Process the jumps
-            await recordBundledJumps(jumpCount);
-            return;
+            // Process the jumps with the specific session ID
+            // This is THE ONLY PLACE where jumps should be recorded
+            await recordBundledJumps(jumpCount, saveId);
+              return;
+            }
           }
-        }
-      } catch (error) {
+        } catch (error) {
         console.error("Error handling game message:", error);
         // Don't re-throw to prevent component crashes
       }
@@ -1698,18 +1688,18 @@ export function Web3Provider({ children }) {
       await fetchJumps(normalizedAddress);
       
       console.log(`User data fetched for ${userAddress}`);
-    } catch (error) {
+        } catch (error) {
       console.error('Error fetching user data:', error);
-    }
-  };
-  
+      }
+    };
+
   // Add the missing refreshJumps function
   const refreshJumps = async () => {
     if (!address) return 0;
     
     console.log(`Refreshing jumps for ${address}`);
     return await fetchJumps(address);
-  };
+    };
 
   // Add a smarter RPC management system to handle rate limiting and network changes
   useEffect(() => {
@@ -1764,7 +1754,7 @@ export function Web3Provider({ children }) {
           if (Date.now() < cooldownUntil) {
             console.warn(`RPC in rate limit cooldown until ${new Date(cooldownUntil).toLocaleTimeString()}`);
             throw new Error('Rate limit cooldown active, skipping request');
-          } else {
+      } else {
             // Cooldown expired, remove it
             localStorage.removeItem('rpc_rate_limit_cooldown');
           }
@@ -1787,7 +1777,7 @@ export function Web3Provider({ children }) {
         }
         
         return await fn(fallbackProvider);
-      } catch (error) {
+    } catch (error) {
         lastError = error;
         
         // Don't retry if we hit a global cooldown
@@ -1887,7 +1877,7 @@ export function Web3Provider({ children }) {
         localStorage.setItem('last_working_rpc', url);
         
         return provider;
-    } catch (error) {
+      } catch (error) {
         console.warn(`RPC ${url} failed:`, error.message);
         // Continue to next URL without recursion
         continue;
@@ -1903,7 +1893,7 @@ export function Web3Provider({ children }) {
     if (window.__ethereum_access_error || typeof window === 'undefined') {
       return false;
     }
-    
+
     try {
       // Just check existence without accessing any properties
       return typeof window.ethereum !== 'undefined';
@@ -1917,9 +1907,9 @@ export function Web3Provider({ children }) {
   // Safe function to check ethereum network
   const safeGetChainId = () => {
     if (window.__ethereum_access_error || !isWalletAvailable()) {
-      return null;
-    }
-    
+          return null;
+        }
+        
     try {
       return window.ethereum.chainId;
     } catch (e) {
@@ -1938,6 +1928,102 @@ export function Web3Provider({ children }) {
       return null;
     }
   };
+
+  // Modify fetchJumpsLeaderboard to be more reactive
+  const fetchJumpsLeaderboard = async () => {
+    try {
+      console.log('Fetching jumps leaderboard');
+      
+      // If no supabase client, or if we're in development and mocking is enabled, use mock data
+      if (!supabase || (import.meta.env.DEV && import.meta.env.VITE_MOCK_DATA === 'true')) {
+        console.log('Using mock jumps leaderboard data');
+        const mockJumpsLeaderboard = Array.from({ length: 10 }, (_, i) => ({
+          player: `Jumper${i + 1}`,
+          address: `0x${i.toString().padStart(40, '0')}`,
+          jumps: 5000 - i * 400,
+          timestamp: new Date().toLocaleDateString()
+        }));
+        
+        return mockJumpsLeaderboard;
+      }
+      
+      // Fetch top jumpers from the jumps table
+      const { data: jumpers, error: jumpersError } = await supabase
+        .from('jumps')
+        .select(`
+          id, 
+          count,
+          wallet_address,
+          created_at,
+          users:wallet_address(username)
+        `)
+        .order('count', { ascending: false })
+        .limit(10);
+      
+      if (jumpersError) throw jumpersError;
+      console.log('Jumpers fetched:', jumpers?.length || 0);
+      
+      // Process jumpers to format for display
+      const formattedJumpsLeaderboard = jumpers?.map(item => {
+        const address = item.wallet_address.toLowerCase();
+        
+        // Format the entry (using username from the joined users table if available)
+        const username = item.users?.username || 
+          `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+        
+        return {
+          player: username,
+          address: address,
+          jumps: item.count,
+          timestamp: new Date(item.created_at).toLocaleDateString()
+        };
+      }) || [];
+      
+      console.log('Final jumps leaderboard:', formattedJumpsLeaderboard.length);
+      
+      return formattedJumpsLeaderboard;
+      
+    } catch (error) {
+      console.error('Error fetching jumps leaderboard:', error);
+      
+      // Return empty array on error
+      return [];
+    }
+  };
+
+  // Set up Supabase real-time subscription for scores and jumps
+  useEffect(() => {
+    if (!supabase) return;
+    
+    // Set up subscription for scores table
+    const scoresSubscription = supabase
+      .channel('public:scores')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'scores' }, 
+        () => {
+          console.log('Scores table updated, refreshing leaderboard');
+          fetchLeaderboard();
+        }
+      )
+      .subscribe();
+      
+    // Set up subscription for jumps table
+    const jumpsSubscription = supabase
+      .channel('public:jumps')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'jumps' }, 
+        () => {
+          console.log('Jumps table updated, jumps leaderboard will refresh on next view');
+        }
+      )
+      .subscribe();
+    
+    // Cleanup function
+    return () => {
+      scoresSubscription.unsubscribe();
+      jumpsSubscription.unsubscribe();
+    };
+  }, [supabase]);
 
   const value = {
     account,
@@ -1982,7 +2068,8 @@ export function Web3Provider({ children }) {
     refreshJumps,
     isCheckingNFT,
     hasNFT,
-    checkNFTStatus: checkNFT
+    checkNFTStatus: checkNFT,
+    fetchJumpsLeaderboard
   };
 
   return (

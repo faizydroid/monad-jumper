@@ -197,4 +197,110 @@
     padding: 4px 10px;
     font-size: 0.8rem;
   }
+}
+
+/* Add styles for leaderboard tabs */
+.leaderboard-tabs {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  border-radius: 25px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.tab-button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.6);
+  font-family: 'Bubblegum Sans', cursive;
+  font-size: 0.95rem;
+  padding: 8px 15px;
+  cursor: pointer;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+.tab-button.active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+  transform: scale(1.05);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.tab-button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Style the jumps bubble differently from score bubble */
+.jumps-bubble {
+  background: linear-gradient(135deg, #4ECDC4 0%, #1A9FBD 100%);
+}
+
+/* Loading indicator */
+.loading-indicator {
+  text-align: center;
+  padding: 20px;
+  color: var(--dark);
+  font-style: italic;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+/* Make responsive for mobile */
+@media (max-width: 768px) {
+  .leaderboard-tabs {
+    margin-bottom: 10px;
+  }
+  
+  .tab-button {
+    font-size: 0.85rem;
+    padding: 6px 12px;
+  }
+}
+
+.leaderboard-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.refresh-button {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.refresh-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: rotate(180deg);
 } 
