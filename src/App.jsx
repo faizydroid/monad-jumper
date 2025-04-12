@@ -231,9 +231,10 @@ const styles = `
 }
 `;
 
-// Update the NFTMintModal component to use wagmi hooks
+// Update the NFTMintModal component with better transaction handling
 const NFTMintModal = ({ isOpen, onClose }) => {
   const [isMinting, setIsMinting] = useState(false);
+  const [mintSuccess, setMintSuccess] = useState(false);
   const [error, setError] = useState(null);
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -245,6 +246,11 @@ const NFTMintModal = ({ isOpen, onClose }) => {
       return;
     }
     
+    if (!walletClient) {
+      setError("Wallet client not initialized. Please refresh and try again.");
+      return;
+    }
+    
     setIsMinting(true);
     setError(null);
     
@@ -252,7 +258,11 @@ const NFTMintModal = ({ isOpen, onClose }) => {
       // Use environment variable for contract address
       const nftAddress = import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS;
       
-      console.log("Sending mint transaction with 1 MON...");
+      if (!nftAddress || nftAddress === "0x0000000000000000000000000000000000000000") {
+        throw new Error("Invalid NFT contract address");
+      }
+      
+      console.log("Sending mint transaction with 1 MON to address:", nftAddress);
       
       // Use wagmi's walletClient and publicClient instead of ethers
       const hash = await walletClient.writeContract({
@@ -267,7 +277,8 @@ const NFTMintModal = ({ isOpen, onClose }) => {
           }
         ],
         functionName: "mint",
-        value: parseEther("1.0")
+        value: parseEther("1.0"),
+        account: address
       });
       
       console.log("Mint transaction sent:", hash);
@@ -276,11 +287,8 @@ const NFTMintModal = ({ isOpen, onClose }) => {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       console.log("NFT minted successfully!");
       
-      // Close modal after successful mint
-      onClose();
-      
-      // Refresh the page to update NFT status
-      window.location.reload();
+      // Show success state instead of closing modal immediately
+      setMintSuccess(true);
     } catch (err) {
       console.error("Mint error:", err);
       
@@ -288,6 +296,8 @@ const NFTMintModal = ({ isOpen, onClose }) => {
         setError("You need 1 MON to mint this NFT");
       } else if (err.message?.includes("Already minted")) {
         setError("You've already minted an NFT with this wallet");
+      } else if (err.message?.includes("rejected")) {
+        setError("Transaction rejected in your wallet");
       } else {
         setError(err.message || "Failed to mint. Please try again.");
       }
@@ -295,6 +305,41 @@ const NFTMintModal = ({ isOpen, onClose }) => {
       setIsMinting(false);
     }
   };
+  
+  // If mint was successful, display success screen
+  if (mintSuccess) {
+    return (
+      <SimpleModal isOpen={isOpen} onClose={onClose} title="Mint Successful!">
+        <div className="mint-success-content" style={{textAlign: 'center'}}>
+          <div style={{fontSize: '64px', margin: '20px 0'}}>🎉</div>
+          <h2 style={{color: '#4CAF50', marginBottom: '20px'}}>NFT Minted Successfully!</h2>
+          <p>Your character is now ready to play!</p>
+          
+          <button 
+            onClick={() => {
+              onClose();
+              window.location.reload();
+            }} 
+            style={{
+              background: 'linear-gradient(90deg, #4CAF50 0%, #45A049 100%)',
+              border: 'none',
+              padding: '15px 30px',
+              borderRadius: '50px',
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: '18px',
+              margin: '30px 0 10px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            LETS F*CKING JUMP...
+          </button>
+        </div>
+      </SimpleModal>
+    );
+  }
   
   return (
     <SimpleModal isOpen={isOpen} onClose={onClose} title="Mint Character NFT">
@@ -313,13 +358,37 @@ const NFTMintModal = ({ isOpen, onClose }) => {
             onClick={handleMint} 
             disabled={isMinting}
             className="mint-now-btn"
+            style={{
+              background: isMinting ? '#888' : 'linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%)',
+              border: 'none',
+              padding: '12px 20px',
+              borderRadius: '50px',
+              color: 'white',
+              flex: '1',
+              cursor: isMinting ? 'not-allowed' : 'pointer',
+              position: 'relative'
+            }}
           >
             {isMinting ? 'Minting...' : 'Mint Now (1 MON)'}
+            {isMinting && (
+              <span className="spinner" style={{
+                width: '20px',
+                height: '20px',
+                border: '2px solid rgba(255,255,255,0.3)',
+                borderTop: '2px solid white',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                position: 'absolute',
+                right: '15px',
+                top: 'calc(50% - 10px)'
+              }}></span>
+            )}
           </button>
           
           <button 
             onClick={onClose}
             style={{padding: '12px', background: 'transparent', border: '1px solid #ccc', borderRadius: '50px', color: 'white'}}
+            disabled={isMinting}
           >
             Cancel
           </button>
@@ -695,6 +764,9 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Add this hook near your other hook declarations
   const { openConnectModal } = useConnectModal();
   
+  // Add this after the state declarations in the GameComponent function 
+  const [mintModalRequested, setMintModalRequested] = useState(false);
+  
   // Initialize fallback provider for offline mode
   useEffect(() => {
     // Create a fallback provider if we don't have one from web3
@@ -928,7 +1000,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       }));
       
       return true; // Default to true
-    } catch (error) {
+        } catch (error) {
       console.error('Error checking NFT ownership:', error);
       
       // Don't update cache on error - keep previous value if it exists
@@ -937,35 +1009,38 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   }, []); // No dependencies to avoid re-rendering
 
   // Replace the checkMintStatus function with a version that avoids recursion
-  const checkMintStatus = useMemo(() => {
-    return async (address) => {
-      if (!address) return false;
+  const checkMintStatus = useCallback(async (walletAddress) => {
+    if (!walletAddress) return false;
+    
+    try {
+      // Clear cache on each wallet change instead of using it
+      // This ensures we always get fresh data
+      console.log('Checking NFT ownership on contract...');
+      const nftAddress = import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS;
       
-      // Check for cached result first
-      const cachedNFT = localStorage.getItem(`nft_status_${address.toLowerCase()}`);
-      if (cachedNFT) {
-        try {
-          const { hasNFT, timestamp } = JSON.parse(cachedNFT);
-          // Use cache for 24 hours
-          if (Date.now() - timestamp < 86400000) {
-            console.log('Using cached NFT status:', hasNFT);
-            return hasNFT;
+      // Check if user has minted using the contract's function
+      const hasMinted = await publicClient.readContract({
+        address: nftAddress,
+        abi: [
+          {
+            name: "walletHasMinted",
+            type: "function",
+            stateMutability: "view",
+            inputs: [{ type: "address", name: "wallet" }],
+            outputs: [{ type: "bool" }]
           }
-        } catch (e) {
-          // Invalid cache, ignore and continue
-        }
-      }
+        ],
+        functionName: "walletHasMinted",
+        args: [walletAddress]
+      });
       
-      // Skip actual checking and just default to true for production
-      console.log('Production mode: Setting NFT status to true');
-      localStorage.setItem(`nft_status_${address.toLowerCase()}`, JSON.stringify({
-        hasNFT: true,
-        timestamp: Date.now()
-      }));
-      
-      return true;
-    };
-  }, []);
+      console.log('Contract says wallet has minted:', hasMinted);
+      return hasMinted;
+    } catch (error) {
+      console.error('Error checking NFT ownership:', error);
+      return false;
+    }
+  }, [publicClient]);
 
   // Find and replace the useEffect that calls checkMintStatus
   // with an optimized version that only runs when address changes
@@ -1004,6 +1079,42 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       }
     }
   }, [address, isConnected, checkMintStatus]); // Only run when address or connection status changes
+
+  // Update the wallet connection status effect
+  useEffect(() => {
+    // Clear NFT status when wallet changes/disconnects  
+    if (!isConnected || !address) {
+      setHasMintedCharacter(false);
+      setIsCheckingMint(false);
+      return;
+    }
+    
+    // Always check when address changes - remove the cached address check
+    console.log('Checking NFT for wallet:', address);
+    setIsCheckingMint(true);
+    
+    // Get from props first if available
+    if (hasMintedNft !== undefined) {
+      console.log('Using NFT status from props:', hasMintedNft);
+      setHasMintedCharacter(hasMintedNft);
+      setIsCheckingMint(false);
+      return;
+    }
+    
+    // Otherwise check the contract directly
+    checkMintStatus(address)
+      .then(result => {
+        console.log('NFT ownership result:', result);
+        setHasMintedCharacter(result);
+      })
+      .catch(err => {
+        console.error('NFT check failed:', err);
+        setHasMintedCharacter(false);
+      })
+      .finally(() => {
+        setIsCheckingMint(false);
+      });
+  }, [address, isConnected, hasMintedNft]);
 
   // Update the wallet connection status effect
   useEffect(() => {
@@ -1153,9 +1264,13 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     // Set the hash to indicate we're in game mode
     window.location.hash = 'game';
     
-    // Show the game with loading animation already defined in the app
-    console.log('Setting showGame to true while preserving wallet connection');
+    // Show the game with loading animation
+    console.log('Setting showGame to true');
     setShowGame(true);
+    
+    // Reset game state for fresh start
+    setGameScore(0);
+    setCurrentJumps(0);
     
     // Reset play button animation after a delay
     setTimeout(() => {
@@ -1163,7 +1278,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         playButton.classList.remove('play-button-clicked');
       }
     }, 500);
-  }, [username]);
+  }, [username, setGameScore]);
 
   // Modify the game message handler to support transactions at game over
   useEffect(() => {
@@ -1198,7 +1313,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Use the correct contract address
             
             // Define ABI in the correct JSON format
-            const contractAbi = [
+              const contractAbi = [
               {
                 "inputs": [
                   {
@@ -1215,10 +1330,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             ];
             
             console.log("Wagmi transaction preparation:", {
-              contractAddress,
+                contractAddress,
               account: address,
-              jumpCount
-            });
+                jumpCount
+              });
               
             // Submit the transaction using walletClient
             const hash = await walletClient.writeContract({
@@ -1233,12 +1348,12 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             
             // Wait for confirmation using publicClient
             const receipt = await publicClient.waitForTransactionReceipt({ hash });
-            console.log("Transaction confirmed in block:", receipt.blockNumber);
-            
-            // Complete handling
-            setTransactionPending(false);
-            setShowPlayAgain(true);
-          } catch (error) {
+              console.log("Transaction confirmed in block:", receipt.blockNumber);
+              
+              // Complete handling
+              setTransactionPending(false);
+              setShowPlayAgain(true);
+        } catch (error) {
             console.error('Transaction error:', error);
             setTransactionPending(false);
             setShowPlayAgain(true);
@@ -1411,6 +1526,32 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
   }, []);
 
+  // Update the existing useEffect in GameComponent to listen for the document event
+  useEffect(() => {
+    // Function to open mint modal from anywhere in the app
+    const openMintModalHandler = () => {
+      console.log("Opening mint modal from event listener");
+      setShowMintModal(true);
+    };
+    
+    // Add the event listener
+    document.addEventListener('openMintModal', openMintModalHandler);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('openMintModal', openMintModalHandler);
+    };
+  }, []);
+
+  // Add this useEffect near the other useEffects
+  useEffect(() => {
+    if (mintModalRequested) {
+      console.log("Mint modal requested via state flag");
+      setShowMintModal(true);
+      setMintModalRequested(false);
+    }
+  }, [mintModalRequested]);
+
   if (providerError) {
     return (
       <div className="wallet-error">
@@ -1539,10 +1680,14 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             ) : (
             <button 
               className="mint-to-play-button"
-                onClick={() => window.open('https://opensea.io/collection/monaddoodle', '_blank')}
+              onClick={() => {
+                console.log("🔴 MINT TO PLAY button clicked");
+                // Use the onOpenMintModal prop that was passed from the parent
+                onOpenMintModal();
+              }}
             >
-                <span className="mint-button-text">MINT TO PLAY</span>
-                <span className="mint-button-icon">🪙</span>
+              <span className="mint-button-text">MINT TO PLAY</span>
+              <span className="mint-button-icon">🪙</span>
             </button>
           )}
           
@@ -1677,136 +1822,28 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           allow="autoplay"
           frameBorder="0"
           tabIndex="0"
-            style={{ visibility: isLoading ? 'hidden' : 'visible', opacity: isLoading ? 0 : 1 }}
-            onLoad={() => {
-              // Only auto-hide the loading screen if not already hidden by the Play button
-              if (isLoading) {
-                // Wait some time before auto-hiding to allow manual click
-                setTimeout(() => {
-                  // Only auto-hide if still loading (not already clicked)
-                  if (isLoading) {
-                    setIsLoading(false);
-                  }
-                }, 3000);
-              }
-            }}
-          />
+          style={{ 
+            visibility: isLoading ? 'hidden' : 'visible', 
+            opacity: isLoading ? 0 : 1,
+            width: '100%',
+            height: '100%'
+          }}
+        ></iframe>
         </div>
       </div>
-      
-      <TransactionNotifications />
-      {showMintModal && (
-        <NFTMintModal 
-          isOpen={showMintModal} 
-          onClose={() => {
-            console.log("Closing mint modal while preserving connection");
-            setShowMintModal(false);
-          }} 
-        />
-      )}
-      {mintError && (
-        <div style={{
-          color: '#FF5252',
-          padding: '10px',
-          marginTop: '10px',
-          backgroundColor: 'rgba(255,82,82,0.1)',
-          borderRadius: '8px',
-          textAlign: 'center'
-        }}>
-          {mintError}
-        </div>
-      )}
-      {showPlayAgain && (
-              <button 
-          className="play-again-button" 
-          onClick={handlePlayAgain}
-          disabled={transactionPending}
-        >
-          {transactionPending ? "Processing Transaction..." : "Play Again"}
-              </button>
-      )}
-      {transactionPending && <LoadingSpinner isMobile={isMobileView} />}
     </div>
   );
 }
 
-// Admin access component
-function AdminAccessCheck() {
-  const [password, setPassword] = useState("");
-  const [authorized, setAuthorized] = useState(false);
-  const correctPassword = "monad-jump-2023";
-  
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (password === correctPassword) {
-      setAuthorized(true);
-      sessionStorage.setItem('adminAuthorized', 'true');
-    } else {
-      alert("Incorrect password");
-    }
-  };
-  
-  useEffect(() => {
-    console.log("AdminAccessCheck component mounted");
-    if (sessionStorage.getItem('adminAuthorized') === 'true') {
-      setAuthorized(true);
-    }
-  }, []);
-  
-  if (authorized) {
-    return (
-      <>
-        <Navbar />
-        <AdminDashboard />
-      </>
-    );
-  }
-  
-  console.log("Rendering admin login form");
-  return (
-    <>
-      <Navbar />
-      <div className="admin-login">
-        <h2>Admin Access</h2>
-        <form onSubmit={handleSubmit}>
-          <input 
-            type="password" 
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter admin password"
-          />
-          <button type="submit">Access Dashboard</button>
-        </form>
-      </div>
-    </>
-  );
-}
-
 function App() {
-  const location = useLocation();
-  const isGameScreen = location.pathname === '/' && window.location.hash === '#game';
-
-  // Access connection state
-  const { isConnected, address } = useAccount();
-  
-  // Import the web3Context and extract needed functions
-  const web3Context = useWeb3();
-  // Extract updateScore from web3Context
-  const { updateScore } = web3Context || {};
-
-  // Reference to the iframe
-  const iframeRef = useRef(null);
-  
-  // Add state variables for NFT status
-  const [isMobileView, setIsMobileView] = useState(false);
   const [showMintModal, setShowMintModal] = useState(false);
-  
-  // Use wagmi's reliable contract reading hook
+  const { isConnected, address } = useAccount();
   const { 
     data: nftBalanceData,
-    isLoading: isNftBalanceLoading
+    isLoading: isNftBalanceLoading,
+    refetch: refetchNftBalance
   } = useContractRead({
-    address: '0xd6f96a88e8abd4da0eab43ec1d044caba3ee9f37',
+    address: import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS,
     abi: [
       {
         "inputs": [{"internalType": "address", "name": "owner", "type": "address"}],
@@ -1819,6 +1856,7 @@ function App() {
     functionName: 'balanceOf',
     args: [address || '0x0000000000000000000000000000000000000000'],
     enabled: isConnected && !!address,
+    watch: true, // Add this to continuously watch for changes
   });
 
   // Calculate NFT ownership status
@@ -1829,27 +1867,18 @@ function App() {
     return balanceNum > 0;
   }, [nftBalanceData]);
 
-  // Detect mobile view
+  // Add an effect to refetch balance on wallet changes
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobileView(window.innerWidth <= 768 || 
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Rest of existing useEffects...
+    if (isConnected && address) {
+      refetchNftBalance();
+    }
+  }, [address, isConnected, refetchNftBalance]);
 
   return (
     <Web3Provider>
-      {/* Only show navbar when wallet is connected */}
       {isConnected && <Navbar />}
       
       <Routes>
-        {/* Pass NFT status to GameComponent */}
         <Route path="/" element={
           <ErrorBoundary>
             <GameComponent 
@@ -1870,7 +1899,6 @@ function App() {
         />
       )}
 
-      {/* Social Media Links - Bottom Left (Ensure this is the ONLY instance) */}
       <div className="social-links">
         <a href="https://x.com/Monadjumper" target="_blank" rel="noopener noreferrer" aria-label="Follow us on X">
           <FaXTwitter size={24} /> 
@@ -1883,4 +1911,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

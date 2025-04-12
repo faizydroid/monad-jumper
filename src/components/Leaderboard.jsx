@@ -3,7 +3,9 @@ import { useWeb3 } from '../contexts/Web3Context';
 import '../styles/Leaderboard.css';
 
 const Leaderboard = () => {
-  const { leaderboard, fetchJumpsLeaderboard } = useWeb3();
+  const web3Context = useWeb3() || { leaderboard: [] };
+  const { leaderboard } = web3Context;
+  const { fetchJumpsLeaderboard } = useWeb3();
   const [jumpsLeaderboard, setJumpsLeaderboard] = useState([]);
   const [activeTab, setActiveTab] = useState('scores'); // 'scores' or 'jumps'
   const [isLoading, setIsLoading] = useState(false);
