@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ethers } from 'ethers';
 import { createClient } from '@supabase/supabase-js';
 import { monadTestnet } from '../config/chains';
-import { useAccount } from 'wagmi';
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import GameScoreABI from '../abis/GameScore.json';
 import { gameContractABI } from '../contracts/abi';
 import { CONTRACT_ADDRESSES } from '../contracts/config';
@@ -204,6 +204,9 @@ export function Web3Provider({ children }) {
   const [isCheckingNFT, setIsCheckingNFT] = useState(false);
   const [hasNFT, setHasNFT] = useState(false);
 
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
+
   // First define the saveScore function since recordScore depends on it
   const saveScore = async (walletAddress, score) => {
     if (!walletAddress || score <= 0 || !supabase) {
@@ -306,9 +309,6 @@ export function Web3Provider({ children }) {
         setPlayerHighScore(score);
         setHighScore(score);
         
-        // Save to localStorage
-        localStorage.setItem(`highScore_${address.toLowerCase()}`, score);
-        
         // Save to Supabase
         try {
           console.log(`🎮 Saving high score to Supabase: ${score}`);
@@ -328,163 +328,186 @@ export function Web3Provider({ children }) {
     return false;
   }, [address, isConnected, playerHighScore, saveScore]);
 
-  // Update recordBundledJumps to use session tracking
+  // Update the saveJumpsToSupabase function to skip updating total_jumps
+  const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionId) => {
+    if (!walletAddress || !jumpCount || jumpCount <= 0) {
+      console.log("Invalid jump data for Supabase");
+      return false;
+    }
+
+    try {
+      console.log(`Saving ${jumpCount} jumps to Supabase for session ${sessionId}`);
+      
+      // First check if this session has already been saved to avoid duplicates
+      const sessionKey = `saved_session_${sessionId}`;
+      if (localStorage.getItem(sessionKey)) {
+        console.log(`Session ${sessionId} already saved to Supabase, skipping`);
+        return true;
+      }
+      
+      // First check if there's an existing record for this wallet
+      const { data: existingJumps, error: fetchError } = await supabase
+        .from('jumps')
+        .select('count')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .maybeSingle();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error("Error fetching existing jumps:", fetchError);
+        return false;
+      }
+      
+      let result;
+      
+      if (existingJumps) {
+        // Update existing record by adding new jumps
+        const newTotal = (existingJumps.count || 0) + jumpCount;
+        console.log(`Updating jumps from ${existingJumps.count} to ${newTotal}`);
+        
+        result = await supabase
+          .from('jumps')
+          .update({ count: newTotal })
+          .eq('wallet_address', walletAddress.toLowerCase());
+      } else {
+        // Insert new record if none exists
+        result = await supabase
+          .from('jumps')
+          .insert({
+            wallet_address: walletAddress.toLowerCase(),
+            count: jumpCount
+          });
+      }
+      
+      if (result.error) {
+        console.error("Error recording jump:", result.error);
+        return false;
+      }
+      
+      // Mark session as saved
+      localStorage.setItem(sessionKey, 'true');
+      console.log(`Successfully saved ${jumpCount} jumps to Supabase`);
+      
+      // Update local state
+      setTotalJumps(prev => (prev || 0) + jumpCount);
+      
+      return true;
+    } catch (error) {
+      console.error("Error saving jumps to Supabase:", error);
+      return false;
+    }
+  }, []);
+
+  // Replace the recordBundledJumps implementation with this version
   const recordBundledJumps = async (jumpCount, gameSessionId) => {
     if (!jumpCount || jumpCount <= 0) {
       console.log("No jumps to record");
       return false;
     }
     
-    console.log(`Recording ${jumpCount} bundled jumps`);
-    
     try {
-      // Make sure we have a session ID
-      const sessionId = gameSessionId || window.__currentGameSessionId || Date.now().toString();
-      
-      // First save to Supabase (this is reliable and doesn't require wallet)
-      const account = address || window.walletAddress;
+      // First save to Supabase database
+      const account = address;
       if (account) {
-        await saveJumpsToSupabase(account, jumpCount, sessionId);
+        await saveJumpsToSupabase(account, jumpCount, gameSessionId);
       }
       
-      // Only attempt blockchain transaction if all dependencies are available
-      if (provider && signer && contract) {
+      // Update local total jumps count
+      setTotalJumps(prev => (prev || 0) + jumpCount);
+      
+      // Use wagmi hooks for blockchain transaction instead of ethers.js
+      // This prevents network switching issues
+      if (walletClient && publicClient) {
         try {
-          console.log(`Sending ${jumpCount} jumps to blockchain contract`);
+          console.log(`Using wagmi to send ${jumpCount} jumps to blockchain`);
           
-          // Check if contract has the recordJumps function
-          if (typeof contract.recordJumps !== 'function') {
-            console.error("Contract doesn't have recordJumps function");
-            return false;
+          const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
+          const contractAbi = [
+            {
+              "inputs": [{"type": "uint256", "name": "_jumps"}],
+              "name": "recordJumps",
+              "outputs": [],
+              "stateMutability": "nonpayable",
+              "type": "function"
+            }
+          ];
+          
+          // Verify we're on the correct chain
+          const chainId = await publicClient.getChainId();
+          if (chainId !== 10143) {
+            console.warn(`Wrong chain: ${chainId}, expected Monad (10143)`);
+            return true; // Still return true since we saved to database
           }
           
-          // Execute the transaction
-          const tx = await contract.recordJumps(jumpCount, {
-            gasLimit: 300000
+          // Execute the transaction with wagmi
+          const hash = await walletClient.writeContract({
+            address: contractAddress,
+            abi: contractAbi,
+            functionName: 'recordJumps',
+            args: [BigInt(jumpCount)],
+            account: address
           });
           
-          console.log("Jump transaction sent:", tx.hash);
-          
-          // Wait for confirmation
-          const receipt = await tx.wait();
-          console.log("Jump transaction confirmed in block:", receipt.blockNumber);
+          console.log("Jump transaction sent:", hash);
           return true;
         } catch (txError) {
           console.error("Error sending jump transaction to blockchain:", txError);
-          return false;
+          return true; // Return true since we saved to database
         }
       } else {
-        console.log("Missing dependencies for blockchain transaction, storing jumps locally");
-        return true; // Return true since we saved to Supabase
+        console.log("Wallet not connected, only saving jumps to database");
+        return true;
       }
     } catch (error) {
-      console.error("Unexpected error in recordBundledJumps:", error);
+      console.error("Error in recordBundledJumps:", error);
       return false;
     }
   };
   
-  // Replace the saveJumpsToSupabase function with this improved version
-  const saveJumpsToSupabase = async (walletAddress, jumpCount, gameSessionId) => {
-    if (!walletAddress || jumpCount <= 0 || !supabase) {
-      console.error('Invalid parameters for saving jumps to Supabase');
-      return false;
+  // Optimize the updateScore function to avoid redundant calls
+  const updateScore = useCallback(async (score, jumpCount) => {
+    // Generate a unique ID for this score update to avoid duplicates
+    const updateId = `score_${score}_jumps_${jumpCount}_${Date.now()}`;
+    
+    // Skip if already processed this update
+    if (window.__processedScoreUpdates && window.__processedScoreUpdates.has(updateId)) {
+      return true;
     }
     
-    // Use a game session ID to prevent duplicate submissions from the same game
-    const sessionKey = gameSessionId || window.__currentGameSessionId || Date.now().toString();
+    // Create set if it doesn't exist
+    if (!window.__processedScoreUpdates) window.__processedScoreUpdates = new Set();
+    window.__processedScoreUpdates.add(updateId);
     
-    // If this session already has recorded jumps, only record the difference
-    const sessionStorageKey = `jump_session_${walletAddress.toLowerCase()}_${sessionKey}`;
-    let previouslyRecorded = 0;
+    console.log(`updateScore called with score: ${score}, jumpCount: ${jumpCount}`);
     
-    try {
-      const storedData = sessionStorage.getItem(sessionStorageKey);
-      if (storedData) {
-        previouslyRecorded = parseInt(storedData, 10) || 0;
-        
-        // If we've already recorded these jumps, don't record them again
-        if (jumpCount <= previouslyRecorded) {
-          console.log(`Skipping ${jumpCount} jumps - already recorded ${previouslyRecorded} jumps for this session`);
-          return true;
-        }
-        
-        // Only record the difference between what we've already recorded and the new total
-        const newJumps = jumpCount - previouslyRecorded;
-        console.log(`Only recording ${newJumps} new jumps (${jumpCount} total - ${previouslyRecorded} previously recorded)`);
-        jumpCount = newJumps;
-      }
-      
-      // Mark these jumps as recorded for this session
-      sessionStorage.setItem(sessionStorageKey, Math.max(previouslyRecorded, jumpCount).toString());
-    } catch (storageError) {
-      console.warn('Error accessing session storage:', storageError);
-      // Continue anyway
+    // Always update local state first for immediate feedback
+    if (score > 0) {
+      setPlayerHighScore(prev => Math.max(prev || 0, score));
+    }
+    
+    if (jumpCount > 0) {
+      setTotalJumps(prev => (prev || 0) + jumpCount);
     }
     
     try {
-      console.log(`Saving ${jumpCount} jumps to Supabase for ${walletAddress}`);
-      const normalizedAddress = walletAddress.toLowerCase();
-      
-      // First ensure user exists in database
-      try {
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('wallet_address')
-          .eq('wallet_address', normalizedAddress)
-          .maybeSingle();
-          
-        if (!existingUser) {
-          // Create user if doesn't exist
-          await supabase.from('users').insert({
-            wallet_address: normalizedAddress,
-            username: `Player_${normalizedAddress.substring(0, 6)}`
-          });
-        }
-      } catch (userError) {
-        console.error('Error checking/creating user:', userError);
+      // Handle jump recording
+      if (jumpCount > 0) {
+        await recordBundledJumps(jumpCount, `game_${Date.now()}`);
       }
       
-      // Check for existing jumps record
-      const { data: existingJumps, error } = await supabase
-        .from('jumps')
-        .select('id, count')
-        .eq('wallet_address', normalizedAddress)
-        .maybeSingle();
-      
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching existing jumps:', error);
-        return false;
+      // Handle score recording
+      if (score > 0) {
+        await recordScore(score);
       }
       
-      if (existingJumps) {
-        // Update existing record
-        const newTotal = existingJumps.count + jumpCount;
-        await supabase
-          .from('jumps')
-          .update({ count: newTotal })
-          .eq('id', existingJumps.id);
-          
-        setTotalJumps(newTotal);
-        console.log(`Updated jump count in Supabase: ${existingJumps.count} + ${jumpCount} = ${newTotal}`);
-        return true;
-      } else {
-        // Create new record
-        await supabase
-          .from('jumps')
-          .insert({
-            wallet_address: normalizedAddress,
-            count: jumpCount
-          });
-          
-        setTotalJumps(jumpCount);
-        console.log(`Created new jump record in Supabase with ${jumpCount} jumps`);
-        return true;
-      }
+      return true; // Return success
     } catch (error) {
-      console.error('Error saving jumps to Supabase:', error);
-      return false;
+      console.error('Error in updateScore:', error);
+      return true; // Return true anyway to avoid UI blocking
     }
-  };
+  }, [recordBundledJumps, recordScore]);
+
+  // Update recordBundledJumps to use session tracking
+ 
 
   // Update the provider initialization to avoid window.ethereum on page load
   useEffect(() => {
@@ -874,83 +897,70 @@ export function Web3Provider({ children }) {
     }
   }, [isConnected, address, supabase, checkAndLoadUsername]);
 
-  // Update the recordJump function to handle transaction states properly
-  const recordJump = async (platformType) => {
-    try {
-      // Add more detailed logging
-      console.log("recordJump called with platform type:", platformType);
-      console.log("Context state:", { 
-        providerExists: !!provider, 
-        contractExists: !!contract, 
-        accountExists: !!account,
-        isConnected: isConnected,
-        address: address
-      });
+  // Optimize the recordJump function to avoid redundant recovery attempts
+  const recordJump = useCallback(async (platformType) => {
+    // Skip recording individual jumps - we'll use bundled approach only
+    console.log('Jump registered locally:', platformType);
+    
+    // Just increment the local counter without network calls
+    window.__jumpCount = (window.__jumpCount || 0) + 1;
+    console.log('Updated local jump count:', window.__jumpCount);
+    
+    // Always return success to keep game running smoothly
+    return true;
+  }, []);
+
+  // Optimize the jump message handler
+  const handleGameMessages = useCallback(async (event) => {
+    if (!event.data || typeof event.data !== 'object') return;
+    
+    const { type, data } = event.data;
+    
+    // Skip processing individual jump messages - only handle bundles
+    if (type === 'JUMP_PERFORMED' || type === 'FINAL_JUMP_COUNT') {
+      console.log(`Tracking local jump: ${data?.jumpCount || 'unknown'}`);
+      return;
+    }
+    
+    // Handle the bundle message with a debounce mechanism
+    if (type === 'BUNDLE_JUMPS' && data) {
+      // Use a key to prevent duplicate processing of the same session
+      const sessionKey = `processed_session_${data.sessionId || Date.now()}`;
+      if (window[sessionKey]) {
+        console.log('Already processed this game session, skipping');
+        return;
+      }
       
-      if (!provider || !contract || !account) {
-        console.log("Missing provider, contract, or account in recordJump");
-        
-        // Try to recover by using safe ethereum wrapper if available
-        if (window.ethereum) {
-          console.log("Attempting to recover using safe ethereum wrapper");
-          
-          try {
-            const safeEthereum = customWalletProvider();
-            if (!safeEthereum) {
-              console.error("Failed to create safe ethereum wrapper");
-              // Track jump count locally for recovery later
-              setPendingJumps(prev => prev + 1);
-              return false;
-            }
-            
-            const ethersProvider = new ethers.providers.Web3Provider(safeEthereum);
-            const signer = ethersProvider.getSigner();
-            const connectedAddress = await signer.getAddress();
-            
-            console.log("Recovered address:", connectedAddress);
-            
-            // Get contract from environment
-            const contractAddress = import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS;
-            const recoveredContract = new ethers.Contract(
-              contractAddress,
-              gameContractABI,
-              signer
-            );
-            
-            // Track jump in Supabase instead of on-chain for now
-            await saveJumpsToSupabase(connectedAddress, 1);
-            return true;
-          } catch (recoveryError) {
-            console.error("Recovery attempt failed:", recoveryError);
-          }
+      // Mark as processed
+      window[sessionKey] = true;
+      
+      console.log(`Processing bundle: ${data.jumpCount} jumps, score: ${data.score}`);
+      
+      try {
+        // First update Supabase (this is more reliable than blockchain)
+        if (data.jumpCount > 0) {
+          await saveJumpsToSupabase(address, data.jumpCount, data.sessionId);
         }
         
-        // Track jump count locally for bundling later
-        setPendingJumps(prev => prev + 1);
-        return false;
-      }
-
-      // If we're in a local development environment, we can mock the transaction
-      if (import.meta.env.DEV && import.meta.env.VITE_MOCK_TRANSACTIONS === 'true') {
-        console.log("DEV MODE: Mocking jump transaction");
-        return true;
-      }
-
-      // Increment pending jumps rather than sending individual transactions
-      setPendingJumps(prev => prev + 1);
-      console.log("Jump recorded locally, will be bundled later");
-      
-      // Track jump in Supabase as well
-      await saveJumpsToSupabase(account, 1);
-      return true;
+        // Only try blockchain transaction if we have all required dependencies
+        if (signer && contract && address) {
+          // Bundle jumps and score in one transaction if possible
+          await recordBundledJumps(data.jumpCount, data.sessionId);
+        } else {
+          console.log('Storing jumps locally only - missing blockchain dependencies');
+        }
+        
+        // Always update UI
+        if (data.score > 0) {
+          // Just update local state without blockchain call
+          setPlayerHighScore(prev => Math.max(prev || 0, data.score));
+          setTotalJumps(prev => (prev || 0) + data.jumpCount);
+        }
     } catch (error) {
-      console.error("Error recording jump:", error);
-      // Track jump count locally even on error
-      setPendingJumps(prev => prev + 1);
-      // Don't throw to prevent game interruption
-      return false;
+        console.error('Error processing bundle:', error);
+      }
     }
-  };
+  }, [address, signer, contract, saveJumpsToSupabase, recordBundledJumps]);
 
   // Clean up timer when component unmounts
   useEffect(() => {
@@ -960,79 +970,6 @@ export function Web3Provider({ children }) {
       }
     };
   }, [jumpTimer]);
-
-  const updateScore = async (score, jumpCount) => {
-    try {
-    console.log(`updateScore called with score: ${score}, jumpCount: ${jumpCount}`);
-    
-    if (!signer || !contract || !account) {
-      console.error("Missing required items for transaction:", { 
-        signer: !!signer, 
-        contract: !!contract, 
-        account: !!account 
-      });
-        
-        // Just record the jumps locally instead of trying to make a contract call
-        if (jumpCount > 0) {
-          setPendingJumps(prev => prev + jumpCount);
-          console.log(`Added ${jumpCount} jumps to pending jumps (total: ${pendingJumps + jumpCount})`);
-        }
-        
-        // Also update score locally if it's provided
-        if (score > 0) {
-          setCurrentGameScore(score);
-          await recordScore(score);
-        }
-        
-      return false;
-    }
-
-      if (!jumpCount || jumpCount <= 0) {
-      console.log("No jumps to record, skipping transaction");
-      return true; // Return true but don't send a transaction for 0 jumps
-    }
-
-    try {
-      console.log(`Submitting transaction to record ${jumpCount} jumps on Monad testnet`);
-      console.log("Contract address:", contract.address);
-      console.log("Using account:", account);
-      
-      // Submit the transaction with explicit gasLimit
-      const tx = await contract.recordJumps(jumpCount, {
-        gasLimit: 300000 // Set a specific gas limit for Monad testnet
-      });
-      
-      console.log("Transaction submitted:", tx.hash);
-      
-      // Wait for confirmation
-      const receipt = await tx.wait();
-      console.log("Transaction confirmed in block:", receipt.blockNumber);
-    
-        // Also update score locally if it's provided
-        if (score > 0) {
-          await recordScore(score);
-        }
-    
-    return true;
-    } catch (error) {
-      console.error("Transaction error:", error);
-      // Check for specific errors
-      if (error.message?.includes("insufficient funds")) {
-        console.error("Insufficient funds on Monad testnet");
-      }
-        
-        // Fall back to local tracking to avoid data loss
-        setPendingJumps(prev => prev + jumpCount);
-        console.log(`Added ${jumpCount} jumps to pending jumps after transaction error`);
-        
-        return false;
-      }
-    } catch (outerError) {
-      // Catch any other errors that might occur outside of the transaction
-      console.error("Unexpected error in updateScore:", outerError);
-      return false;
-    }
-  };
 
   const usePowerUp = async (type) => {
     if (!contract) return false;
@@ -1174,11 +1111,15 @@ export function Web3Provider({ children }) {
   };
 
   // Add fetchPlayerStats to get user's stats from Supabase
-  const fetchPlayerStats = async () => {
-    if (!address) return;
+  const fetchingRef = useRef({
+    playerStats: false
+  });
 
+  const fetchPlayerStats = useCallback(async () => {
+    if (!address) return;
+    
     try {
-      console.log(`Fetching player stats for address ${address}`);
+      console.log("Fetching player stats for address", address);
       
       // Get highest score by ordering and taking first result
       const { data, error } = await supabase
@@ -1195,42 +1136,17 @@ export function Web3Provider({ children }) {
       }
 
       const highScore = data?.score || 0;
-      
-      console.log('Fetched player high score:', highScore);
-
-      const stats = {
-        highScore: highScore,
-        address: address
-      };
-
-      console.log('Setting player stats:', stats);
-      setPlayerStats(stats);
       setPlayerHighScore(highScore);
       
-      // Also check for scores in localStorage fallback
-      const localScoreKey = `player_score_${address.toLowerCase()}`;
-      const localScore = localStorage.getItem(localScoreKey);
-      
-      if (localScore && parseInt(localScore) > highScore) {
-        const parsedScore = parseInt(localScore);
-        console.log(`Found higher local score: ${parsedScore}, using instead of ${highScore}`);
-        setPlayerHighScore(parsedScore);
-      }
+      // Set window variables for the game
+      window.playerHighScore = highScore;
+      window.highScoreSet = true;
+      console.log(`High score set once to: ${highScore}`);
       
     } catch (error) {
-      console.error('Error in fetchPlayerStats:', error);
-      
-      // Try to use localStorage as fallback
-      const localScoreKey = `player_score_${address.toLowerCase()}`;
-      const localScore = localStorage.getItem(localScoreKey);
-      
-      if (localScore) {
-        const parsedScore = parseInt(localScore);
-        console.log(`Using fallback local score: ${parsedScore}`);
-        setPlayerHighScore(parsedScore);
-      }
+      console.error("Error fetching player stats:", error);
     }
-  };
+  }, [address]);
 
   // Add this effect to fetch player stats when address changes
   useEffect(() => {
@@ -2058,7 +1974,6 @@ export function Web3Provider({ children }) {
     playerHighScore,
     recordScore,
     refreshScores: fetchScores,
-    highScore,
     totalJumps,
     recordJumps,
     recordBundledJumps,
