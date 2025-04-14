@@ -41,6 +41,15 @@ document.addEventListener('keydown', function(e) {
   document.head.appendChild(style);
 })();
 
+// Add this at the top of the file after other imports
+(function() {
+  // Import Bangers font from Google Fonts
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=Bangers&display=swap';
+  document.head.appendChild(link);
+})();
+
 window.addEventListener('load', () => {
     // Initialize global variables
     window.gameInitialized = false;
@@ -72,18 +81,11 @@ window.addEventListener('load', () => {
             this.blue_white_platform_max_chance = 85
             this.gameOverButtons = {
                 tryAgain: {
-                    x: canvas.width / 2 - 100,
-                    y: canvas.height / 2 + 50,
-                    width: 200,
-                    height: 50,
+                    x: canvas.width / 2 - 40, // Center the smaller image
+                    y: canvas.height / 2 + 140, // Move further down for more gap
+                    width: 80, // Image size
+                    height: 80,
                     text: 'Try Again'
-                },
-                backToHome: {
-                    x: canvas.width / 2 - 100,
-                    y: canvas.height / 2 + 120,
-                    width: 200,
-                    height: 50,
-                    text: 'Back to Home'
                 }
             };
 
@@ -119,6 +121,13 @@ window.addEventListener('load', () => {
             if (this.isMobile) {
                 this.initMobileControls();
             }
+
+            // Load reload button image
+            this.reloadImage = new Image();
+            this.reloadImage.src = '/images/reload.png';
+            this.reloadImage.onload = () => {
+                console.log('Reload button image loaded successfully');
+            };
         }
     
         initializeGame() {
@@ -283,7 +292,6 @@ window.addEventListener('load', () => {
             
             // Draw buttons
             this.drawButton(this.gameOverButtons.tryAgain);
-            this.drawButton(this.gameOverButtons.backToHome);
 
             const finalScore = Math.floor(this.score);
             console.log(`Game Over - Sending final score: ${finalScore} with ${window.totalJumps} jumps`);
@@ -336,19 +344,11 @@ window.addEventListener('load', () => {
             const x = (event.clientX - rect.left) * scaleX;
             const y = (event.clientY - rect.top) * scaleY;
 
-            // Check Try Again button
+            // Check only the Try Again button
             const tryAgain = this.gameOverButtons.tryAgain;
             if (x >= tryAgain.x && x <= tryAgain.x + tryAgain.width &&
                 y >= tryAgain.y && y <= tryAgain.y + tryAgain.height) {
                 this.reset();
-                return;
-            }
-
-            // Check Back to Home button
-            const backToHome = this.gameOverButtons.backToHome;
-            if (x >= backToHome.x && x <= backToHome.x + backToHome.width &&
-                y >= backToHome.y && y <= backToHome.y + backToHome.height) {
-                window.location.href = '/';
                 return;
             }
         }
@@ -458,266 +458,44 @@ window.addEventListener('load', () => {
             }
         }
 
-        drawGameOverScreen(context) {
-            // Draw the background image
-            const gameOverBg = new Image();
-            gameOverBg.src = '/images/gamoverbg.png';
+        drawGameOverScreen() {
+            // Use the correct context reference
+            const ctx = this.canvas.getContext('2d');
             
-            // Draw a semi-transparent overlay while image loads
-            context.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            context.fillRect(0, 0, this.width, this.height);
+            // Semi-transparent background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             
-            // Draw the game over background image preserving aspect ratio
-            const drawBackgroundWithAspectRatio = () => {
-                // Get the original image dimensions
-                const imgWidth = gameOverBg.naturalWidth;
-                const imgHeight = gameOverBg.naturalHeight;
-                
-                // Calculate the scaling ratio to fit the image within the canvas
-                const widthRatio = this.width / imgWidth;
-                const heightRatio = this.height / imgHeight;
-                
-                // Use the smaller ratio to ensure full containment
-                const ratio = Math.min(widthRatio, heightRatio);
-                
-                // Calculate new dimensions
-                const newWidth = imgWidth * ratio;
-                const newHeight = imgHeight * ratio;
-                
-                // Calculate centering offsets
-                const xOffset = (this.width - newWidth) / 2;
-                const yOffset = (this.height - newHeight) / 2;
-                
-                // Draw the image centered and scaled appropriately
-                context.drawImage(gameOverBg, xOffset, yOffset, newWidth, newHeight);
-            };
+            // Game Over text with Bangers font
+            ctx.fillStyle = 'white';
+            ctx.font = '45px Bangers, cursive';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 40);
             
-            if (gameOverBg.complete) {
-                // If image is already loaded
-                drawBackgroundWithAspectRatio();
+            // Score text with Bangers font
+            ctx.font = '32px Bangers, cursive';
+            ctx.fillText(`Score: ${Math.floor(this.score)}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
+            
+            // Jumps display with Bangers font
+            const jumpCount = this.finalJumpCount || window.__jumpCount || window.totalJumps || 0;
+            ctx.fillText(`Jumps: ${jumpCount}`, this.canvas.width / 2, this.canvas.height / 2 + 50);
+            
+            // Add green transaction approval message
+            ctx.fillStyle = '#ede4ca';
+            ctx.font = '16px Arial, cursive';
+            ctx.fillText('Approve transaction in your wallet and continue to play', this.canvas.width / 2, this.canvas.height / 2 + 90);
+            
+            // Draw reload button image instead of text button
+            const tryAgain = this.gameOverButtons.tryAgain;
+            if (this.reloadImage && this.reloadImage.complete) {
+                ctx.drawImage(this.reloadImage, tryAgain.x, tryAgain.y, tryAgain.width, tryAgain.height);
             } else {
-                // Set up image load handler
-                gameOverBg.onload = drawBackgroundWithAspectRatio;
+                // Fallback if image isn't loaded
+                ctx.fillStyle = '#ff6b6b';
+                ctx.beginPath();
+                ctx.arc(tryAgain.x + tryAgain.width/2, tryAgain.y + tryAgain.height/2, tryAgain.width/2, 0, Math.PI * 2);
+                ctx.fill();
             }
-            
-            // Calculate center point and content area
-            const centerX = this.width / 2;
-            const centerY = this.height / 2;
-            const contentWidth = 400;
-            const contentHeight = 500;
-            const contentX = centerX - contentWidth / 2;
-            const contentY = centerY - contentHeight / 2 + 50; // Offset a bit to align with image
-            
-            // Draw score information with shadow effect
-            context.save();
-            context.shadowColor = 'transparent';
-            context.shadowBlur = 0;
-            context.shadowOffsetX = 0;
-            context.shadowOffsetY = 0;
-            
-            // Score font settings
-            context.font = 'bold 48px "Bangers", cursive';
-            context.textAlign = 'center';
-            
-            // Display score with vibrant red color
-            context.fillStyle = '#ffffff';
-            context.strokeStyle = 'black';
-            context.lineWidth = 0.5;
-            context.fillText(`${Math.floor(this.score)}`, centerX, contentY + 80);
-            context.strokeText(`${Math.floor(this.score)}`, centerX, contentY + 80);
-            
-            // Display score label
-            context.font = 'bold 30x "Bangers", cursive';
-            context.fillStyle = '#9d0909'; // Yellow
-            context.strokeStyle = 'white';
-            context.lineWidth = 0.1;
-            context.fillText('SCORE', centerX, contentY + 40);
-            context.strokeText('SCORE', centerX, contentY + 40);
-            
-            // Get high score from player stats (parent window) instead of localStorage
-            let highScore = 0;
-            try {
-                // Request high score from parent when game over screen is shown
-                if (!this.highScoreRequested) {
-                    window.parent.postMessage({
-                        type: 'GET_HIGH_SCORE',
-                        gameId: 'doodlejump'
-                    }, '*');
-                    this.highScoreRequested = true;
-                    console.log('Requesting high score from player stats');
-                }
-                
-                // Check if we already have high score from the parent window UI
-                const parentHighScore = parseInt(document.querySelector('.parent-hi-score')?.innerText.match(/\d+/)?.[0]);
-                if (!isNaN(parentHighScore) && parentHighScore > 0) {
-                    highScore = parentHighScore;
-                    console.log('Using high score from parent UI:', highScore);
-                }
-                // If we have a high score from player stats response, use that instead
-                else if (window.playerHighScore !== undefined) {
-                    highScore = window.playerHighScore;
-                    console.log('Using high score from player stats response:', highScore);
-                }
-                // Use localStorage as last resort fallback
-                else {
-                    const storedHighScore = localStorage.getItem('highScore');
-                    highScore = storedHighScore ? parseInt(storedHighScore) : 0;
-                    console.log('Using fallback localStorage high score:', highScore);
-                }
-                
-                // Direct hi-score override from URL or parent frame
-                if (window.parent && window.parent.hiScore) {
-                    highScore = window.parent.hiScore;
-                    console.log('Direct hi-score override from parent:', highScore);
-                }
-                
-                // Try to get score from UI element if exists (most reliable)
-                try {
-                    const scoreElement = window.parent.document.querySelector('[data-hi-score]');
-                    if (scoreElement) {
-                        const uiScore = parseInt(scoreElement.getAttribute('data-hi-score'));
-                        if (!isNaN(uiScore) && uiScore > 0) {
-                            highScore = uiScore;
-                            console.log('Found hi-score in parent UI element:', highScore);
-                        }
-                    }
-                } catch (e) {
-                    console.log('Could not access parent document elements');
-                }
-                
-                // Force 504 score if we detect we're in the UI that displays 504
-                if (window.location.href.includes('play') && document.referrer.includes('play')) {
-                    const headerScore = 504; // Based on the screenshot
-                    if (headerScore > highScore) {
-                        highScore = headerScore;
-                        console.log('Using header score of 504');
-                    }
-                }
-                
-                // Update high score if current score is higher
-                if (Math.floor(this.score) > highScore) {
-                    highScore = Math.floor(this.score);
-                    localStorage.setItem('highScore', highScore);
-                    
-                    // Send updated high score to parent
-                    window.parent.postMessage({
-                        type: 'UPDATE_HIGH_SCORE',
-                        gameId: 'doodlejump',
-                        score: highScore
-                    }, '*');
-                }
-            } catch (e) {
-                console.error('Error handling high score:', e);
-                // Emergency fallback - just use 504 since we know it's correct
-                highScore = 504;
-            }
-            
-            // Display high score
-            context.font = 'bold 30px "Bangers", cursive';
-            context.fillStyle = '#9d0909'; // Yellow
-            context.strokeStyle = 'white';
-            context.lineWidth = 0.01;
-            context.fillText('HI-SCORE', centerX, contentY + 150);
-            context.strokeText('HI-SCORE', centerX, contentY + 150);
-            
-            // Display hi-score value
-            context.font = 'bold 36px "Bangers", cursive';
-            context.fillStyle = '#ffffff'; // White
-            context.strokeStyle = 'black';
-            context.lineWidth = 0.5;
-            context.fillText(`${highScore}`, centerX, contentY + 190);
-            context.strokeText(`${highScore}`, centerX, contentY + 190);
-            
-            // Display jump count
-            const jumpCount = window.__jumpCount || 0;
-            context.font = 'bold 30px "Bangers", cursive';
-            context.fillStyle = '#9d0909'; // Yellow
-            context.strokeStyle = 'white';
-            context.lineWidth = 0.01;
-            context.fillText('JUMPS', centerX, contentY + 250);
-            context.strokeText('JUMPS', centerX, contentY + 250);
-            
-            // Display jump count value
-            context.font = 'bold 36px "Bangers", cursive';
-            context.fillStyle = '#ffffff'; // White
-            context.strokeStyle = 'black';
-            context.lineWidth = 0.5;
-            context.fillText(`${jumpCount}`, centerX, contentY + 290);
-            context.strokeText(`${jumpCount}`, centerX, contentY + 290);
-            
-            // Display transaction message
-            context.font = 'bold 25px "Bangers", cursive';
-            context.fillStyle = 'white';
-            context.strokeStyle = 'black';
-            context.lineWidth = 0.01;
-            context.fillText('Approve transaction in your wallet!', centerX, contentY + 350);
-            context.strokeText('Approve transaction in your wallet!', centerX, contentY + 350);
-            context.restore();
-            
-            // Only send the final count message ONCE
-            if (!this.jumpCountSent) {
-                window.parent.postMessage({
-                    type: 'FINAL_JUMP_COUNT',
-                    jumpCount: jumpCount
-                }, '*');
-                this.jumpCountSent = true; // Mark as sent
-                console.log(`🎮 Final jump count ${jumpCount} sent to parent`);
-            }
-            
-            // Store the final jump count
-            this.finalJumpCount = jumpCount;
-            
-            // Draw the Play Again button (invisible hit area only)
-            const playAgainButton = {
-                x: centerX - 150,
-                y: contentY + 400,
-                width: 300,
-                height: 100,
-                text: 'PLAY AGAIN'
-            };
-            
-            // Load and draw the reload image only, no button background
-            const reloadImage = new Image();
-            reloadImage.src = '/images/reload.png';
-            
-            const drawReloadImage = () => {
-                // Get original image dimensions to calculate aspect ratio
-                const originalWidth = reloadImage.naturalWidth;
-                const originalHeight = reloadImage.naturalHeight;
-                const aspectRatio = originalWidth / originalHeight;
-                
-                // Set larger size while preserving aspect ratio
-                const maxSize = playAgainButton.height * 1.5; // Make it 3x larger
-                let imgWidth, imgHeight;
-                
-                if (aspectRatio >= 1) {
-                    // Image is wider than tall or square
-                    imgWidth = maxSize;
-                    imgHeight = maxSize / aspectRatio;
-                } else {
-                    // Image is taller than wide
-                    imgHeight = maxSize;
-                    imgWidth = maxSize * aspectRatio;
-                }
-                
-                // Calculate position to center in button area
-                const imgX = centerX - imgWidth/2;
-                const imgY = playAgainButton.y + (playAgainButton.height - imgHeight)/2;
-                
-                // Draw the image with preserved aspect ratio
-                context.drawImage(reloadImage, imgX, imgY, imgWidth, imgHeight);
-            };
-            
-            // If image is already loaded, draw it immediately
-            if (reloadImage.complete) {
-                drawReloadImage();
-            } else {
-                // Otherwise draw it when it loads
-                reloadImage.onload = drawReloadImage;
-            }
-            
-            // Update the game over button for click handling
-            this.gameOverButtons.tryAgain = playAgainButton;
         }
 
         drawBubblePanel(ctx, x, y, width, height) {
