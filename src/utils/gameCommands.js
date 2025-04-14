@@ -1,137 +1,138 @@
 import { GameTransactions } from '../services/gameTransactions';
 
 // Function to expose our web3 functions to iframe
-export const setupGameCommands = (iframe, {
-  provider,
-  account,
-  contract,
-  onScoreUpdate,
-  onGameOver,
-  onJump
-}) => {
-  // Check if iframe exists
-  if (!iframe || !iframe.contentWindow) {
-    console.error("Invalid iframe reference - cannot set up game commands");
-    return () => {}; // Return empty cleanup function
-  }
-
-  // Create a transaction tracker
-  const pendingTransactions = new Map();
+export const setupGameCommands = (iframe, options) => {
+  const {
+    provider,
+    account,
+    contract,
+    onScoreUpdate,
+    onGameOver,
+    onJump
+  } = options;
   
-  // Handle messages from the game
+  // Keep track of processed messages
+  const processedMessages = new Set();
+  
+  // Debounce score updates
+  const debouncedScoreUpdate = debounce((score) => {
+    if (typeof onScoreUpdate === 'function') {
+      onScoreUpdate(score);
+    }
+  }, 200);
+  
   const handleMessage = async (event) => {
-    if (!event.data || !event.data.type) return;
-    console.log('Game message received:', event.data);
+    // Skip if already being processed (prevent re-entry)
+    if (window.__processingGameMessage) return;
     
     try {
-      switch (event.data.type) {
-        case 'JUMP':
-          // Track this jump with a unique ID
-          const jumpId = `jump-${Date.now()}`;
-          pendingTransactions.set(jumpId, { type: 'jump', timestamp: Date.now() });
-          
-          if (onJump) {
-            // Let the parent component know about the jump
-            const result = await onJump();
-            console.log('Jump result:', result);
-            
-            // IMPORTANT: Always force a success message back to the game
-            // regardless of actual transaction status
-            setTimeout(() => {
-              iframe.contentWindow.postMessage({
-                type: 'TRANSACTION_COMPLETE',
-                data: { id: jumpId, type: 'jump', success: true }
-              }, '*');
-              
-              // Remove from pending
-              pendingTransactions.delete(jumpId);
-            }, 1000); // Force completion after 1 second
-          }
+      window.__processingGameMessage = true;
+      
+      // Quick validation
+      if (!event.data || typeof event.data !== 'object') return;
+      
+      const { type, data } = event.data;
+      
+      // Skip common messages that flood the console
+      if (type === 'GET_HIGH_SCORE' || type === 'GET_ACCOUNT') {
+        return;
+      }
+      
+      // Generate a unique message ID that includes relevant properties but not timestamps
+      // This helps deduplicate functionally identical messages
+      const messageProps = { type };
+      if (data) {
+        if (data.jumpCount) messageProps.jumpCount = data.jumpCount;
+        if (data.score) messageProps.score = data.score;
+        if (data.saveId) messageProps.saveId = data.saveId;
+      }
+      
+      const messageId = JSON.stringify(messageProps);
+      
+      // Track processed messages with a timeout-based cache
+      if (!window.__gameCommandCache) {
+        window.__gameCommandCache = new Map();
+      }
+      
+      // Skip if processed in the last 2 seconds
+      const lastProcessed = window.__gameCommandCache.get(messageId);
+      if (lastProcessed && Date.now() - lastProcessed < 2000) {
+        return;
+      }
+      
+      // Mark as processed with timestamp
+      window.__gameCommandCache.set(messageId, Date.now());
+      
+      // Handle the message based on type
+      switch (type) {
+        case 'SCORE_UPDATE':
+          debouncedScoreUpdate(data.score);
           break;
           
-        case 'SCORE_UPDATE':
-          console.log('Score update received:', event.data.score);
-          await onScoreUpdate?.(event.data.score);
+        case 'JUMP_PERFORMED':
+          // Just use local tracking without blockchain calls
+          if (typeof onJump === 'function') {
+            onJump(data.platformType).catch(err => 
+              console.error('Background jump handling error:', err)
+            );
+          }
           break;
           
         case 'GAME_OVER':
-          console.log('GAME OVER MESSAGE RECEIVED FROM IFRAME:', event.data);
+          // Only process this once
+          if (window.__gameOverProcessed) return;
+          window.__gameOverProcessed = true;
           
-          // Extract the jumpCount from the message data or use our local count
-          const bundledJumpCount = event.data.jumpCount || 0;
-          const finalScore = event.data.finalScore || 0;
+          console.log(`GAME OVER MESSAGE RECEIVED FROM IFRAME:`, event.data);
           
-          console.log(`Processing bundled game data: ${bundledJumpCount} jumps, final score: ${finalScore}`);
+          // Extract the final data
+          const jumpCount = iframe.contentWindow.__jumpCount || data.jumpCount || 0;
+          const finalScore = data.score || 0;
           
-          if (typeof finalScore !== 'number') {
-            console.error('Invalid final score:', finalScore);
-            return;
+          console.log(`Processing bundled game data: ${jumpCount} jumps, final score: ${finalScore}`);
+          
+          // Update score display
+          if (typeof onScoreUpdate === 'function') {
+            onScoreUpdate(finalScore);
           }
           
-          try {
-            // First update the final score
-            await onScoreUpdate?.(finalScore);
-            
-            console.log('Calling updateScore with jump count:', bundledJumpCount);
-            
-            // Process the game over with bundled jump data
-            const success = await onGameOver(finalScore, bundledJumpCount);
-            console.log('Game over transaction result:', success);
-            
-            if (success) {
-              console.log('Game over transaction completed successfully');
-              iframe.contentWindow.postMessage({
-                type: 'TRANSACTION_SUCCESS',
-                data: { type: 'game_over' }
-              }, '*');
-            } else {
-              console.error('Failed to process game over transaction');
-              iframe.contentWindow.postMessage({
-                type: 'TRANSACTION_FAILED',
-                data: { type: 'game_over' }
-              }, '*');
+          // Process game over and save all data
+          if (typeof onGameOver === 'function') {
+            console.log(`Calling updateScore with jump count: ${jumpCount}`);
+            try {
+              const result = await onGameOver(finalScore);
+              console.log(`Game over transaction result: ${result}`);
+            } catch (error) {
+              console.error(`Failed to process game over transaction:`, error);
             }
-          } catch (error) {
-            console.error('Error in game over handling:', error);
-            console.error('Error details:', error.message, error.stack);
-            iframe.contentWindow.postMessage({
-              type: 'TRANSACTION_FAILED',
-              data: { type: 'game_over', error: error.message }
-            }, '*');
           }
+          
+          // Reset game over flag after processing completes
+          setTimeout(() => {
+            window.__gameOverProcessed = false;
+          }, 10000);
           break;
       }
-    } catch (error) {
-      console.error('Error handling game message:', error);
-      
-      // Always notify the game to continue even if there's an error
-      iframe.contentWindow.postMessage({
-        type: 'TRANSACTION_ERROR',
-        data: { error: error.message }
-      }, '*');
+    } finally {
+      // Always clear the processing flag
+      window.__processingGameMessage = false;
     }
   };
   
-  // Listen for custom events from the wallet
-  const handleTransactionComplete = (event) => {
-    const { type, hash, success } = event.detail;
-    console.log(`Transaction ${type} complete. Success: ${success}, Hash: ${hash}`);
-    
-    // Always notify the game about transaction completion
-    iframe.contentWindow.postMessage({
-      type: 'TRANSACTION_COMPLETE',
-      data: { type, success, hash }
-    }, '*');
-  };
-  
-  // Set up event listeners
   window.addEventListener('message', handleMessage);
-  window.addEventListener('transaction-complete', handleTransactionComplete);
   
-  console.log("Game commands initialized with account:", account);
-  
-  return () => {
-    window.removeEventListener('message', handleMessage);
-    window.removeEventListener('transaction-complete', handleTransactionComplete);
+  return {
+    cleanup: () => {
+      window.removeEventListener('message', handleMessage);
+    }
   };
-}; 
+};
+
+// Helper debounce function
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+} 

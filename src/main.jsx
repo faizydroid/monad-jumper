@@ -122,7 +122,7 @@ const config = createConfig({
 
 // Get rainbowkit wallets
 const { connectors } = getDefaultWallets({
-  appName: 'Monad Jumper',
+  appName: 'JumpNads',
   projectId: import.meta.env.VITE_PROJECT_ID || '5a6a3d758f242052a2e87e42e2816833',
   chains: [monadTestnet]
 })

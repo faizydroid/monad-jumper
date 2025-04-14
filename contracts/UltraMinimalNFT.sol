@@ -17,7 +17,7 @@ contract UltraMinimalNFT is ERC721, Ownable {
     // Tracking who has minted
     mapping(address => bool) public hasMinted;
     
-    constructor(string memory baseURI) ERC721("Monad Jumper", "JUMPER") Ownable(msg.sender) {
+    constructor(string memory baseURI) ERC721("JumpNads", "JUMPER") Ownable(msg.sender) {
         _tokenIdCounter = 1;
         baseTokenURI = baseURI;
     }

@@ -15,7 +15,7 @@ const MobileHomePage = ({
   return (
     <div className="mobile-container">
       <div className="mobile-header">
-        <h1 className="mobile-game-title">MONAD JUMPER</h1>
+        <h1 className="mobile-game-title">JumpNads</h1>
         <p className="mobile-game-subtitle">Jump through the blockchain one block at a time!</p>
       </div>
       

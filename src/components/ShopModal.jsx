@@ -20,7 +20,7 @@ const ShopModal = ({ isOpen, onClose }) => {
       name: 'Classic Jumper',
       image: '/images/monad0.png',
       price: 5,
-      description: 'The original Monad Jumper character',
+      description: 'The original JumpNads character',
       owned: true
     },
     {
@@ -125,7 +125,7 @@ const ShopModal = ({ isOpen, onClose }) => {
   };
 
   return (
-    <SimpleModal isOpen={isOpen} onClose={onClose} title="MONAD JUMPER SHOP">
+    <SimpleModal isOpen={isOpen} onClose={onClose} title="JumpNads SHOP">
       <div className="shop-container">
         <div className="shop-tabs">
           <button 

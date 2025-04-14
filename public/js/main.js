@@ -1019,13 +1019,16 @@ window.addEventListener('load', () => {
                 playButton = document.createElement('button');
                 playButton.id = 'playButton';
                 playButton.textContent = 'PLAY!';
+                playButton.style.display = 'block'; // Ensure it's visible
+                playButton.style.opacity = '1';
+                playButton.style.animation = 'pulse 1.5s infinite'; // Add attention-grabbing animation
+                playButton.style.fontSize = '24px';
+                playButton.style.padding = '15px 40px';
                 
                 // Add padding above the button with margin-top
                 playButton.style.marginTop = '30px';
                 
                 // Add more button styling directly
-                playButton.style.fontSize = '28px';
-                playButton.style.padding = '18px 50px';
                 playButton.style.boxShadow = '0 8px 0 rgba(220, 50, 50, 0.5), 0 12px 20px rgba(0, 0, 0, 0.2)';
                 
                 startScreen.appendChild(playButton);

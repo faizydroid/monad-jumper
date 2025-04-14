@@ -27,7 +27,15 @@ import {
   metaMaskWallet, 
   trustWallet,
   coinbaseWallet,
-  walletConnectWallet
+  walletConnectWallet,
+  braveWallet,
+  argentWallet,
+  omniWallet,
+  ledgerWallet,
+  imTokenWallet,
+  zerionWallet,
+  bitgetWallet,
+  okxWallet
 } from '@rainbow-me/rainbowkit/wallets';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { createConfig } from 'wagmi';
@@ -37,6 +45,8 @@ import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 import { FaXTwitter, FaDiscord } from "react-icons/fa6";
 import { monadTestnet } from './config/chains';
+import { WagmiProvider } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -344,7 +354,7 @@ const NFTMintModal = ({ isOpen, onClose }) => {
   return (
     <SimpleModal isOpen={isOpen} onClose={onClose} title="Mint Character NFT">
       <div className="mint-modal-content">
-        <p>Mint your unique Monad Jumper character NFT to play the game!</p>
+        <p>Mint your unique JumpNads character NFT to play the game!</p>
         <p>Cost: <strong>1 MON</strong></p>
         
         {error && (
@@ -417,7 +427,7 @@ function forceReloadIframe(iframeRef, newGameId) {
   newIframe.allow = 'autoplay';
   newIframe.frameBorder = '0';
   newIframe.tabIndex = '0';
-  newIframe.title = 'Monad Jumper Game';
+  newIframe.title = 'JumpNads Game';
   
   // Create a URL with a timestamp and session ID to prevent caching
   const url = new URL('/original.html', window.location.origin);
@@ -471,8 +481,66 @@ function HorizontalStats() {
   const [usernameError, setUsernameError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   
-  console.log("HorizontalStats render - Connected:", isConnected, "Address:", address, "Username:", username, 
-    "Score:", playerHighScore, typeof playerHighScore, "Jumps:", totalJumps);
+  // Create a ref to store last fetch time and data
+  const fetchRef = useRef({
+    lastFetch: 0,
+    lastAddress: null,
+    isFetching: false
+  });
+  
+  // Log minimally
+  useEffect(() => {
+    console.log("Player data:", { 
+      address: address?.substring(0, 8), 
+      username, 
+      score: playerHighScore, 
+      jumps: totalJumps 
+    });
+  }, [address, username, playerHighScore, totalJumps]);
+  
+  // Replace the problematic effect with a better-controlled one
+  useEffect(() => {
+    // Skip if not connected or no address
+    if (!isConnected || !address) return;
+    
+    // Skip if address hasn't changed
+    if (fetchRef.current.lastAddress === address) return;
+    
+    // Skip if we've fetched in the last 30 seconds for this address
+    const now = Date.now();
+    if (now - fetchRef.current.lastFetch < 30000 && 
+        fetchRef.current.lastAddress === address) return;
+    
+    // Skip if already fetching
+    if (fetchRef.current.isFetching) return;
+    
+    // Set fetching state
+    fetchRef.current.isFetching = true;
+    fetchRef.current.lastAddress = address;
+    
+    // Run fetch operations
+    console.log("Fetching stats once for address:", address.substring(0, 8));
+    
+    // Fetch data in sequence to avoid race conditions
+    const fetchData = async () => {
+      try {
+        await fetchPlayerStats();
+        await fetchJumps(address);
+      } finally {
+        // Update last fetch time
+        fetchRef.current.lastFetch = Date.now();
+        fetchRef.current.isFetching = false;
+      }
+    };
+    
+    fetchData();
+    
+    // Clean up function
+    return () => {
+      // If component unmounts during fetch, mark as not fetching
+      fetchRef.current.isFetching = false;
+    };
+  }, [isConnected, address]); // Remove fetchPlayerStats and fetchJumps from deps
   
   // Get player rank from leaderboard
   const getPlayerRank = () => {
@@ -494,20 +562,6 @@ function HorizontalStats() {
     
     return "N/A";
   };
-  
-  // Fetch player stats when component mounts or address changes
-  useEffect(() => {
-    if (isConnected && address) {
-      console.log("Fetching updated player stats");
-      fetchPlayerStats();
-      fetchJumps(address);
-    }
-  }, [isConnected, address, fetchPlayerStats, fetchJumps]);
-  
-  // Log when playerHighScore changes
-  useEffect(() => {
-    console.log("Player high score changed:", playerHighScore, typeof playerHighScore);
-  }, [playerHighScore]);
   
   // Handle username submission directly with Web3Context
   const handleSubmitUsername = async (e) => {
@@ -611,7 +665,7 @@ function HorizontalStats() {
         <div className="card-badge">SET USERNAME</div>
         
         <div className="stats-info">
-          <h3 className="greeting-title">Welcome to Monad Jumper!</h3>
+          <h3 className="greeting-title">Welcome to JumpNads!</h3>
           <p className="greeting-message">Please set a username to play</p>
         </div>
         
@@ -724,7 +778,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     recordJump,
     providerError,
     signer,
-    leaderboard
+    leaderboard,
+    playerHighScore
   } = web3Context || {};
   
   const [username, setUsername] = useState(webUsername || null);
@@ -951,10 +1006,24 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
 
   useEffect(() => {
     if (showGame) {
+      // Reset loading state when game is shown
+      setIsLoading(true);
+      // Auto-hide loading screen after 3 seconds
       const timer = setTimeout(() => {
         setIsLoading(false);
-      }, 2000); // Show loading for 2 seconds
+        
+        // Make iframe visible
+        const iframe = iframeRef.current;
+        if (iframe) {
+          iframe.style.visibility = 'visible';
+          iframe.style.opacity = '1';
+        }
+      }, 3000);
+      
       return () => clearTimeout(timer);
+    } else {
+      // Reset loading state when returning to home
+      setIsLoading(false);
     }
   }, [showGame]);
 
@@ -1012,13 +1081,26 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   const checkMintStatus = useCallback(async (walletAddress) => {
     if (!walletAddress) return false;
     
+    // Use a cache key that includes the address
+    const cacheKey = `nft_status_${walletAddress.toLowerCase()}`;
+    
     try {
-      // Clear cache on each wallet change instead of using it
-      // This ensures we always get fresh data
+      // Check cache with appropriate TTL (5 minutes instead of 24 hours)
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        try {
+          const { hasNFT, timestamp } = JSON.parse(cachedData);
+          // Use shorter cache time (5 min) to avoid stale data but reduce calls
+          if (Date.now() - timestamp < 300000) {
+            console.log('Using cached NFT status:', hasNFT);
+            return hasNFT;
+          }
+        } catch (e) {}
+      }
+      
       console.log('Checking NFT ownership on contract...');
       const nftAddress = import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS;
       
-      // Check if user has minted using the contract's function
       const hasMinted = await publicClient.readContract({
         address: nftAddress,
         abi: [
@@ -1034,7 +1116,12 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         args: [walletAddress]
       });
       
-      console.log('Contract says wallet has minted:', hasMinted);
+      // Cache the result with timestamp
+      localStorage.setItem(cacheKey, JSON.stringify({
+        hasNFT: hasMinted,
+        timestamp: Date.now()
+      }));
+      
       return hasMinted;
     } catch (error) {
       console.error('Error checking NFT ownership:', error);
@@ -1045,43 +1132,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Find and replace the useEffect that calls checkMintStatus
   // with an optimized version that only runs when address changes
   useEffect(() => {
-    // Only run this effect when we have an address and are connected
-    if (address && isConnected) {
-      // Use a ref to track if this is the first run for this address
-      const addressKey = `nft_check_${address.toLowerCase()}`;
-      
-      if (!window.__checkedAddresses) {
-        window.__checkedAddresses = new Set();
-      }
-      
-      // Only check if we haven't checked this address before
-      if (!window.__checkedAddresses.has(addressKey)) {
-        window.__checkedAddresses.add(addressKey);
-        
-        console.log('Checking NFT for newly connected address:', address);
-        
-        // Set loading state
-        setIsCheckingMint(true);
-        
-        // Run the check and update state
-        checkMintStatus(address)
-          .then(result => {
-            console.log('Final NFT ownership result:', result);
-            setHasMintedCharacter(result);
-          })
-          .catch(err => {
-            console.error('NFT check failed:', err);
-            setHasMintedCharacter(false);
-          })
-          .finally(() => {
-            setIsCheckingMint(false);
-          });
-      }
-    }
-  }, [address, isConnected, checkMintStatus]); // Only run when address or connection status changes
-
-  // Update the wallet connection status effect
-  useEffect(() => {
     // Clear NFT status when wallet changes/disconnects  
     if (!isConnected || !address) {
       setHasMintedCharacter(false);
@@ -1089,11 +1139,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       return;
     }
     
-    // Always check when address changes - remove the cached address check
-    console.log('Checking NFT for wallet:', address);
-    setIsCheckingMint(true);
-    
-    // Get from props first if available
+    // Prioritize props to avoid additional RPC call
     if (hasMintedNft !== undefined) {
       console.log('Using NFT status from props:', hasMintedNft);
       setHasMintedCharacter(hasMintedNft);
@@ -1101,7 +1147,17 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       return;
     }
     
-    // Otherwise check the contract directly
+    // Track in-flight requests to avoid duplicate calls
+    const requestKey = `request_${address.toLowerCase()}`;
+    if (window[requestKey]) {
+      console.log('NFT check already in progress');
+      return;
+    }
+    
+    setIsCheckingMint(true);
+    window[requestKey] = true;
+    
+    // Check the contract status
     checkMintStatus(address)
       .then(result => {
         console.log('NFT ownership result:', result);
@@ -1113,8 +1169,9 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       })
       .finally(() => {
         setIsCheckingMint(false);
+        window[requestKey] = false;
       });
-  }, [address, isConnected, hasMintedNft]);
+  }, [address, isConnected, hasMintedNft, checkMintStatus]);
 
   // Update the wallet connection status effect
   useEffect(() => {
@@ -1160,6 +1217,21 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   const handlePlayAgain = useCallback(() => {
     console.log("🔄 Play Again clicked");
     
+    // Clear all localStorage high scores to prevent fallback
+    try {
+      // Clear any potential localStorage high scores
+      localStorage.removeItem('highScore');
+      
+      // Clear address-specific high scores
+      if (address) {
+        localStorage.removeItem(`highScore_${address.toLowerCase()}`);
+      }
+      
+      console.log("🧹 Cleared localStorage high scores");
+    } catch (e) {
+      console.warn("Error clearing localStorage:", e);
+    }
+    
     // Reset game state
     setCurrentJumps(0);
     setGameScore(0);
@@ -1197,7 +1269,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }, 1000);
     
     console.log("🎮 Game reset complete with new session ID:", newGameId);
-  }, [setGameScore]);
+  }, [setGameScore, address]);
 
   // Detect mobile view on component mount and window resize
   const detectMobile = () => {
@@ -1281,93 +1353,61 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   }, [username, setGameScore]);
 
   // Modify the game message handler to support transactions at game over
-  useEffect(() => {
-    const handleGameMessages = async (event) => {
-      // Check for bundled jumps message for blockchain transaction
-      if (event.data?.type === 'BUNDLE_JUMPS' && event.data.data) {
-        // Use a specific format for the saveId to avoid duplicates
-        const originalData = event.data.data;
-        
-        // Ensure we have a saveId and it's unique for this game session
-        if (!originalData.saveId) {
-          originalData.saveId = `game_${gameId}_${Date.now()}`;
-          console.log(`Added missing saveId to BUNDLE_JUMPS: ${originalData.saveId}`);
-        }
-        
-        const { score, jumpCount, saveId } = originalData;
-        console.log(`🎮 Bundle request received:`, originalData);
-        
-        if (jumpCount > 0) {
-          console.log(`🎮 Bundle includes score: ${score}`);
-          
-          // Ensure address and walletClient are available
-          if (!address || !walletClient) {
-            console.error("Wallet not connected or client not available for transaction.");
-            return;
-          }
-          
-          try {
-            // Set transaction as pending
-            setTransactionPending(true);
-            
-            const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Use the correct contract address
-            
-            // Define ABI in the correct JSON format
-              const contractAbi = [
-              {
-                "inputs": [
-                  {
-                    "internalType": "uint256",
-                    "name": "_jumps",
-                    "type": "uint256"
-                  }
-                ],
-                "name": "recordJumps",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-              }
-            ];
-            
-            console.log("Wagmi transaction preparation:", {
-                contractAddress,
-              account: address,
-                jumpCount
-              });
-              
-            // Submit the transaction using walletClient
-            const hash = await walletClient.writeContract({
-              address: contractAddress,
-              abi: contractAbi,
-              functionName: 'recordJumps',
-              args: [BigInt(jumpCount)],
-              account: address,
-            });
-              
-            console.log("Transaction submitted via wagmi:", hash);
-            
-            // Wait for confirmation using publicClient
-            const receipt = await publicClient.waitForTransactionReceipt({ hash });
-              console.log("Transaction confirmed in block:", receipt.blockNumber);
-              
-              // Complete handling
-              setTransactionPending(false);
-              setShowPlayAgain(true);
-        } catch (error) {
-            console.error('Transaction error:', error);
-            setTransactionPending(false);
-            setShowPlayAgain(true);
-          }
-        } else {
-          console.log('No jumps to record, skipping transaction');
-          setShowPlayAgain(true);
-        }
+  const handleGameMessages = useCallback(async (event) => {
+    // Only process if it's a bundle jumps message
+    if (event.data?.type === 'BUNDLE_JUMPS' && event.data.data) {
+      const originalData = event.data.data;
+      const { score, jumpCount, saveId = `game_${gameId}_${Date.now()}` } = originalData;
+      
+      // Skip if no jumps or if transaction already pending
+      if (jumpCount <= 0 || transactionPending) {
+        return;
       }
-    };
-    
-    window.addEventListener('message', handleGameMessages);
-    return () => window.removeEventListener('message', handleGameMessages);
-  }, [address, walletClient, publicClient, setTransactionPending, setShowPlayAgain, gameId]);
+      
+      // Ensure address and walletClient are available
+      if (!address || !walletClient) {
+        console.error("Wallet not connected or client not available for transaction.");
+        return;
+      }
+      
+      try {
+        setTransactionPending(true);
+        
+        const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
+        const contractAbi = [
+          {
+            "inputs": [
+              {
+                "internalType": "uint256",
+                "name": "_jumps",
+                "type": "uint256"
+              }
+            ],
+            "name": "recordJumps",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ];
+        
+        const hash = await walletClient.writeContract({
+          address: contractAddress,
+          abi: contractAbi,
+          functionName: 'recordJumps',
+          args: [BigInt(jumpCount)],
+          account: address,
+        });
+        
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        console.log("Transaction confirmed in block:", receipt.blockNumber);
+      } catch (error) {
+        console.error('Transaction error:', error);
+      } finally {
+        setTransactionPending(false);
+        setShowPlayAgain(true);
+      }
+    }
+  }, [address, walletClient, publicClient, gameId, transactionPending]);
 
   // Add a function to handle game over transactions
   const handleGameOver = useCallback(async (score) => {
@@ -1470,18 +1510,22 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     if (showGame) {
       // Reset loading state when game is shown
       setIsLoading(true);
-      // Show play button after 1.5 seconds 
+      // Auto-hide loading screen after 3 seconds
       const timer = setTimeout(() => {
-        setShowPlayButton(true);
-      }, 1500);
+        setIsLoading(false);
+        
+        // Make iframe visible
+        const iframe = iframeRef.current;
+        if (iframe) {
+          iframe.style.visibility = 'visible';
+          iframe.style.opacity = '1';
+        }
+      }, 3000);
       
-      return () => {
-        clearTimeout(timer);
-      }
+      return () => clearTimeout(timer);
     } else {
       // Reset loading state when returning to home
       setIsLoading(false);
-      setShowPlayButton(false);
     }
   }, [showGame]);
 
@@ -1552,6 +1596,151 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }
   }, [mintModalRequested]);
 
+  // Update the script injection code (around line 1713-1741)
+  useEffect(() => {
+    if (!iframeRef.current || !iframeRef.current.contentWindow) return;
+    
+    // Create a script element to inject into the iframe
+    const injectScript = () => {
+      try {
+        const script = document.createElement('script');
+        script.textContent = `
+          // Stop localStorage fallback for high scores
+          const originalGetItem = localStorage.getItem;
+          localStorage.getItem = function(key) {
+            if (key && (key === 'highScore' || key.startsWith('highScore_'))) {
+              console.log("⛔ Blocked localStorage fallback for: " + key);
+              return null; 
+            }
+            return originalGetItem.apply(this, arguments);
+          };
+          
+          // Add anti-loop protection for high score updates
+          let lastHighScoreUpdate = 0;
+          let currentHighScore = 0;
+          
+          // Replace any existing handler with this debounced version
+          window.setDirectHighScore = function(score) {
+            // Prevent updating too frequently (once per 5 seconds max)
+            const now = Date.now();
+            if (now - lastHighScoreUpdate < 5000 && currentHighScore === score) {
+              return; // Skip duplicate updates within 5 seconds
+            }
+            
+            window.playerHighScore = score;
+            window.highScoreSet = true;
+            currentHighScore = score;
+            lastHighScoreUpdate = now;
+            console.log("📊 High score set directly:", score);
+          };
+          
+          // Override the game's high score retrieval system
+          // to stop its own polling
+          if (window.getHighScore) {
+            const originalGetHighScore = window.getHighScore;
+            window.getHighScore = function() {
+              return window.playerHighScore || 0;
+            };
+          }
+          
+          console.log("✅ Advanced anti-loop protection installed");
+        `;
+        
+        // Add the script to the iframe's document
+        const iframeDocument = iframeRef.current.contentWindow.document;
+        iframeDocument.body.appendChild(script);
+        
+        // Set high score immediately
+        if (typeof playerHighScore !== 'undefined') {
+          iframeRef.current.contentWindow.setDirectHighScore(playerHighScore || 0);
+        }
+        
+        console.log("🔧 Injected anti-loop script into game");
+      } catch (err) {
+        console.error("Error injecting script:", err);
+      }
+    };
+    
+    // Wait for iframe to load before injecting
+    iframeRef.current.addEventListener('load', injectScript);
+    
+    return () => {
+      if (iframeRef.current) {
+        iframeRef.current.removeEventListener('load', injectScript);
+      }
+    };
+  }, [iframeRef.current, playerHighScore]);
+
+  // Add this at the top of your component
+  useEffect(() => {
+    // Wait until iframe is loaded
+    if (!iframeRef.current) return;
+    
+    const injectHighScoreOverride = () => {
+      try {
+        // Create a script to inject
+        const script = document.createElement('script');
+        script.textContent = `
+          // Permanently disable high score checking in main.js
+          (function() {
+            // Intercept the console.log function to filter out specific messages
+            const originalConsoleLog = console.log;
+            console.log = function(...args) {
+              // Filter out the high score messages
+              if (args[0] === 'Using high score from player stats response:') {
+                return; // Ignore these logs completely
+              }
+              return originalConsoleLog.apply(this, args);
+            };
+            
+            // Set an immutable high score getter that always returns the value
+            let _cachedHighScore = ${playerHighScore || 0};
+            Object.defineProperty(window, 'playerHighScore', {
+              get: function() { return _cachedHighScore; },
+              set: function(val) { 
+                _cachedHighScore = val;
+                console.log("High score cached:", val);
+              },
+              configurable: false
+            });
+            
+            // Override the game's getHighScore function
+            if (window.getHighScore) {
+              window.getHighScore = function() {
+                return _cachedHighScore;
+              };
+            }
+            
+            // Flag this as done to prevent multiple injections
+            window._highScoreOverrideApplied = true;
+            
+            console.log("🔧 High score checking permanently disabled");
+          })();
+        `;
+        
+        // Check if this has already been injected
+        if (!iframeRef.current.contentWindow._highScoreOverrideApplied) {
+          iframeRef.current.contentWindow.document.head.appendChild(script);
+        }
+      } catch (err) {
+        console.error("Error injecting high score override:", err);
+      }
+    };
+    
+    // Wait for iframe to load, then inject
+    if (iframeRef.current.contentDocument?.readyState === 'complete') {
+      injectHighScoreOverride();
+    } else {
+      iframeRef.current.addEventListener('load', injectHighScoreOverride);
+    }
+    
+    return () => {
+      if (iframeRef.current) {
+        iframeRef.current.removeEventListener('load', injectHighScoreOverride);
+      }
+    };
+  }, [iframeRef.current, playerHighScore]);
+
   if (providerError) {
     return (
       <div className="wallet-error">
@@ -1602,7 +1791,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           <>
         <BackgroundElements />
           <div className="home-container">
-              <h1 className="game-title">MONAD JUMPER</h1>
+              <h1 className="game-title">JUMPNADS</h1>
             <p className="game-subtitle">Jump to the MOON! </p>
           
             <div className="character-container animated">
@@ -1649,7 +1838,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         <BackgroundElements />
         
           <header>
-          <h1 className="title">MONAD JUMPER</h1>
+          <h1 className="title">JUMPNADS</h1>
           <p className="subtitle">Jump to the MOON! 🚀</p>
           </header>
           
@@ -1724,27 +1913,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             <p>Tip: Collect power-ups for special abilities!</p>
           </div>
           
-          {/* Play button for loading screen - only show after delay */}
-          {showPlayButton && (
-            <button 
-              id="playButton" 
-              className="start-game-button"
-              onClick={() => {
-                // Hide loading screen completely when button is clicked
-                setIsLoading(false);
-                
-                // Make sure iframe is fully visible
-                const iframe = iframeRef.current;
-                if (iframe) {
-                  iframe.style.visibility = 'visible';
-                  iframe.style.opacity = '1';
-                  iframe.focus(); // Focus the iframe for immediate keyboard input
-                }
-              }}
-            >
-              PLAY!
-            </button>
-          )}
+          {/* No button - just loading animation */}
         </div>
       </>
     );
@@ -1756,7 +1925,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       {/* Game loading screen - only show when both showGame and isLoading are true */}
         {isLoading && showGame && (
         <div className="loading-screen game-begin-screen">
-          <h1 className="game-title">Monad Jumper</h1>
+          <h1 className="game-title">JumpNads</h1>
           <div className="character-container">
             <div className="character"></div>
             <div className="shadow"></div>
@@ -1768,43 +1937,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             <p>{getRandomTip()}</p>
             </div>
           
-          {/* Play button for loading screen - only show after delay */}
-          {showPlayButton && (
-            <button 
-              id="playButton" 
-              className="start-game-button"
-              onClick={() => {
-                // Hide loading screen completely when button is clicked
-                setIsLoading(false);
-                
-                // Make sure iframe is fully visible
-                const iframe = iframeRef.current;
-                if (iframe) {
-                  iframe.style.visibility = 'visible';
-                  iframe.style.opacity = '1';
-                  iframe.focus(); // Focus the iframe for immediate keyboard input
-                }
-              }}
-            >
-              PLAY!
-            </button>
-          )}
-          
-          <div className="loading-particles">
-            {[...Array(20)].map((_, i) => (
-              <div 
-                key={i} 
-                className="loading-particle"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 2}s`,
-                  animationDuration: `${1 + Math.random() * 3}s`
-                }}
-              ></div>
-            ))}
-            </div>
-          </div>
+          {/* No button - just loading animation */}
+        </div>
         )}
         
       <div className="game-container">
@@ -1817,7 +1951,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           key={`game-${gameId}`}
           ref={iframeRef}
           src={`/original.html?session=${gameId}`}
-          title="Monad Jumper Game"
+          title="JumpNads Game"
           className="game-frame"
           allow="autoplay"
           frameBorder="0"
@@ -1856,7 +1990,11 @@ function App() {
     functionName: 'balanceOf',
     args: [address || '0x0000000000000000000000000000000000000000'],
     enabled: isConnected && !!address,
-    watch: true, // Add this to continuously watch for changes
+    watch: true,
+    cacheTime: 60000, // 1 minute cache
+    staleTime: 30000, // Consider data stale after 30 seconds
+    // Only refetch on specific actions rather than constant polling
+    refetchInterval: 60000, // Refetch every minute at most
   });
 
   // Calculate NFT ownership status
@@ -1874,20 +2012,31 @@ function App() {
     }
   }, [address, isConnected, refetchNftBalance]);
 
+  // Use the simple getDefaultConfig approach instead of manually configuring wallets
+  const wagmiConfig = useMemo(() => getDefaultConfig({
+    appName: 'JumpNads',
+    projectId: '5a6a3d758f242052a2e87e42e2816833',
+    chains: [monadTestnet],
+    ssr: true,
+  }), []);
+
+  // Memoize components to prevent re-renders
+  const gameComponent = useMemo(() => (
+    <ErrorBoundary>
+      <GameComponent 
+        hasMintedNft={hasMintedNft} 
+        isNftLoading={isNftBalanceLoading}
+        onOpenMintModal={() => setShowMintModal(true)}
+      />
+    </ErrorBoundary>
+  ), [hasMintedNft, isNftBalanceLoading]);
+
   return (
     <Web3Provider>
       {isConnected && <Navbar />}
       
       <Routes>
-        <Route path="/" element={
-          <ErrorBoundary>
-            <GameComponent 
-              hasMintedNft={hasMintedNft} 
-              isNftLoading={isNftBalanceLoading}
-              onOpenMintModal={() => setShowMintModal(true)}
-            />
-          </ErrorBoundary>
-        } />
+        <Route path="/" element={gameComponent} />
         <Route path="/admin" element={<AdminAccess />} />
       </Routes>
       <TransactionNotifications />

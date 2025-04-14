@@ -54,7 +54,7 @@ export default function Navbar() {
         <div className="navbar-container">
           <div className="navbar-left">
             <div className="navbar-logo">
-              <span className="logo-text">Monad Jumper</span>
+              <span className="logo-text">JumpNads</span>
             </div>
           </div>
           

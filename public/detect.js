@@ -103,7 +103,7 @@
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Monad Jumper - Edge Compatibility Mode</title>
+        <title>JumpNads - Edge Compatibility Mode</title>
         <style>
           body {
             font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -175,7 +175,7 @@
           <div class="card">
             <h1>Browser Compatibility Issue</h1>
             <p>We've detected that you're using Microsoft Edge with disabled wallet extensions.</p>
-            <p>For the best experience with Monad Jumper:</p>
+            <p>For the best experience with JumpNads:</p>
             
             <div class="browser-options">
               <a href="https://www.mozilla.org/firefox/new/" class="browser-option">

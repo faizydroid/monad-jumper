@@ -22,7 +22,7 @@ contract MonadJumperNFT is ERC721, ERC721Enumerable, Ownable {
     event NFTMinted(address indexed minter, uint256 tokenId);
     event FundsWithdrawn(address indexed owner, uint256 amount);
 
-    constructor() ERC721("Monad Jumper", "JUMPER") Ownable(msg.sender) {
+    constructor() ERC721("JumpNads", "JUMPER") Ownable(msg.sender) {
         _tokenIdCounter = 1; // Start from token ID 1
     }
     
@@ -71,9 +71,9 @@ contract MonadJumperNFT is ERC721, ERC721Enumerable, Ownable {
      */
     function _encodeMetadata(uint256 tokenId) internal pure returns (string memory) {
         bytes memory json = abi.encodePacked(
-            '{"name":"Monad Jumper #', 
+            '{"name":"JumpNads #', 
             tokenId.toString(),
-            '","description":"A unique character for the Monad Jumper game","image":"ipfs://',
+            '","description":"A unique character for the JumpNads game","image":"ipfs://',
             CID,
             '","attributes":[{"trait_type":"Type","value":"Jumper"}]}'
         );

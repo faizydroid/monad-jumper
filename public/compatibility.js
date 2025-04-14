@@ -1,5 +1,5 @@
 /**
- * Monad Jumper - Browser Compatibility Layer
+ * JumpNads - Browser Compatibility Layer
  * 
  * This script provides compatibility fixes for various browsers,
  * especially for Firefox which has issues with SES (Secure ECMAScript) lockdown errors.
