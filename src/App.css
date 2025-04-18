@@ -265,12 +265,12 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  width: calc(100% - 420px); /* Account for leaderboard width */
+  width: calc(100% - 420px);
   max-width: 800px;
   margin: 0 auto;
   position: relative;
-  left: 0; /* Remove the incorrect offset */
-  transform: translateX(-65px); /* Fine-tune centering */
+  /* Remove transform that may cause stack overflow */
+  transform: none; 
 }
 
 .leaderboard-column {
@@ -2716,4 +2716,34 @@ button[contains="MINT TO PLAY"],
   0% { transform: rotate(-5deg) scale(1); }
   50% { transform: rotate(-5deg) scale(1.05); }
   100% { transform: rotate(-5deg) scale(1); }
+}
+
+/* Fix recursive CSS issues */
+.game-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: calc(100% - 420px);
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+  /* Remove transform that may cause stack overflow */
+  transform: none; 
+}
+
+.title, .subtitle {
+  width: 100%;
+  text-align: center;
+  position: relative;
+  left: 0;
+  /* Remove transform that may cause stack overflow */
+  transform: none;
+}
+
+/* Use margin for positioning instead of transforms */
+.centered-content {
+  margin: 0 auto;
+  width: fit-content;
 }

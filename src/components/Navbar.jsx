@@ -167,10 +167,10 @@ export default function Navbar() {
             )}
             
             <div className="vertical-social">
-              <a href="https://discord.gg/AxYUSmQw" target="_blank" rel="noopener noreferrer">
+              <a href="https://discord.gg/pK5SZDtypv" target="_blank" rel="noopener noreferrer">
                 <FaDiscord />
               </a>
-              <a href="https://x.com/Monadjumper" target="_blank" rel="noopener noreferrer">
+              <a href="https://x.com/jumpnads" target="_blank" rel="noopener noreferrer">
                 <FaTwitter />
               </a>
             </div>
