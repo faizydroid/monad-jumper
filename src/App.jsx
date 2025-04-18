@@ -481,6 +481,46 @@ function HorizontalStats() {
   const [newUsername, setNewUsername] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [jumpRank, setJumpRank] = useState("..."); // Move this to top level
+  
+  // Add this effect at the top level
+  useEffect(() => {
+    async function fetchJumpRank() {
+      if (!address || !supabase) return;
+      
+      try {
+        // Get all users with their jump counts sorted by count descending
+        const { data, error } = await supabase
+          .from('jumps')
+          .select('wallet_address, count')
+          .order('count', { ascending: false });
+          
+        if (error) {
+          console.error("Error fetching jump rankings:", error);
+          return;
+        }
+        
+        // Find the user's position in the sorted data
+        const userPosition = data.findIndex(
+          entry => entry.wallet_address.toLowerCase() === address.toLowerCase()
+        );
+        
+        // If found, return position+1 as rank, otherwise N/A
+        if (userPosition >= 0) {
+          setJumpRank(`#${userPosition + 1}`);
+        } else if (totalJumps > 0) {
+          setJumpRank("N/A");
+        } else {
+          setJumpRank("Unranked");
+        }
+      } catch (error) {
+        console.error("Error calculating jump rank:", error);
+        setJumpRank("Error");
+      }
+    }
+    
+    fetchJumpRank();
+  }, [address, totalJumps]);
   
   // Create a ref to store last fetch time and data
   const fetchRef = useRef({
@@ -740,54 +780,7 @@ function HorizontalStats() {
         <div className="stat-item-horizontal">
           <div className="stat-icon">⭐</div>
           <div className="stat-label">Jump Rank</div>
-          <div className="stat-value">
-            {(() => {
-              if (!address) return "N/A";
-              
-              // Use useEffect + useState to fetch and store the rank
-              const [jumpRank, setJumpRank] = React.useState("...");
-              
-              React.useEffect(() => {
-                async function fetchJumpRank() {
-                  if (!address || !supabase) return;
-                  
-                  try {
-                    // Get all users with their jump counts sorted by count descending
-                    const { data, error } = await supabase
-                      .from('jumps')
-                      .select('wallet_address, count')
-                      .order('count', { ascending: false });
-                      
-                    if (error) {
-                      console.error("Error fetching jump rankings:", error);
-                      return;
-                    }
-                    
-                    // Find the user's position in the sorted data
-                    const userPosition = data.findIndex(
-                      entry => entry.wallet_address.toLowerCase() === address.toLowerCase()
-                    );
-                    
-                    // If found, return position+1 as rank, otherwise N/A
-                    if (userPosition >= 0) {
-                      setJumpRank(`#${userPosition + 1}`);
-                    } else if (totalJumps > 0) {
-                      setJumpRank("N/A");
-                    } else {
-                      setJumpRank("Unranked");
-                    }
-                  } catch (error) {
-                    console.error("Error calculating jump rank:", error);
-                    setJumpRank("Error");
-                  }
-                }
-                
-                fetchJumpRank();
-              }, [address, totalJumps]);
-              
-              return jumpRank;
-            })()}
-          </div>
+          <div className="stat-value">{jumpRank}</div>
         </div>
         
         <div className="stat-item-horizontal">

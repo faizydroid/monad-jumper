@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { useState } from "react";
 
 // Look for something similar to this in your codebase
 const handleMintNow = async () => {
@@ -34,4 +35,30 @@ const handleMintNow = async () => {
     console.error("Mint error:", error);
     // Show error to user
   }
+};
+
+const HorizontalStats = ({ /* props */ }) => {
+  // Move all useState hooks to the top, outside of any conditions
+  const [state1, setState1] = useState(/* initial value */);
+  const [state2, setState2] = useState(/* initial value */);
+  const [state3, setState3] = useState(/* initial value */);
+  // Include the missing useState hook that's causing the error
+  const [newState, setNewState] = useState(null); // Add the missing hook
+  
+  // Rest of your component code...
+  
+  // If you have any code like this:
+  // if (someCondition) {
+  //   const [state, setState] = useState(initialValue); // ❌ WRONG
+  // }
+  
+  // Change it to this:
+  // const [state, setState] = useState(initialValue); // ✅ RIGHT
+  // if (someCondition) {
+  //   // use state and setState here
+  // }
+  
+  return (
+    // Component JSX
+  );
 };
