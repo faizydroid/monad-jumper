@@ -818,24 +818,8 @@ function getRandomTip() {
 }
 
 function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver }) {
-  // Update the web3Context reference to prevent maximum stack size errors
-  const web3Context = React.useMemo(() => {
-    try {
-      // Only access the Web3Context inside a try/catch to prevent errors
-      if (window.__hasAccessedWeb3Context) {
-        console.log("Already accessed Web3Context, using cached data");
-        return window.__cachedWeb3Context || {};
-      }
-      
-      window.__hasAccessedWeb3Context = true;
-      const context = useWeb3();
-      window.__cachedWeb3Context = {...context};
-      return context;
-    } catch (error) {
-      console.error("Error accessing Web3Context:", error);
-      return {}; // Return empty object to prevent errors
-    }
-  }, []);
+  // Replace this problematic code in GameComponent (around line 934-954)
+  const web3Context = useWeb3();
   
   const { 
     username: webUsername,
@@ -1862,62 +1846,26 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Add this code directly in your GameComponent useEffect
   useEffect(() => {
     // Function to handle messages from the game iframe
-    const handleGameMessage = async (event) => {
-      // Make sure it's from our game iframe
-      if (event.source !== iframeRef.current.contentWindow) return;
-      
-      // Check if it's a reload_clicked message
-      if (event.data?.type === 'reload_clicked') {
-        console.log("⚡ Reload button clicked - updating games count");
-        
-        try {
-          // Get current games count from Supabase
-          const { data, error } = await supabase
-            .from('games')
-            .select('count')
-            .eq('wallet_address', address.toLowerCase())
-            .maybeSingle();
-            
-          if (error && error.code !== 'PGRST116') {
-            console.error("Error fetching games count:", error);
-            return;
-          }
-          
-          // Calculate new count (start at 1 if no record exists)
-          const currentCount = data?.count || 0;
-          const newCount = currentCount + 1;
-          
-          console.log(`Updating games count: ${currentCount} → ${newCount}`);
-          
-          // Use upsert to handle both insert and update
-          const { error: upsertError } = await supabase
-            .from('games')
-            .upsert({
-              wallet_address: address.toLowerCase(),
-              count: newCount
-            }, { onConflict: 'wallet_address' });
-          
-          if (upsertError) {
-            console.error("Error updating games count:", upsertError);
-            return;
-          }
-          
-          console.log("✅ Games count updated successfully");
-          
-          // Force a re-fetch of the games count to update UI
-          fetchGamesCount();
-        } catch (error) {
-          console.error("Error handling reload click:", error);
-        }
+    const handleGameMessage = useCallback((event) => {
+      // Add this guard at the top
+      if (!iframeRef?.current) {
+        return; // Exit if iframe ref is null
       }
-    };
+      
+      // Only proceed if message is from our iframe
+      if (event.source !== iframeRef.current.contentWindow) {
+        return;
+      }
+      
+      // Rest of your existing code
+    }, [/* your dependencies */]);
     
     // Add event listener
     window.addEventListener('message', handleGameMessage);
     
     // Clean up
     return () => window.removeEventListener('message', handleGameMessage);
-  }, [address, supabase, iframeRef]);
+  }, [address, incrementGamesPlayed]);
 
   // Add this function to fetch games count
   const fetchGamesCount = async () => {
