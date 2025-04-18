@@ -1,130 +1,211 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useWeb3 } from '../contexts/Web3Context';
 import { Link, useLocation } from 'react-router-dom';
 import './Navbar.css';
-import ShopModal from './ShopModal';
+import { FaHome, FaGift, FaShoppingCart, FaCalendarCheck, FaDiscord, FaTwitter } from 'react-icons/fa';
+import ShopContent from './ShopContent';
+import RewardsContent from './RewardsContent';
+import DailyQuestContent from './DailyQuestContent';
 
 export default function Navbar() {
   const { account, username, playerHighScore } = useWeb3();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showShopModal, setShowShopModal] = useState(false);
+  const [activeSection, setActiveSection] = useState('home');
+  const [transitioning, setTransitioning] = useState(false);
   const location = useLocation();
   
-  // Check if we're on the homepage (not game screen or other pages)
+  // Check if we're on different pages
   const isHomepage = location.pathname === '/' && !window.location.hash.includes('game');
-  
-  // Check if we're on the game screen 
   const isGameScreen = window.location.hash === '#game' || 
-                      location.pathname.includes('game') ||
-                      document.getElementById('game-iframe') !== null;
-
-  // Log the values for debugging
-  console.log('Current path:', location.pathname);
-  console.log('Current hash:', window.location.hash);
-  console.log('Game iframe exists:', document.getElementById('game-iframe') !== null);
-  console.log('Is game screen?', isGameScreen);
-  console.log('Is homepage?', isHomepage);
-  console.log('Account exists?', !!account);
-  console.log('Should show connect button?', isHomepage && !account);
-
-  const toggleDropdown = () => {
-    setShowDropdown(!showDropdown);
+                       location.pathname.includes('game') ||
+                       document.getElementById('game-iframe') !== null;
+  
+  // Handle section changes with animation
+  const changeSection = (section) => {
+    if (section === activeSection || transitioning || isGameScreen) return;
+    
+    setTransitioning(true);
+    
+    // Start transition out
+    document.querySelector('.content-container').classList.add('sliding-out');
+    
+    // After exit animation completes, change section and start entry animation
+    setTimeout(() => {
+      setActiveSection(section);
+      document.querySelector('.content-container').classList.remove('sliding-out');
+      document.querySelector('.content-container').classList.add('sliding-in');
+      
+      setTimeout(() => {
+        document.querySelector('.content-container').classList.remove('sliding-in');
+        setTransitioning(false);
+      }, 300); // Changed from 500ms to 300ms
+    }, 300); // Changed from 500ms to 300ms
   };
 
-  const handleHomeClick = (e) => {
-    if (isGameScreen) {
-      e.preventDefault();
-      window.location.hash = '';
-      window.location.href = '/';
+  // Add app-content class to main containers
+  useEffect(() => {
+    const appDivs = document.querySelectorAll('.app, .container, .game-container');
+    appDivs.forEach(div => {
+      div.classList.add('app-content');
+    });
+    
+    // Add content container if it doesn't exist
+    if (!document.querySelector('.content-container') && !isGameScreen) {
+      const contentContainer = document.createElement('div');
+      contentContainer.className = 'content-container';
+      document.body.appendChild(contentContainer);
     }
-  };
-
-  const openShopModal = () => {
-    setShowShopModal(true);
-  };
-
-  const closeShopModal = () => {
-    setShowShopModal(false);
-  };
+    
+    return () => {
+      appDivs.forEach(div => {
+        div.classList.remove('app-content');
+      });
+    };
+  }, [isGameScreen]);
+  
+  // Update panel visibility in game screen
+  useEffect(() => {
+    if (isGameScreen) {
+      const container = document.querySelector('.content-container');
+      if (container) {
+        // Don't hide the container, just make it transparent initially
+        container.style.opacity = '0';
+        container.style.pointerEvents = 'none';
+      }
+    } else {
+      const container = document.querySelector('.content-container');
+      if (container) {
+        container.style.display = 'block';
+        container.style.opacity = '1';
+        container.style.pointerEvents = 'auto';
+      }
+    }
+  }, [isGameScreen]);
 
   return (
     <>
-      <nav className="navbar">
-        <div className="navbar-container">
-          <div className="navbar-left">
-            <div className="navbar-logo">
-              <span className="logo-text">JumpNads</span>
-            </div>
-          </div>
-          
-          <div className="navbar-right">
-            {isGameScreen && (
-              <div className="game-controls">
-                <Link to="/" className="home-button" onClick={handleHomeClick}>
-                  <button className="nav-button home-nav-button">
-                    🏠 Home
-                  </button>
-                </Link>
-                
-                <div className="high-score">
+      <nav className="vertical-navbar">
+        <div className="vertical-container">
+          {/* TOP SECTION - USERNAME */}
+          <div className="vertical-top">
+            {account && username ? (
+              <>
+                <div className="username-button" style={{ fontSize: '38px', margin: '5px 0' }}>
+                  {username}
+                </div>
+                <div className="high-score" style={{ margin: '10px auto', display: 'inline-flex' }}>
                   <span role="img" aria-label="trophy">🏆</span>
-                  <span className="score-label">Hi-Score:</span>
                   <span className="score-value">{playerHighScore || 0}</span>
                 </div>
-              </div>
-            )}
-            
-            {account && username && (
-              <>
-                <button 
-                  className="nav-button shop-button"
-                  onClick={openShopModal}
-                >
-                  🛒 SHOP
-                </button>
-                
-                <div className="wallet-info">
-                  <div className="username-wrapper">
-                    <button 
-                      className="username-button" 
-                      onClick={toggleDropdown}
-                    >
-                      <span role="img" aria-label="user">👤</span> 
-                      {username}
-                      {isGameScreen && <span className="dropdown-arrow">▼</span>}
-                    </button>
-                    
-                    {showDropdown && isGameScreen && (
-                      <div className="dropdown-menu">
-                        <div className="connect-button-wrapper">
-                          <ConnectButton 
-                            showBalance={false} 
-                            chainStatus="icon"
-                            accountStatus="address"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
               </>
+            ) : (
+              <div style={{ padding: '20px 0' }}>
+                <ConnectButton showBalance={false} label="Connect" />
+              </div>
             )}
+          </div>
+          
+          {/* MIDDLE SECTION - NAV ITEMS */}
+          <div className="vertical-middle">
+            <button
+              className={`vertical-nav-item ${activeSection === 'home' ? 'active' : ''} ${!username ? 'disabled-button' : ''}`}
+              onClick={() => {
+                if (!username) return; // Prevent navigation if no username
+                if (isGameScreen) {
+                  window.location.hash = '';
+                  window.location.href = '/';
+                } else {
+                  changeSection('home');
+                }
+              }}
+            >
+              <FaHome size={20} />
+              <span>Home</span>
+            </button>
             
-            {/* Show connect button only on homepage - FIXED VERSION */}
-            {isHomepage && (
-              <div className="navbar-connect-button-fixed">
-                <ConnectButton showBalance={true} />
+            <button 
+              className={`vertical-nav-item ${activeSection === 'daily-quest' ? 'active' : ''} ${!username ? 'disabled-button' : ''}`}
+              onClick={() => username && changeSection('daily-quest')}
+            >
+              <FaCalendarCheck size={20} />
+              <span>Quests</span>
+            </button>
+            
+            <button 
+              className={`vertical-nav-item ${activeSection === 'rewards' ? 'active' : ''} ${!username ? 'disabled-button' : ''}`}
+              onClick={() => username && changeSection('rewards')}
+            >
+              <FaGift size={20} />
+              <span>Rewards</span>
+            </button>
+            
+            <button 
+              className={`vertical-nav-item ${activeSection === 'shop' ? 'active' : ''} ${!username ? 'disabled-button' : ''}`}
+              onClick={() => username && changeSection('shop')}
+            >
+              <FaShoppingCart size={20} />
+              <span>Shop</span>
+            </button>
+          </div>
+          
+          {/* BOTTOM SECTION - WALLET & SOCIAL */}
+          <div className="vertical-bottom">
+            {account && (
+              <div style={{ 
+                marginBottom: '15px',
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%'
+              }}>
+                <ConnectButton 
+                  showBalance={false} 
+                  chainStatus="icon"
+                  accountStatus="address"
+                />
               </div>
             )}
             
-          
+            <div className="vertical-social">
+              <a href="https://discord.gg/AxYUSmQw" target="_blank" rel="noopener noreferrer">
+                <FaDiscord />
+              </a>
+              <a href="https://x.com/Monadjumper" target="_blank" rel="noopener noreferrer">
+                <FaTwitter />
+              </a>
+            </div>
           </div>
         </div>
       </nav>
       
-      {/* Shop Modal */}
-      {showShopModal && <ShopModal isOpen={showShopModal} onClose={closeShopModal} />}
+      {/* Content Panel System */}
+      {!isGameScreen && (
+        <div className="sliding-panel-container">
+          {activeSection === 'home' && (
+            <div className="home-panel panel">
+              {/* Main content is already rendered by routes */}
+            </div>
+          )}
+          
+          {activeSection === 'daily-quest' && (
+            <div className="daily-quest-panel panel">
+              <DailyQuestContent onClose={() => changeSection('home')} />
+            </div>
+          )}
+          
+          {activeSection === 'rewards' && (
+            <div className="rewards-panel panel">
+              <RewardsContent onClose={() => changeSection('home')} />
+            </div>
+          )}
+          
+          {activeSection === 'shop' && (
+            <div className="shop-panel panel">
+              <ShopContent onClose={() => changeSection('home')} />
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 } 

@@ -203,6 +203,9 @@ export function Web3Provider({ children }) {
   const [totalJumps, setTotalJumps] = useState(0);
   const [isCheckingNFT, setIsCheckingNFT] = useState(false);
   const [hasNFT, setHasNFT] = useState(false);
+  const [usernameChecked, setUsernameChecked] = useState(false);
+  const previousAccount = useRef(null);
+  const [playerData, setPlayerData] = useState({ address: null, username: null, score: 0, jumps: 0 });
 
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
@@ -1115,17 +1118,29 @@ export function Web3Provider({ children }) {
     playerStats: false
   });
 
-  const fetchPlayerStats = useCallback(async () => {
-    if (!address) return;
+  const fetchPlayerStats = useCallback(async (walletAddress) => {
+    // Verify this is still the current account before updating state
+    if (walletAddress !== account) {
+      console.log("Account changed while fetching stats, aborting");
+      return;
+    }
     
     try {
-      console.log("Fetching player stats for address", address);
+      console.log("Fetching player stats for address", walletAddress);
       
-      // Get highest score by ordering and taking first result
+      // Clear playerData for this address first
+      setPlayerData({
+        address: walletAddress ? walletAddress.slice(0, 8) : null,
+        username: username,
+        score: 0, 
+        jumps: 0
+      });
+      
+      // Get highest score
       const { data, error } = await supabase
         .from('scores')
         .select('score')
-        .eq('wallet_address', address.toLowerCase())
+        .eq('wallet_address', walletAddress.toLowerCase())
         .order('score', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1136,22 +1151,24 @@ export function Web3Provider({ children }) {
       }
 
       const highScore = data?.score || 0;
-      setPlayerHighScore(highScore);
       
-      // Set window variables for the game
-      window.playerHighScore = highScore;
-      window.highScoreSet = true;
-      console.log(`High score set once to: ${highScore}`);
-      
+      // Verify this is still the current account before updating state
+      if (walletAddress === account) {
+        setPlayerHighScore(highScore);
+        setPlayerData(prev => ({
+          ...prev,
+          score: highScore
+        }));
+      }
     } catch (error) {
       console.error("Error fetching player stats:", error);
     }
-  }, [address]);
+  }, [account, username]);
 
   // Add this effect to fetch player stats when address changes
   useEffect(() => {
     if (address) {
-      fetchPlayerStats();
+      fetchPlayerStats(address);
       fetchLeaderboard();
     }
   }, [address]);
@@ -1941,6 +1958,166 @@ export function Web3Provider({ children }) {
     };
   }, [supabase]);
 
+  // Reset state when account changes
+  useEffect(() => {
+    if (account !== previousAccount.current) {
+      console.log("Account changed, resetting ALL state");
+      
+      // Reset ALL state values immediately
+      setUsername(null);
+      setPlayerData({
+        address: account ? account.slice(0, 8) : null,
+        username: null,
+        score: 0,
+        jumps: 0
+      });
+      setTotalJumps(0);
+      setPlayerHighScore(0);
+      setShowUsernameModal(false);
+      
+      // Force a new username check
+      setUsernameChecked(false);
+      
+      // Save the new account ref
+      previousAccount.current = account;
+      
+      // Only proceed with fetching if we have an account
+      if (account) {
+        console.log("New account connected, fetching fresh data:", account);
+        fetchPlayerUsername(account);
+        fetchPlayerStats(account);
+      }
+    }
+  }, [account]);
+
+  // Also update the fetchPlayerUsername function to clear cached data
+  const fetchPlayerUsername = useCallback(async (walletAddress) => {
+    if (!walletAddress) {
+      setUsername(null);
+      setShowUsernameModal(false);
+      setIsLoading(false);
+      return;
+    }
+    
+    try {
+      console.log("Checking username for wallet:", walletAddress);
+      
+      // IMPORTANT: Force clear any previous username first to avoid stale data
+      setUsername(null);
+      
+      // Get username from Supabase
+      const { data, error } = await supabase
+        .from('users')
+        .select('username')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .maybeSingle();
+      
+      console.log("📊 Supabase response:", { data, error });
+      
+      if (data?.username) {
+        console.log("✅ Found username:", data.username);
+        setUsername(data.username);
+        setShowUsernameModal(false);
+      } else {
+        console.log("❌ No username found for current wallet - username input form will be shown");
+        setUsername(null);
+        setShowUsernameModal(true);
+      }
+      
+      setUsernameChecked(true);
+      setIsLoading(false);
+    } catch (error) {
+      console.error("🔴 Error checking username:", error);
+      setUsername(null);
+      setShowUsernameModal(true);
+      setIsLoading(false);
+    }
+  }, [supabase]);
+
+  const checkIfUserExists = async (walletAddress) => {
+    if (!walletAddress || !supabase) return false;
+    
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('wallet_address, username')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking if user exists:', error);
+        return false;
+      }
+      
+      if (data) {
+        console.log('User exists:', data);
+        setUsername(data.username);
+        return true;
+      } else {
+        console.log('User does not exist yet');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error checking if user exists:', error);
+      return false;
+    }
+  };
+
+  const incrementGamesPlayed = async (walletAddress) => {
+    if (!walletAddress || !supabase) return false;
+    
+    try {
+      // First check if a record exists
+      const { data, error } = await supabase
+        .from('games')
+        .select('count')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching games count:', error);
+        return false;
+      }
+      
+      let newCount = 1; // Start with 1 if no record exists
+      
+      if (data) {
+        // Increment existing count
+        newCount = (parseInt(data.count) || 0) + 1;
+        
+        // Update the record
+        const { error: updateError } = await supabase
+          .from('games')
+          .update({ count: newCount })
+          .eq('wallet_address', walletAddress.toLowerCase());
+        
+        if (updateError) {
+          console.error('Error updating games count:', updateError);
+          return false;
+        }
+      } else {
+        // Insert new record
+        const { error: insertError } = await supabase
+          .from('games')
+          .insert({
+            wallet_address: walletAddress.toLowerCase(),
+            count: newCount
+          });
+        
+        if (insertError) {
+          console.error('Error inserting games count:', insertError);
+          return false;
+        }
+      }
+      
+      console.log(`Updated games count to: ${newCount}`);
+      return newCount;
+    } catch (error) {
+      console.error('Error incrementing games count:', error);
+      return false;
+    }
+  };
+
   const value = {
     account,
     username,
@@ -1984,7 +2161,8 @@ export function Web3Provider({ children }) {
     isCheckingNFT,
     hasNFT,
     checkNFTStatus: checkNFT,
-    fetchJumpsLeaderboard
+    fetchJumpsLeaderboard,
+    incrementGamesPlayed
   };
 
   return (

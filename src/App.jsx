@@ -9,7 +9,6 @@ import './components/AdminDashboard.css';
 import Navbar from './components/Navbar';
 import PlayerStats from './components/PlayerStats';
 import Leaderboard from './components/Leaderboard';
-import GameCards from './components/GameCards';
 import TransactionNotifications from './components/TransactionNotifications';
 import { setupGameCommands } from './utils/gameCommands';
 import AdminAccess from './components/AdminAccess';
@@ -183,8 +182,9 @@ const styles = `
   background: linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%);
   border: none;
   border-radius: 50px;
+  height: 150px !important;
   padding: 15px 30px;
-  color: white;
+  color: white; 
   font-weight: bold;
   font-size: 18px;
   cursor: pointer;
@@ -475,6 +475,7 @@ function LoadingSpinner({ isMobile }) {
 
 // Horizontal Stats Component
 function HorizontalStats() {
+  const [gamesPlayed, setGamesPlayed] = useState(0);
   const { playerHighScore, totalJumps, username, setUserUsername, fetchPlayerStats, fetchJumps, leaderboard } = useWeb3();
   const { isConnected, address } = useAccount();
   const [newUsername, setNewUsername] = useState('');
@@ -645,6 +646,34 @@ function HorizontalStats() {
     setShowSuccess(false);
   }, [address]);
   
+  // Add useEffect to fetch games count
+  useEffect(() => {
+    async function fetchGamesCount() {
+      if (!address || !supabase) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('games')
+          .select('count')
+          .eq('wallet_address', address.toLowerCase())
+          .maybeSingle();
+        
+        if (error) {
+          console.error('Error fetching games count:', error);
+          return;
+        }
+        
+        if (data) {
+          setGamesPlayed(parseInt(data.count) || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching games count:', error);
+      }
+    }
+    
+    fetchGamesCount();
+  }, [address, supabase]);
+  
   if (!isConnected || !address) {
     return (
       <div className="stats-card-horizontal">
@@ -664,9 +693,11 @@ function HorizontalStats() {
       <div className="stats-card-horizontal username-form-card">
         <div className="card-badge">SET USERNAME</div>
         
-        <div className="stats-info">
-          <h3 className="greeting-title">Welcome to JumpNads!</h3>
-          <p className="greeting-message">Please set a username to play</p>
+        <div className="stats-info">  
+          <br></br>
+          
+          
+     
         </div>
         
         <form onSubmit={handleSubmitUsername} className="username-form">
@@ -693,30 +724,82 @@ function HorizontalStats() {
     <div className="stats-card-horizontal">
       <div className="card-badge">STATS</div>
       
-      <div className="stats-info">
-        <h3 className="greeting-title">Hi there, {username}!</h3>
-        <p className="greeting-message">Ready to break the monad?</p>
-      </div>
-      
       <div className="stats-grid-horizontal">
         <div className="stat-item-horizontal">
+          <div className="stat-icon">🏆</div>
           <div className="stat-label">Hi-Score</div>
           <div className="stat-value">{playerHighScore !== undefined ? Number(playerHighScore).toLocaleString() : '0'}</div>
         </div>
         
         <div className="stat-item-horizontal">
+          <div className="stat-icon">🦘</div>
           <div className="stat-label">Total Jumps</div>
           <div className="stat-value">{totalJumps !== undefined ? Number(totalJumps).toLocaleString() : '0'}</div>
         </div>
         
         <div className="stat-item-horizontal">
-          <div className="stat-label">Level</div>
-          <div className="stat-value">{Math.max(1, Math.floor(Number(playerHighScore || 0) / 100))}</div>
+          <div className="stat-icon">⭐</div>
+          <div className="stat-label">Jump Rank</div>
+          <div className="stat-value">
+            {(() => {
+              if (!address) return "N/A";
+              
+              // Use useEffect + useState to fetch and store the rank
+              const [jumpRank, setJumpRank] = React.useState("...");
+              
+              React.useEffect(() => {
+                async function fetchJumpRank() {
+                  if (!address || !supabase) return;
+                  
+                  try {
+                    // Get all users with their jump counts sorted by count descending
+                    const { data, error } = await supabase
+                      .from('jumps')
+                      .select('wallet_address, count')
+                      .order('count', { ascending: false });
+                      
+                    if (error) {
+                      console.error("Error fetching jump rankings:", error);
+                      return;
+                    }
+                    
+                    // Find the user's position in the sorted data
+                    const userPosition = data.findIndex(
+                      entry => entry.wallet_address.toLowerCase() === address.toLowerCase()
+                    );
+                    
+                    // If found, return position+1 as rank, otherwise N/A
+                    if (userPosition >= 0) {
+                      setJumpRank(`#${userPosition + 1}`);
+                    } else if (totalJumps > 0) {
+                      setJumpRank("N/A");
+                    } else {
+                      setJumpRank("Unranked");
+                    }
+                  } catch (error) {
+                    console.error("Error calculating jump rank:", error);
+                    setJumpRank("Error");
+                  }
+                }
+                
+                fetchJumpRank();
+              }, [address, totalJumps]);
+              
+              return jumpRank;
+            })()}
+          </div>
         </div>
         
         <div className="stat-item-horizontal">
+          <div className="stat-icon">📊</div>
           <div className="stat-label">Rank</div>
           <div className="stat-value">{getPlayerRank()}</div>
+        </div>
+
+        <div className="stat-item-horizontal">
+          <div className="stat-icon">🎮</div>
+          <div className="stat-label">Total Games</div>
+          <div className="stat-value">{gamesPlayed || 0}</div>
         </div>
       </div>
     </div>
@@ -779,7 +862,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     providerError,
     signer,
     leaderboard,
-    playerHighScore
+    playerHighScore,
+    incrementGamesPlayed
   } = web3Context || {};
   
   const [username, setUsername] = useState(webUsername || null);
@@ -1213,9 +1297,19 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
 }, [isConnected, address, openConnectModal]);
 
-  // Update the handlePlayAgain function to reset the game session
+  // Modify the handlePlayAgain function to track games
   const handlePlayAgain = useCallback(() => {
     console.log("🔄 Play Again clicked");
+    
+    // Increment games counter in Supabase
+    if (address && incrementGamesPlayed) {
+      incrementGamesPlayed(address)
+        .then(newCount => {
+          console.log(`Game count updated to: ${newCount}`);
+          // Update local state to reflect the new count
+        })
+        .catch(err => console.error("Failed to update game count:", err));
+    }
     
     // Clear all localStorage high scores to prevent fallback
     try {
@@ -1269,7 +1363,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }, 1000);
     
     console.log("🎮 Game reset complete with new session ID:", newGameId);
-  }, [setGameScore, address]);
+  }, [address, incrementGamesPlayed, setGameScore]);
+
+  // Add a state to GameComponent for games played
+  const [gamesPlayed, setGamesPlayed] = useState(0);
 
   // Detect mobile view on component mount and window resize
   const detectMobile = () => {
@@ -1741,6 +1838,188 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
   }, [iframeRef.current, playerHighScore]);
 
+  // In your GameComponent, add code to listen for reload button clicks
+  useEffect(() => {
+    if (!iframeRef.current) return;
+    
+    const handleMessage = (event) => {
+      // Make sure the message is from our game iframe
+      if (event.source !== iframeRef.current.contentWindow) return;
+      
+      // Listen for reload button clicks from the game
+      if (event.data && event.data.type === 'reload_clicked') {
+        console.log('Reload button clicked in game!');
+        
+        // Increment games played count
+        if (address) {
+          incrementGamesPlayed(address)
+            .then(newCount => {
+              console.log(`Game count updated to: ${newCount}`);
+              setGamesPlayed(newCount);
+            })
+            .catch(err => console.error("Failed to update game count:", err));
+        }
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [address, incrementGamesPlayed]);
+
+  // Add this code directly in your GameComponent useEffect
+  useEffect(() => {
+    // Function to handle messages from the game iframe
+    const handleGameMessage = async (event) => {
+      // Make sure it's from our game iframe
+      if (event.source !== iframeRef.current.contentWindow) return;
+      
+      // Check if it's a reload_clicked message
+      if (event.data?.type === 'reload_clicked') {
+        console.log("⚡ Reload button clicked - updating games count");
+        
+        try {
+          // Get current games count from Supabase
+          const { data, error } = await supabase
+            .from('games')
+            .select('count')
+            .eq('wallet_address', address.toLowerCase())
+            .maybeSingle();
+            
+          if (error && error.code !== 'PGRST116') {
+            console.error("Error fetching games count:", error);
+            return;
+          }
+          
+          // Calculate new count (start at 1 if no record exists)
+          const currentCount = data?.count || 0;
+          const newCount = currentCount + 1;
+          
+          console.log(`Updating games count: ${currentCount} → ${newCount}`);
+          
+          // Use upsert to handle both insert and update
+          const { error: upsertError } = await supabase
+            .from('games')
+            .upsert({
+              wallet_address: address.toLowerCase(),
+              count: newCount
+            }, { onConflict: 'wallet_address' });
+          
+          if (upsertError) {
+            console.error("Error updating games count:", upsertError);
+            return;
+          }
+          
+          console.log("✅ Games count updated successfully");
+          
+          // Force a re-fetch of the games count to update UI
+          fetchGamesCount();
+        } catch (error) {
+          console.error("Error handling reload click:", error);
+        }
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('message', handleGameMessage);
+    
+    // Clean up
+    return () => window.removeEventListener('message', handleGameMessage);
+  }, [address, supabase, iframeRef]);
+
+  // Add this function to fetch games count
+  const fetchGamesCount = async () => {
+    if (!address || !supabase) return 0;
+    
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('count')
+        .eq('wallet_address', address.toLowerCase())
+        .maybeSingle();
+      
+      if (error) {
+        console.error("Error fetching games count:", error);
+        return 0;
+      }
+      
+      const count = data?.count || 0;
+      setGamesPlayed(count); // Update state with new count
+      return count;
+    } catch (error) {
+      console.error("Error in fetchGamesCount:", error);
+      return 0;
+    }
+  };
+
+  // Inside the GameComponent function, add this useEffect
+  useEffect(() => {
+    // Direct console counter for reload clicks
+    let reloadClickCount = 0;
+    
+    const handleGameReload = async (event) => {
+      // Check if the message is from our game iframe
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
+      
+      // Check for reload button click message
+      if (event.data?.type === 'GAME_RELOAD_CLICKED') {
+        reloadClickCount++;
+        console.log(`🔄 RELOAD CLICKED: Count = ${reloadClickCount}`);
+        
+        // Only proceed if we have an address
+        if (!address) {
+          console.log("No wallet address available - can't update games count");
+          return;
+        }
+        
+        try {
+          // First, get current count from Supabase
+          const { data, error } = await supabase
+            .from('games')
+            .select('count')
+            .eq('wallet_address', address.toLowerCase())
+            .maybeSingle();
+            
+          if (error && error.code !== 'PGRST116') {
+            console.error("Error fetching games count:", error);
+            return;
+          }
+          
+          // Calculate new count (start at 1 if no existing record)
+          const currentCount = data?.count || 0;
+          const newCount = currentCount + 1;
+          
+          console.log(`Updating games count: ${currentCount} → ${newCount}`);
+          
+          // Use upsert for both insert and update cases
+          const { error: upsertError } = await supabase
+            .from('games')
+            .upsert({
+              wallet_address: address.toLowerCase(),
+              count: newCount
+            }, { onConflict: 'wallet_address' });
+          
+          if (upsertError) {
+            console.error("Error updating games count:", upsertError);
+            return;
+          }
+          
+          console.log(`✅ Games count updated successfully to ${newCount}`);
+          
+          // Update the state to reflect the new value
+          setGamesPlayed(newCount);
+        } catch (error) {
+          console.error("Error processing reload click:", error);
+        }
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('message', handleGameReload);
+    
+    // Clean up
+    return () => window.removeEventListener('message', handleGameReload);
+  }, [address, supabase, iframeRef]);
+
   if (providerError) {
     return (
       <div className="wallet-error">
@@ -1883,13 +2162,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             <div className="stats-row">
               <HorizontalStats />
             </div>
-            
-            <GameCards />
-            </div>
-            
-            <div className="leaderboard-column">
-              <Leaderboard />
-            </div>
+          </div>
+          
+          <div className="leaderboard-column">
+            <Leaderboard />
+          </div>
         </div>
           
         
@@ -2048,14 +2325,7 @@ function App() {
         />
       )}
 
-      <div className="social-links">
-        <a href="https://x.com/Monadjumper" target="_blank" rel="noopener noreferrer" aria-label="Follow us on X">
-          <FaXTwitter size={24} /> 
-        </a>
-        <a href="https://discord.gg/AxYUSmQw" target="_blank" rel="noopener noreferrer" aria-label="Join our Discord">
-          <FaDiscord size={24} />
-        </a>
-      </div>
+    
     </Web3Provider>
   );
 }

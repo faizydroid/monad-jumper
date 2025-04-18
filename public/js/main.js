@@ -81,10 +81,10 @@ window.addEventListener('load', () => {
             this.blue_white_platform_max_chance = 85
             this.gameOverButtons = {
                 tryAgain: {
-                    x: canvas.width / 2 - 40, // Center the smaller image
-                    y: canvas.height / 2 + 140, // Move further down for more gap
-                    width: 80, // Image size
-                    height: 80,
+                    x: canvas.width / 2 - 60, // Center the larger image
+                    y: canvas.height / 2 + 180, // Move further down
+                    width: 120, // Increase size
+                    height: 120, // Increase size
                     text: 'Try Again'
                 }
             };
@@ -198,9 +198,9 @@ window.addEventListener('load', () => {
             this.player.draw(context);
             this.enemies.forEach(enemy => enemy.draw(context));
 
-            // Draw score
+            // Draw score with Bangers font instead of Arial
             context.fillStyle = "black";
-            context.font = '20px Arial';
+            context.font = '24px Bangers, cursive';
             context.textAlign = 'start';
             context.fillText(`Score: ${Math.floor(this.score)}`, 20, 40);
 
@@ -348,6 +348,16 @@ window.addEventListener('load', () => {
             const tryAgain = this.gameOverButtons.tryAgain;
             if (x >= tryAgain.x && x <= tryAgain.x + tryAgain.width &&
                 y >= tryAgain.y && y <= tryAgain.y + tryAgain.height) {
+                console.log("RELOAD BUTTON CLICKED!");
+                
+                // Send special message to parent window
+                if (window.parent) {
+                    window.parent.postMessage({
+                        type: 'GAME_RELOAD_CLICKED',
+                        timestamp: Date.now()
+                    }, '*');
+                }
+                
                 this.reset();
                 return;
             }
@@ -468,24 +478,37 @@ window.addEventListener('load', () => {
             
             // Game Over text with Bangers font
             ctx.fillStyle = 'white';
-            ctx.font = '45px Bangers, cursive';
+            ctx.font = '65px Bangers, cursive';
             ctx.textAlign = 'center';
             ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 40);
             
-            // Score text with Bangers font
-            ctx.font = '32px Bangers, cursive';
-            ctx.fillText(`Score: ${Math.floor(this.score)}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
+            // Score label in white (centered)
+            ctx.fillStyle = 'white';
+            ctx.font = '38px Bangers, cursive';
+            ctx.fillText('SCORE', this.canvas.width / 2, this.canvas.height / 2 + 10);
             
-            // Jumps display with Bangers font
-            const jumpCount = this.finalJumpCount || window.__jumpCount || window.totalJumps || 0;
-            ctx.fillText(`Jumps: ${jumpCount}`, this.canvas.width / 2, this.canvas.height / 2 + 50);
+            // Score value in red BELOW the label
+            ctx.fillStyle = 'red';
+            ctx.font = '50px Bangers, cursive'; // Slightly larger font for the number
+            ctx.fillText(Math.floor(this.score).toString(), this.canvas.width / 2, this.canvas.height / 2 + 50);
             
-            // Add green transaction approval message
+            // Jumps label in white (centered)
+            ctx.fillStyle = 'white';
+            ctx.font = '38px Bangers, cursive';
+            ctx.fillText('JUMPS', this.canvas.width / 2, this.canvas.height / 2 + 90);
+            
+            // Jumps value in red BELOW the label
+            ctx.fillStyle = 'red';
+            ctx.font = '50px Bangers, cursive'; // Slightly larger font for the number
+            const jumpCount = (this.finalJumpCount || window.__jumpCount || window.totalJumps || 0).toString();
+            ctx.fillText(jumpCount, this.canvas.width / 2, this.canvas.height / 2 + 130);
+            
+            // Transaction message
             ctx.fillStyle = '#ede4ca';
             ctx.font = '16px Arial, cursive';
-            ctx.fillText('Approve transaction in your wallet and continue to play', this.canvas.width / 2, this.canvas.height / 2 + 90);
+            ctx.fillText('Approve transaction in your wallet and continue to play', this.canvas.width / 2, this.canvas.height / 2 + 170);
             
-            // Draw reload button image instead of text button
+            // Draw reload button
             const tryAgain = this.gameOverButtons.tryAgain;
             if (this.reloadImage && this.reloadImage.complete) {
                 ctx.drawImage(this.reloadImage, tryAgain.x, tryAgain.y, tryAgain.width, tryAgain.height);
@@ -1132,6 +1155,21 @@ window.addEventListener('load', () => {
             
             // Add container to body
             document.body.appendChild(controlsContainer);
+        }
+
+        handleReloadButton() {
+            // Your existing code...
+            
+            // Send a message to the parent window when reload is clicked
+            if (window.parent) {
+                window.parent.postMessage({ 
+                    type: 'reload_clicked', 
+                    timestamp: Date.now() 
+                }, '*');
+                console.log("Sent reload_clicked message to parent");
+            }
+            
+            // Rest of your existing code...
         }
     }
     
