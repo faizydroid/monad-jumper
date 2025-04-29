@@ -53,36 +53,6 @@ const DailyQuestContent = ({ onClose }) => {
     }
   ];
 
-  // Calculate jumps based on streak
-  const calculateJumpsReward = (streak) => {
-    // Base value is 10 times day number
-    let baseReward = streak * 10;
-    
-    // Check if it's a 7th day (any multiple of 7)
-    if (streak % 7 === 0) {
-      // Apply 2x bonus on 7th days (7th, 14th, 21st, etc.)
-      baseReward *= 2;
-    }
-    
-    // First week: Day 1: 10, Day 2: 20, Day 3: 30, ... Day 7: 70 (with 2x = 140)
-    if (streak <= 7) {
-      return baseReward;
-    } 
-    // Second week and beyond: keep same pattern but double the rewards
-    else {
-      const weekNumber = Math.floor((streak - 1) / 7) + 1;
-      const dayInWeek = (streak - 1) % 7 + 1;
-      
-      // If it's not a 7th day (already handled above)
-      if (dayInWeek !== 7) {
-        // Apply week multiplier
-        baseReward = (dayInWeek * 10) * Math.pow(2, weekNumber - 1);
-      }
-      
-      return baseReward;
-    }
-  };
-
   // Fetch user's check-in data from Supabase
   const fetchCheckInData = async () => {
     if (!address) return;
@@ -95,18 +65,21 @@ const DailyQuestContent = ({ onClose }) => {
       let currentStreak = 0;
       let lastCheckIn = null;
       let checkedToday = false;
+      let breakInStreak = false;
       
       // Find all check-in entries in localStorage
+      const checkInDates = [];
+      
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(`checkin_${address.toLowerCase()}`)) {
           try {
             const data = JSON.parse(localStorage.getItem(key));
             const checkDate = new Date(data.checked_at);
+            checkInDates.push({date: checkDate, key: key});
             
             if (!lastCheckIn || checkDate > new Date(lastCheckIn)) {
               lastCheckIn = data.checked_at;
-              currentStreak = data.streak;
             }
             
             // Check if already checked in today
@@ -116,6 +89,48 @@ const DailyQuestContent = ({ onClose }) => {
           } catch (e) {
             console.error("Error parsing localStorage check-in data:", e);
           }
+        }
+      }
+      
+      // Sort dates chronologically
+      checkInDates.sort((a, b) => a.date - b.date);
+      
+      // Check for consecutive days to determine current streak
+      if (checkInDates.length > 0) {
+        // Start with the most recent check-in
+        currentStreak = 1;
+        
+        // If checked in today, start from yesterday; otherwise from today
+        const startDate = checkedToday 
+          ? new Date(new Date().setDate(new Date().getDate() - 1)) 
+          : new Date();
+        
+        startDate.setHours(0, 0, 0, 0);
+        
+        // Check backwards from the start date
+        for (let i = 1; i <= 30; i++) {
+          const checkDate = new Date(startDate);
+          checkDate.setDate(startDate.getDate() - i);
+          const dateStr = checkDate.toISOString().split('T')[0];
+          
+          // Look for this date in our check-in records
+          const found = checkInDates.some(entry => 
+            entry.key.includes(dateStr)
+          );
+          
+          if (found) {
+            currentStreak++;
+          } else {
+            // Break in streak detected
+            breakInStreak = true;
+            break;
+          }
+        }
+        
+        // If we found a break in the streak and it's not just that today hasn't been checked yet
+        if (breakInStreak && !(!checkedToday && currentStreak === 1)) {
+          // Reset streak to 0 if there was a missed day
+          currentStreak = 0;
         }
       }
       
@@ -162,6 +177,41 @@ const DailyQuestContent = ({ onClose }) => {
         isLoading: false,
         error: 'Failed to load check-in data'
       }));
+    }
+  };
+
+  // Calculate jumps based on streak
+  const calculateJumpsReward = (streak) => {
+    // If streak is 0 (missed days) or 1 (first day), return base value of 10
+    if (streak <= 1) {
+      return 10;
+    }
+    
+    // Base value is 10 times day number
+    let baseReward = streak * 10;
+    
+    // Check if it's a 7th day (any multiple of 7)
+    if (streak % 7 === 0) {
+      // Apply 2x bonus on 7th days (7th, 14th, 21st, etc.)
+      baseReward *= 2;
+    }
+    
+    // First week: Day 1: 10, Day 2: 20, Day 3: 30, ... Day 7: 70 (with 2x = 140)
+    if (streak <= 7) {
+      return baseReward;
+    } 
+    // Second week and beyond: keep same pattern but double the rewards
+    else {
+      const weekNumber = Math.floor((streak - 1) / 7) + 1;
+      const dayInWeek = (streak - 1) % 7 + 1;
+      
+      // If it's not a 7th day (already handled above)
+      if (dayInWeek !== 7) {
+        // Apply week multiplier
+        baseReward = (dayInWeek * 10) * Math.pow(2, weekNumber - 1);
+      }
+      
+      return baseReward;
     }
   };
 
@@ -505,11 +555,11 @@ const DailyQuestContent = ({ onClose }) => {
           const newData = {
             wallet_address: address.toLowerCase(),
             last_reset: now.toISOString(),
-            games_played: Math.max(0, totalGamesPlayed - lastTotalGames),
+            games_played: totalGamesPlayed, // Use total games as the current week's progress
             high_score: 0,
             claimed_games: [false, false, false, false, false, false, false],
             claimed_score: [false, false, false, false, false, false],
-            last_total_games: totalGamesPlayed
+            last_total_games: 0 // Start from 0 to count all existing games
           };
           
           // Upsert the data (update or insert)
@@ -524,9 +574,9 @@ const DailyQuestContent = ({ onClose }) => {
           
           setWeeklyQuests({
             lastReset: now.toISOString(),
-            gamesPlayed: Math.max(0, totalGamesPlayed - lastTotalGames),
+            gamesPlayed: totalGamesPlayed, // Use total games as current progress
             highScore: 0,
-            lastTotalGames: totalGamesPlayed,
+            lastTotalGames: 0, // Reset baseline to 0
             claimed: {
               games: [false, false, false, false, false, false, false],
               score: [false, false, false, false, false, false]
@@ -537,8 +587,8 @@ const DailyQuestContent = ({ onClose }) => {
           // Fallback: Continue with basic functionality
         }
       } else if (data) {
-        // Calculate games played since last reset
-        const gamesPlayedSinceReset = Math.max(0, totalGamesPlayed - (data.last_total_games || 0));
+        // Use the total games played as the progress for this week
+        const gamesPlayedSinceReset = totalGamesPlayed;
         
         // Use existing data but update games played count
         setWeeklyQuests({
@@ -848,7 +898,6 @@ const DailyQuestContent = ({ onClose }) => {
                 <div className="quest-header">
                   <h3>Play {quest.threshold} Games</h3>
                   <div className="quest-reward-badge">
-                    <span className="jumps-icon">🦘</span>
                     <span className="reward-amount">+{quest.reward}</span>
                   </div>
                 </div>
@@ -865,6 +914,7 @@ const DailyQuestContent = ({ onClose }) => {
                 className="claim-button" 
                 disabled={!isCompleted || isClaimed || claimingIndex !== null}
                 onClick={() => claimQuestReward('games', index)}
+                style={{marginLeft: '15px'}}
               >
                 {isClaimed ? 'Claimed' : 
                  claimingIndex === index ? (

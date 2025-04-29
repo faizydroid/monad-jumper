@@ -5,6 +5,17 @@ import { resolve } from 'path'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  
+  // Filter out sensitive env vars for client-side code
+  // This creates a safe subset of environment variables
+  const safeEnv = {};
+  for (const key in env) {
+    // Only expose non-sensitive environment variables to the client
+    if (key.startsWith('VITE_PUBLIC_')) {
+      safeEnv[key] = env[key];
+    }
+  }
+  
   return {
     plugins: [react()],
     server: {
@@ -24,13 +35,20 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      'process.env': env,
+      // Only expose safe env variables to the client
+      'process.env': safeEnv,
+      'import.meta.env': JSON.stringify({
+        ...safeEnv,
+        MODE: mode,
+        DEV: mode === 'development',
+        PROD: mode === 'production',
+      }),
       'globalThis.b_': '{}',
       'window.b_': '{}',
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
+      sourcemap: mode === 'development', // Only generate sourcemaps in development
       target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
       rollupOptions: {
         input: {
@@ -47,7 +65,7 @@ export default defineConfig(({ mode }) => {
       minify: 'terser',
       terserOptions: {
         compress: {
-          drop_console: false,
+          drop_console: mode === 'production', // Remove console logs in production
           unsafe: false,
           unsafe_arrows: false,
           unsafe_comps: false,

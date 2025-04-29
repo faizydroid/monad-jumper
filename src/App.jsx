@@ -20,6 +20,7 @@ import { encodeFunctionData, parseEther } from 'viem';
 import CartoonPopup from './components/CartoonPopup';
 import { createClient } from '@supabase/supabase-js';
 import ErrorBoundary from './components/ErrorBoundary';
+import NadsBot from './components/NadsBot';
 import { 
   injectedWallet,
   rainbowWallet,
@@ -883,6 +884,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Add this after the state declarations in the GameComponent function 
   const [mintModalRequested, setMintModalRequested] = useState(false);
   
+  // Add NadsBot state variables
+  const [showNadsBot, setShowNadsBot] = useState(false);
+  const [gameData, setGameData] = useState(null);
+  
   // Initialize fallback provider for offline mode
   useEffect(() => {
     // Create a fallback provider if we don't have one from web3
@@ -1555,11 +1560,34 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       const data = event.data;
       
       if (data && typeof data === 'object') {
-        if (data.type === 'gameOver') {
-          console.log('Game Over with score:', data.score);
+        if (data.type === 'gameOver' || data.type === 'GAME_OVER') {
+          console.log('Game Over with score:', data.score || data.data?.finalScore);
+          
+          // Collect game data for NadsBot
+          const finalScore = data.score || data.data?.finalScore || 0;
+          const jumpCount = data.jumps || data.data?.jumpCount || window.totalJumps || 0;
+          const deathReason = data.deathReason || 'fall'; // Default to fall
+          const platformTypes = data.platformTypes || ['normal']; // Default to normal platforms
+          const gameDuration = data.duration || 0; // Game duration in ms
+          
+          // Prepare game data for NadsBot
+          const gameSessionData = {
+            score: finalScore,
+            jumps: jumpCount,
+            deathReason: deathReason,
+            platformTypes: platformTypes,
+            duration: gameDuration,
+            timestamp: new Date().toISOString()
+          };
+          
+          // Store game data and show NadsBot
+          setGameData(gameSessionData);
+          setShowNadsBot(true);
+          
           // Call the handler from props or context
-          onGameOver && onGameOver(data.score);
+          onGameOver && onGameOver(finalScore);
         }
+        
         // Handle other message types...
       }
     };
@@ -1717,7 +1745,72 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             };
           }
           
-          console.log("✅ Advanced anti-loop protection installed");
+          // NadsBot tracking initialization
+          window.__nadsBotData = {
+            sessionStartTime: Date.now(),
+            jumps: 0,
+            platformTypes: {
+              normal: 0,
+              moving: 0,
+              breaking: 0,
+              special: 0
+            },
+            powerUps: [],
+            deaths: {
+              reason: 'none',
+              position: null
+            },
+            shotsFired: 0,
+            enemiesKilled: 0,
+            maxHeight: 0
+          };
+          
+          // Update game over to collect NadsBot data
+          if (typeof window.gameOver === 'function') {
+            const originalGameOver = window.gameOver;
+            window.gameOver = function(score) {
+              // Calculate session duration
+              const sessionDuration = Date.now() - window.__nadsBotData.sessionStartTime;
+              
+              // Get death reason (default to fall)
+              const deathReason = window.__nadsBotData.deaths?.reason || 'fall';
+              
+              // Enhanced analytics data for NadsBot
+              const analyticsData = {
+                score: score || 0,
+                jumps: window.__jumpCount || 0,
+                deathReason: deathReason,
+                platformTypes: Object.keys(window.__nadsBotData.platformTypes || {})
+                  .filter(type => (window.__nadsBotData.platformTypes[type] || 0) > 0),
+                shotsFired: window.__nadsBotData.shotsFired || 0,
+                enemiesKilled: window.__nadsBotData.enemiesKilled || 0,
+                duration: sessionDuration,
+                timestamp: new Date().toISOString()
+              };
+              
+              // Send enhanced data to parent
+              if (window.parent) {
+                try {
+                  window.parent.postMessage({
+                    type: 'GAME_OVER',
+                    data: {
+                      finalScore: score || 0,
+                      jumpCount: window.__jumpCount || 0,
+                      ...analyticsData
+                    }
+                  }, '*');
+                  console.log('🤖 NadsBot analytics sent:', analyticsData);
+                } catch (err) {
+                  console.error('Failed to send NadsBot analytics:', err);
+                }
+              }
+              
+              // Call original game over function
+              return originalGameOver.apply(this, arguments);
+            };
+          }
+          
+          console.log("✅ Advanced anti-loop protection and NadsBot tracking installed");
         `;
         
         // Add the script to the iframe's document
@@ -1729,7 +1822,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           iframeRef.current.contentWindow.setDirectHighScore(playerHighScore || 0);
         }
         
-        console.log("🔧 Injected anti-loop script into game");
+        console.log("🔧 Injected scripts into game");
       } catch (err) {
         console.error("Error injecting script:", err);
       }
@@ -2050,13 +2143,14 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               <h1 className="game-title">JUMPNADS</h1>
             <p className="game-subtitle">Jump to the MOON! </p>
           
-            <div className="character-container animated">
+            <div className="character-container animated" style={{ textAlign: 'center', margin: '1.5rem auto' }}>
                 <img 
                   src="/images/monad0.png" 
                   alt="Game Character" 
                   className="character" 
+                  style={{ position: 'relative', left: '0', margin: '0 auto', display: 'block' }}
                 />
-              <div className="shadow"></div>
+              <div className="shadow" style={{ margin: '10px auto 0' }}></div>
           </div>
           
             <div className="connect-container">
@@ -2176,30 +2270,14 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Game is showing
   return (
     <div className="app">
-      {/* Game loading screen - only show when both showGame and isLoading are true */}
-        {isLoading && showGame && (
-        <div className="loading-screen game-begin-screen">
-          <h1 className="game-title">JumpNads</h1>
-          <div className="character-container">
-            <div className="character"></div>
-            <div className="shadow"></div>
-          </div>
-            <div className="loading-bar-container">
-              <div className="loading-bar"></div>
-            </div>
-          <div className="loading-tips">
-            <p>{getRandomTip()}</p>
-            </div>
-          
-          {/* No button - just loading animation */}
-        </div>
-        )}
+      {/* Add GameNavbar here */}
+      <GameNavbar />
         
-      <div className="game-container">
+      <div className="game-container" style={{ width: '100vw', maxWidth: '100%', margin: '0', padding: '0', overflow: 'hidden', position: 'absolute', left: '0', right: '0' }}>
         {/* Remove the separate start screen that shows the Play button */}
         
         {/* Wrapper div with background image */}
-        <div className="iframe-background">
+        <div className="iframe-background" style={{ width: '100vw', position: 'relative' }}>
           {/* Always render the iframe but control visibility */}
         <iframe 
           key={`game-${gameId}`}
@@ -2213,12 +2291,29 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           style={{ 
             visibility: isLoading ? 'hidden' : 'visible', 
             opacity: isLoading ? 0 : 1,
-            width: '100%',
-            height: '100%'
+            width: '100vw',
+            height: '100vh',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            border: 'none'
           }}
         ></iframe>
         </div>
       </div>
+      
+      {/* NadsBot component - shown after game over */}
+      {showNadsBot && gameData && (
+        <NadsBot 
+          gameData={gameData}
+          onClose={() => {
+            setShowNadsBot(false);
+            setGameData(null);
+          }}
+        />
+      )}
     </div>
   );
 }

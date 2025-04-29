@@ -4,6 +4,7 @@ import { useWeb3 } from '../contexts/Web3Context';
 import { useNavigate, Link } from 'react-router-dom';
 import { ethers } from 'ethers';
 import './Navbar.css';
+import MusicPlayer from './MusicPlayer';
 
 export default function GameNavbar() {
   console.log('Rendering GameNavbar for game screen');
@@ -183,6 +184,8 @@ export default function GameNavbar() {
               🏠 Home
             </button>
           </Link>
+          
+          <MusicPlayer />
           
           <div className="high-score">
             <span role="img" aria-label="trophy">🏆</span>

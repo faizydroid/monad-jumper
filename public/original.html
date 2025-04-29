@@ -29,6 +29,127 @@
             display: none;
         }
 
+        /* Game juice animations */
+        @keyframes squash {
+            0% { transform: scaleY(1) scaleX(1); }
+            50% { transform: scaleY(0.7) scaleX(1.3); }
+            100% { transform: scaleY(1) scaleX(1); }
+        }
+        
+        @keyframes stretch {
+            0% { transform: scaleY(1) scaleX(1); }
+            50% { transform: scaleY(1.3) scaleX(0.7); }
+            100% { transform: scaleY(1) scaleX(1); }
+        }
+        
+        @keyframes platformJiggle {
+            0% { transform: rotate(0deg) scale(1); }
+            25% { transform: rotate(-2deg) scale(1.05); }
+            50% { transform: rotate(0deg) scale(1.1); }
+            75% { transform: rotate(2deg) scale(1.05); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        
+        @keyframes platformGlow {
+            0% { filter: brightness(1) drop-shadow(0 0 0px rgba(255, 255, 255, 0)); }
+            50% { filter: brightness(1.5) drop-shadow(0 0 10px rgba(255, 255, 255, 0.7)); }
+            100% { filter: brightness(1) drop-shadow(0 0 0px rgba(255, 255, 255, 0)); }
+        }
+        
+        @keyframes scorePopup {
+            0% { transform: scale(0.5); opacity: 0; }
+            10% { transform: scale(1.2); opacity: 1; }
+            20% { transform: scale(1); opacity: 1; }
+            80% { transform: scale(1) translateY(-20px); opacity: 1; }
+            100% { transform: scale(1) translateY(-30px); opacity: 0; }
+        }
+        
+        @keyframes comboPopup {
+            0% { transform: scale(0.5); opacity: 0; }
+            10% { transform: scale(1.5); opacity: 1; }
+            30% { transform: scale(1.2); opacity: 1; }
+            90% { transform: scale(1.2) translateY(-30px); opacity: 1; }
+            100% { transform: scale(1) translateY(-40px); opacity: 0; }
+        }
+        
+        /* Add bullet screen glow animation */
+        @keyframes screenGlow {
+            0% { box-shadow: 0 0 0 0 rgba(255, 255, 0, 0); }
+            25% { box-shadow: 0 0 50px 20px rgba(255, 255, 0, 0.5); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 255, 0, 0); }
+        }
+        
+        .score-popup {
+            position: absolute;
+            font-family: 'Bangers', cursive;
+            color: white;
+            font-size: 24px;
+            text-shadow: 2px 2px 0 #000;
+            pointer-events: none;
+            z-index: 100;
+            animation: scorePopup 1s forwards;
+        }
+        
+        .combo-popup {
+            position: absolute;
+            font-family: 'Bangers', cursive;
+            color: #FFD700;
+            font-size: 32px;
+            text-shadow: 
+                2px 2px 0 #000,
+                0 0 10px rgba(255, 215, 0, 0.7);
+            pointer-events: none;
+            z-index: 100;
+            animation: comboPopup 1.5s forwards;
+        }
+        
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            z-index: 99;
+        }
+        
+        .particle.flame {
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(to top, #FF5722, #FFC107);
+            border-radius: 50%;
+            opacity: 0.8;
+        }
+        
+        .particle.star {
+            width: 8px;
+            height: 8px;
+            background-color: white;
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+        }
+        
+        .particle.trail {
+            width: 6px;
+            height: 6px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+        
+        /* Wing style for glide powerup */
+        .wings {
+            position: absolute;
+            width: 40px;
+            height: 30px;
+            background-image: url('images/wing.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            pointer-events: none;
+            z-index: 98;
+            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.7));
+        }
+        
+        .wings.left {
+            transform: scaleX(-1);
+        }
+
+        /* Game title and UI styles */
         .game-title {
             font-family: 'Bangers', cursive;
             font-size: clamp(3.5rem, 10vw, 7rem);
@@ -121,7 +242,6 @@
         }
 
         body {
-            background: transparent;
             margin: 0;
             padding: 0;
             display: flex;
@@ -130,6 +250,11 @@
             min-height: 100vh;
             width: 100%;
             overflow: hidden;
+            background-image: url('images/iframebg.jpg');
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
         }
 
         #gameCanvas {
@@ -139,20 +264,19 @@
 
         #startScreen {
             position: absolute;
-            top: 0;
-            left: 0;
             width: 100%;
             height: 100%;
+            top: 0;
+            left: 0;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-image: url('images/startbg.png');
-            background-size: cover;
-            background-position: center;
-            padding: 2rem;
             z-index: 10;
-            overflow: hidden; /* Keep floating elements contained */
+            background-image: url('images/iframebg.jpg');
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
         }
 
         .connect-wallet-message {
@@ -478,7 +602,7 @@
         }
 
         #canvas1 {
-            position: absolute; /* Change to relative if needed */
+            position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
@@ -618,6 +742,21 @@
     <img src='/images/brown_platform.png' id='brown_platform' />
     <img src='/images/white_platform.png' id='white_platform' />
     
+    <!-- Game juice effects container -->
+    <div id="juice-effects-container"></div>
+    
+    <!-- Audio elements for sound effects -->
+    <audio id="sound-jump" src="/sounds/jump.mp3" preload="auto"></audio>
+    <audio id="sound-land" src="/sounds/land.mp3" preload="auto"></audio>
+    <audio id="sound-boost" src="/sounds/boost.mp3" preload="auto"></audio>
+    <audio id="sound-combo" src="/sounds/combo.mp3" preload="auto"></audio>
+    <audio id="sound-hit" src="/sounds/hit.mp3" preload="auto"></audio>
+    <audio id="sound-dramatic" src="/sounds/dramatic.mp3" preload="auto"></audio>
+    <audio id="sound-spring" src="/sounds/spring.mp3" preload="auto"></audio>
+    <audio id="sound-fall" src="sound effects/fall.mp3" preload="auto"></audio>
+    <!-- Add background music audio element -->
+    <audio id="bg-music" src="/sound effects/bgmusic.mp3" loop preload="auto"></audio>
+    
     <div id="startScreen">
         <!-- Add decorative elements -->
       
@@ -690,6 +829,100 @@
                 case 'CONTINUE_RESPONSE':
                     // Handle continue purchase response
                     handleContinueResponse(data);
+                    break;
+                
+                // Add music control message handling
+                case 'MUSIC_VOLUME':
+                    const bgMusic = document.getElementById('bg-music');
+                    if (bgMusic) {
+                        bgMusic.volume = event.data.volume;
+                        console.log('Set background music volume:', event.data.volume);
+                        
+                        // Also save to localStorage for persistence
+                        localStorage.setItem('bgMusicVolume', event.data.volume);
+                    }
+                    break;
+                
+                case 'MUSIC_PLAY_STATE':
+                    const bgMusicElement = document.getElementById('bg-music');
+                    if (bgMusicElement) {
+                        if (event.data.isPlaying) {
+                            bgMusicElement.play().catch(err => {
+                                console.error("Failed to play background music:", err);
+                            });
+                            console.log('Playing background music');
+                        } else {
+                            bgMusicElement.pause();
+                            console.log('Paused background music');
+                        }
+                    }
+                    break;
+                    
+                // Handle audio mute state
+                case 'AUDIO_MUTE_STATE':
+                    if (typeof event.data.muted === 'boolean' && window.setAudioMuted) {
+                        window.setAudioMuted(false); // Always force unmuted
+                        console.log('Force unmuted audio despite parent request');
+                    }
+                    break;
+                    
+                // Handle audio toggle request
+                case 'AUDIO_TOGGLE':
+                    if (window.toggleAudio) {
+                        window.toggleAudio(); // Will always set to unmuted now
+                        console.log('Audio toggled by parent (forced to unmuted)');
+                    }
+                    break;
+                    
+                // Handle audio context resume request
+                case 'AUDIO_RESUME':
+                    if (window.audioManager && window.audioManager.audioContext) {
+                        if (window.audioManager.audioContext.state === 'suspended') {
+                            window.audioManager.audioContext.resume().then(() => {
+                                console.log('AudioContext resumed by parent request');
+                            });
+                        }
+                    }
+                    break;
+                    
+                // New message types
+                case 'PLAY_BACKGROUND_MUSIC':
+                    // Play background music directly
+                    const bgMusicToPlay = document.getElementById('bg-music');
+                    if (bgMusicToPlay) {
+                        const volume = event.data.volume || 0.5;
+                        bgMusicToPlay.volume = volume;
+                        bgMusicToPlay.muted = false;
+                        bgMusicToPlay.currentTime = 0;
+                        bgMusicToPlay.play().catch(err => {
+                            console.error("Failed to play background music:", err);
+                        });
+                        console.log('Playing background music from explicit request');
+                    }
+                    break;
+                
+                case 'FORCE_AUDIO_UNMUTE':
+                    // Force parent UI to unmute audio
+                    try {
+                        window.parent.postMessage({
+                            type: 'UPDATE_AUDIO_UI',
+                            muted: false,
+                            volume: 0.5
+                        }, '*');
+                        
+                        // Also force all audio to be unmuted
+                        document.querySelectorAll('audio').forEach(audio => {
+                            audio.muted = false;
+                        });
+                        
+                        if (window.audioManager) {
+                            window.audioManager.setMuted(false);
+                        }
+                        
+                        console.log('Forced audio unmute complete');
+                    } catch (e) {
+                        console.warn('Error in force unmute:', e);
+                    }
                     break;
             }
         });
@@ -783,6 +1016,41 @@
             // The actual power-up will be applied when the response comes back
         }
 
+        // Expose juice effects hooks for the main game
+        window.applyJumpEffect = function(playerElement) {
+            if (window.juiceEffects) {
+                window.juiceEffects.applyStretch(playerElement);
+            }
+        };
+        
+        window.applyLandEffect = function(playerElement, platformElement) {
+            if (window.juiceEffects) {
+                window.juiceEffects.applySquash(playerElement);
+                window.juiceEffects.platformEffect(platformElement, Math.random() > 0.5 ? 'jiggle' : 'glow');
+            }
+        };
+        
+        window.applyScoreEffect = function(x, y, points, isCombo) {
+            if (window.juiceEffects) {
+                window.juiceEffects.showScorePopup(x, y, points, isCombo);
+                window.juiceEffects.createParticles(x, y, 'star', isCombo ? 15 : 5);
+            }
+        };
+        
+        // Hook into existing game code
+        const originalJump = window.jump || function(){};
+        window.jump = function(player) {
+            // Call original jump function
+            const result = originalJump.apply(this, arguments);
+            
+            // Apply juice effects
+            if (player && player.element) {
+                window.applyJumpEffect(player.element);
+            }
+            
+            return result;
+        };
+
         // Single source of truth for jump counting
         window.__jumpCount = 0;
 
@@ -840,220 +1108,926 @@
     <script type="module" src="/js/player.js"></script>
     <script type="module" src="/js/main.js"></script>
 
-    <!-- Add this at the end of the file, right before the closing </body> tag -->
+    <!-- Add this right after the main.js import to hook into the game instance -->
     <script>
-      // Direct game over detection script - STRICT VERSION
-      (function() {
-        console.log("🎮 Setting up strict game over detection");
+      // Wait for the game instance to be created
+      function connectJuiceToGame() {
+        if (!window.gameInstance) {
+          setTimeout(connectJuiceToGame, 100);
+          return;
+        }
         
-        // We will NOT automatically detect game over through DOM observation
-        // Instead, we'll only rely on the main.js game code to trigger it
+        console.log("🎮 Connecting juice effects to game instance");
         
-        // Keep track of jumps for bundling
-        let originalJumpCount = window.__jumpCount || 0;
-        let gameHasStarted = false;
-        
-        // Track real gameplay
-        window.addEventListener('keydown', function() {
-          gameHasStarted = true;
-          if (!window.__gameStartTime) {
-            window.__gameStartTime = Date.now();
-            console.log("🎮 Game started tracking at", new Date().toISOString());
-          }
-        });
-        
-        // Override the gameOver function to add strict validation
-        const originalGameOver = window.gameOver;
-        window.gameOver = function(finalScore) {
-          console.log("🎮 Game over function called with score:", finalScore);
+        // Hook into player jumps
+        const originalPlayerUpdate = window.gameInstance.player.update;
+        window.gameInstance.player.update = function() {
+          const prevSpeedY = this.speedY;
+          const result = originalPlayerUpdate.apply(this, arguments);
           
-          // Strict validation before processing game over
-          const jumpsMade = (window.__jumpCount || 0) - originalJumpCount;
-          const gameTime = window.__gameStartTime ? (Date.now() - window.__gameStartTime) : 0;
-          const minimumGameTime = 3000; // 3 seconds
-          
-          console.log(`🎮 Game over validation: gameStarted=${gameHasStarted}, jumpsMade=${jumpsMade}, gameTime=${gameTime}ms`);
-          
-          // Only proceed if all conditions are met:
-          // 1. Game has started through user interaction
-          // 2. Game has been played for at least 3 seconds
-          // 3. Player has a score or made jumps
-          if (!gameHasStarted) {
-            console.log("🎮 Rejected game over: Game never started");
-            return;
+          // Detect jump (when speedY changes from 0/positive to negative)
+          if (prevSpeedY >= 0 && this.speedY < 0) {
+            // Player jumped - apply stretch effect
+            window.juiceEffects.applyStretch(document.getElementById('canvas1'));
+            
+            // Create particles below player
+            const x = this.x + this.width/2;
+            const y = this.y + this.height;
+            window.juiceEffects.createParticles(x, y, 'star', 8, 800);
           }
           
-          if (gameTime < minimumGameTime) {
-            console.log(`🎮 Rejected game over: Game time too short (${gameTime}ms < ${minimumGameTime}ms)`);
-            return;
+          // Detect landing (when speedY changes from negative to 0/positive)
+          if (prevSpeedY < 0 && this.speedY >= 0) {
+            // Player landed - apply squash effect
+            window.juiceEffects.applySquash(document.getElementById('canvas1'));
+            
+            // Screen shake on big landings (if falling fast)
+            if (prevSpeedY < -10) {
+              window.juiceEffects.screenShake(Math.min(Math.abs(prevSpeedY) * 0.5, 15), 300);
+            }
           }
           
-          if (jumpsMade <= 0 && (!finalScore || finalScore <= 0)) {
-            console.log("🎮 Rejected game over: No jumps or score recorded");
-            return;
-          }
-          
-          // We have a valid game over condition - get the actual jump count and score
-          const jumpCount = window.__jumpCount || 0;
-          finalScore = finalScore || window.currentScore || 0;
-          
-          // Log for debugging
-          console.log(`🎮 VALID GAME OVER: Score=${finalScore}, Jumps=${jumpCount}, GameTime=${gameTime}ms`);
-          
-          // Now process the real game over
-          try {
-            // Send the message to parent window
-            window.parent.postMessage({
-              type: 'GAME_OVER',
-              data: {
-                finalScore: finalScore,
-                jumpCount: jumpCount,
-                timestamp: Date.now()
+          return result;
+        };
+        
+        // Hook into player's onPlatform method to detect brown platforms
+        const originalOnPlatform = window.gameInstance.player.onPlatform;
+        window.gameInstance.player.onPlatform = function() {
+          const platformType = originalOnPlatform.apply(this, arguments);
+          return platformType;
+        };
+        
+        // Hook into player's shootTop method to remove the squeezing effect
+        if (window.gameInstance.player.shootTop) {
+          console.log("Removing squeezing effect from bullet shooting");
+          const originalShootTop = window.gameInstance.player.shootTop;
+          window.gameInstance.player.shootTop = function() {
+            // Add screen glow effect when bullet is shot
+            console.log("Applying bullet screen glow effect");
+            if (window.juiceEffects && window.juiceEffects.canvas) {
+              window.juiceEffects.canvas.style.animation = 'screenGlow 0.5s ease-out';
+              setTimeout(() => {
+                if (window.juiceEffects.canvas) {
+                  window.juiceEffects.canvas.style.animation = '';
+                }
+              }, 500);
+            }
+            
+            // Call original method
+            return originalShootTop.apply(this, arguments);
+          };
+        }
+        
+        // Also hook into processJump as an alternative detection method
+        if (window.gameInstance.player.processJump) {
+          const originalProcessJump = window.gameInstance.player.processJump;
+          window.gameInstance.player.processJump = function(platformType) {
+            // Call original first
+            const result = originalProcessJump.apply(this, arguments);
+            
+            // Now check for brown platforms
+            if (platformType === 'brown') {
+              console.log("🎮 BROWN PLATFORM JUMP PROCESSED!");
+              
+              // Create particle explosion
+              const x = this.x + this.width/2;
+              const y = this.y + this.height;
+              window.juiceEffects.createParticles(x, y, 'star', 15, 1000);
+              
+              // Show crash text
+              window.juiceEffects.showScorePopup(x, y - 30, "CRASH!", true);
+              
+              // Apply very strong screen shake
+              window.juiceEffects.screenShake(25, 700);
+            }
+            // Handle spring platforms
+            else if (platformType === 'spring') {
+              console.log("🎮 SPRING PLATFORM JUMP PROCESSED!");
+              
+              // Create special spring particles
+              const x = this.x + this.width/2;
+              const y = this.y + this.height;
+              
+              // Create spiral particle effect for spring
+              for (let i = 0; i < 20; i++) {
+                setTimeout(() => {
+                  window.juiceEffects.createParticles(
+                    x, 
+                    y - (i * 3), 
+                    'star', 
+                    2, 
+                    1500
+                  );
+                }, i * 30);
               }
-            }, '*');
-            console.log('🎮 Game over message sent with bundled jumps:', jumpCount);
+              
+              // Show boost text
+              window.juiceEffects.showScorePopup(x, y - 80, "BOOST!", true);
+              
+              // Play spring sound if available
+              const springSound = document.getElementById('sound-spring');
+              if (springSound) {
+                springSound.currentTime = 0;
+                springSound.play().catch(e => console.log("Error playing spring sound:", e));
+              }
+              
+              // Apply medium screen shake but longer lasting
+              window.juiceEffects.screenShake(15, 1000);
+            }
             
-            // Reset jump counter
-            window.__jumpCount = 0;
-            
-            // Reset game tracking
-            gameHasStarted = false;
-            window.__gameStartTime = null;
-          } catch (error) {
-            console.error('🎮 Error sending game over message:', error);
-          }
-        };
+            return result;
+          };
+        }
         
-        console.log("🎮 Strict game over detection installed");
-      })();
-    </script>
-
-    <!-- Add this to the bottom of the page, right before </body> -->
-    <script>
-      // Direct access to check jump counter
-      setInterval(() => {
-        console.log('Current jump count:', window.__jumpCount || window.totalJumps || 0);
-      }, 5000);
-    </script>
-
-    <!-- Add this to check if the platform images are loaded correctly -->
-    <script>
-      window.addEventListener('load', () => {
-        // Check if platform images are loaded
-        const platformTypes = ['green', 'blue', 'white', 'brown'];
-        platformTypes.forEach(type => {
-          const img = document.querySelector(`#${type}_platform`);
-          if (img) {
-            console.log(`${type}_platform image loaded: ${img.complete}`);
+        // Hook into score changes
+        const originalAddScore = window.gameInstance.addScore || function() {};
+        window.gameInstance.addScore = function(points) {
+          const result = originalAddScore.apply(this, arguments);
+          
+          // Show score popup
+          const playerX = this.player.x + this.player.width/2;
+          const playerY = this.player.y;
+          
+          // Keep track of combos
+          if (!this._comboData) {
+            this._comboData = {
+              count: 0,
+              lastTime: 0,
+              timeout: null
+            };
+          }
+          
+          const now = Date.now();
+          const timeDiff = now - this._comboData.lastTime;
+          
+          if (timeDiff < 2000) {
+            // Combo continues
+            this._comboData.count++;
+            clearTimeout(this._comboData.timeout);
           } else {
-            console.error(`${type}_platform image not found!`);
+            // New combo
+            this._comboData.count = 1;
           }
-        });
-      });
-    </script>
-
-    <!-- Add this script before the closing body tag -->
-    <script>
-        // Detect if device is mobile
-        function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        }
-        
-        // Create and display appropriate control instructions
-        function displayControlInstructions() {
-            const controlsContainer = document.getElementById('controls-instructions');
-            const isMobile = isMobileDevice();
+          
+          this._comboData.lastTime = now;
+          
+          // Show combo or regular score
+          if (this._comboData.count >= 3) {
+            // It's a combo!
+            const comboPoints = points * this._comboData.count;
+            window.juiceEffects.showScorePopup(playerX, playerY, comboPoints, true);
             
-            // Clear any existing content
-            controlsContainer.innerHTML = '';
+            // Create celebratory particles
+            window.juiceEffects.createParticles(playerX, playerY, 'star', 15, 1200);
             
-            // Create title
-            const title = document.createElement('h2');
-            title.className = 'controls-title';
-            title.textContent = 'CONTROLS';
-            controlsContainer.appendChild(title);
-            
-            // Create instructions container
-            const instructionsDiv = document.createElement('div');
-            instructionsDiv.className = 'controls-instructions';
-            
-            if (isMobile) {
-                // Mobile controls - minimal version
-                instructionsDiv.innerHTML = `
-                    <div class="control-item">
-                        <div class="control-icon">👆</div>
-                        <div class="control-text">Tap on screen</div>
-                    </div>
-                    <div class="control-item">
-                        <div class="control-icon">📱</div>
-                        <div class="control-text">Tilt to move</div>
-                    </div>
-                `;
-            } else {
-                // Desktop controls - updated to show space bar
-                instructionsDiv.innerHTML = `
-                    <div class="control-item">
-                        <div class="control-icon" style="font-size: 14px; letter-spacing: -1px;">Space</div>
-                        <div class="control-text">Shoot</div>
-                    </div>
-                    <div class="control-item">
-                        <div class="control-icon">←→</div>
-                        <div class="control-text">Move</div>
-                    </div>
-                `;
+            // Screen shake for big combos
+            if (this._comboData.count >= 5) {
+              window.juiceEffects.screenShake(8, 400);
             }
             
-            controlsContainer.appendChild(instructionsDiv);
-        }
-        
-        // Run this when the page loads
-        window.addEventListener('load', displayControlInstructions);
-    </script>
-
-    <!-- Move the controls-instructions div to appear under the Play button -->
-    <script>
-        // 1. Remove the controls-instructions div from its current location (after character-container)
-        const controlsElement = document.getElementById('controls-instructions');
-        if (controlsElement) {
-            controlsElement.remove();
-        }
-
-        // 2. Create a new function to insert controls after Play button is added
-        function insertControlsAfterPlayButton() {
-            const playButton = document.getElementById('playButton');
-            if (!playButton) {
-                // If play button isn't available yet, try again in 100ms
-                setTimeout(insertControlsAfterPlayButton, 100);
-                return;
+            // Play dramatic sound on big combos
+            if (this._comboData.count >= 8) {
+              window.juiceEffects.dramaticMoment(800);
             }
-            
-            // Get or create the controls container
-            let controlsContainer = document.getElementById('controls-instructions');
-            if (!controlsContainer) {
-                controlsContainer = document.createElement('div');
-                controlsContainer.id = 'controls-instructions';
-                controlsContainer.className = 'controls-container';
-            }
-            
-            // Style adjustment for positioning under the play button
-            controlsContainer.style.marginTop = '30px';
-            controlsContainer.style.marginBottom = '0';
-            
-            // Insert the controls container after the play button
-            playButton.parentNode.insertBefore(controlsContainer, playButton.nextSibling);
-            
-            // Display the correct controls
-            displayControlInstructions();
-        }
-
-        // 3. Modify the existing load event to call our new function
-        const originalLoadHandler = window.onload;
-        window.onload = function() {
-            if (originalLoadHandler) originalLoadHandler();
-            
-            // Call our new function to place controls after play button
-            setTimeout(insertControlsAfterPlayButton, 100);
+          } else {
+            // Regular score
+            window.juiceEffects.showScorePopup(playerX, playerY, points, false);
+          }
+          
+          // Reset combo after a delay
+          this._comboData.timeout = setTimeout(() => {
+            this._comboData.count = 0;
+          }, 2000);
+          
+          return result;
         };
+        
+        console.log("🎮 Juice effects connected successfully");
+      }
+      
+      // Start connecting once the page has loaded
+      window.addEventListener('load', connectJuiceToGame);
+    </script>
+
+    <!-- Direct game over detection script - STRICT VERSION -->
+    <script>
+      // ... existing code ...
+    </script>
+
+    <!-- Direct access to check jump counter -->
+    <script>
+      // ... existing code ...
+    </script>
+
+    <!-- Check if platform images are loaded correctly -->
+    <script>
+      // ... existing code ...
+    </script>
+
+    <!-- Detect if device is mobile -->
+    <script>
+      // ... existing code ...
+    </script>
+
+    <!-- Move the controls-instructions div -->
+    <script>
+      // ... existing code ...
+    </script>
+
+    <!-- Include NadsBot tracking script -->
+    <script src="nadsbot-tracking.js"></script>
+
+    <!-- Game juice JavaScript functions -->
+    <script>
+        console.log("🎮 Game juice effects script loaded");
+        
+        // Add visible debug section to the page
+        const debugElement = document.createElement('div');
+        debugElement.style.position = 'fixed';
+        debugElement.style.bottom = '10px';
+        debugElement.style.right = '10px';
+        debugElement.style.background = 'rgba(0,0,0,0.7)';
+        debugElement.style.color = 'white';
+        debugElement.style.padding = '5px 10px';
+        debugElement.style.fontSize = '12px';
+        debugElement.style.zIndex = '9999';
+        debugElement.style.fontFamily = 'monospace';
+        document.body.appendChild(debugElement);
+        
+        // Direct effect that always shows (regardless of game integration)
+        function createOverlayEffects() {
+            // Create fancy stars in background
+            function createStar() {
+                const star = document.createElement('div');
+                star.style.position = 'fixed';
+                star.style.width = Math.random() * 15 + 5 + 'px';
+                star.style.height = star.style.width;
+                star.style.backgroundColor = `hsl(${Math.random() * 60}, 100%, 75%)`;
+                star.style.clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)';
+                star.style.top = Math.random() * 100 + 'vh';
+                star.style.left = Math.random() * 100 + 'vw';
+                star.style.zIndex = '9000';
+                star.style.filter = 'drop-shadow(0 0 5px rgba(255,255,255,0.7))';
+                star.style.opacity = '0';
+                star.style.transition = 'opacity 0.5s ease, transform 5s ease';
+                
+                document.body.appendChild(star);
+                
+                // Animate
+                setTimeout(() => {
+                    star.style.opacity = '0.7';
+                    star.style.transform = 'rotate(360deg) translateY(-50vh)';
+                }, 10);
+                
+                // Remove after animation
+                setTimeout(() => {
+                    star.style.opacity = '0';
+                    setTimeout(() => star.remove(), 1000);
+                }, 4500);
+            }
+            
+            // Create stars periodically
+            setInterval(createStar, 2000);
+            
+            // Add animation keyframes
+            const styleEl = document.createElement('style');
+            styleEl.textContent = `
+                @keyframes screen-shake {
+                    0%, 100% { transform: translate(0, 0); }
+                    10% { transform: translate(-5px, 5px); }
+                    20% { transform: translate(5px, -5px); }
+                    30% { transform: translate(-6px, -6px); }
+                    40% { transform: translate(6px, 6px); }
+                    50% { transform: translate(-4px, -4px); }
+                    60% { transform: translate(4px, 4px); }
+                    70% { transform: translate(-6px, -2px); }
+                    80% { transform: translate(2px, -6px); }
+                    90% { transform: translate(-5px, 5px); }
+                }
+                
+                @keyframes score-pop {
+                    0% { transform: scale(0.5); opacity: 0; }
+                    10% { transform: scale(1.5); opacity: 1; }
+                    20% { transform: scale(1.2); opacity: 1; }
+                    80% { transform: translateY(-50px) scale(1.2); opacity: 1; }
+                    100% { transform: translateY(-100px) scale(1); opacity: 0; }
+                }
+                
+                .score-popup {
+                    position: fixed;
+                    font-family: 'Bangers', cursive;
+                    color: white;
+                    font-size: 36px;
+                    text-shadow: 3px 3px 0 #000, 0 0 10px gold;
+                    pointer-events: none;
+                    z-index: 9999;
+                    animation: score-pop 1.5s forwards;
+                }
+            `;
+            document.head.appendChild(styleEl);
+            
+            // Create particle effect
+            function createParticleEffect(x, y, count = 5) {
+                for (let i = 0; i < count; i++) {
+                    const particle = document.createElement('div');
+                    particle.style.position = 'fixed';
+                    particle.style.width = (Math.random() * 12 + 5) + 'px';
+                    particle.style.height = particle.style.width;
+                    particle.style.backgroundColor = 'white';
+                    particle.style.borderRadius = '50%';
+                    particle.style.filter = 'drop-shadow(0 0 5px gold)';
+                    particle.style.left = x + 'px';
+                    particle.style.top = y + 'px';
+                    particle.style.zIndex = '9400';
+                    document.body.appendChild(particle);
+                    
+                    // Animate
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 5 + 3;
+                    const vx = Math.cos(angle) * speed;
+                    const vy = Math.sin(angle) * speed - 5; // upward bias
+                    
+                    let opacity = 1;
+                    let posX = x;
+                    let posY = y;
+                    
+                    const interval = setInterval(() => {
+                        opacity -= 0.05;
+                        posX += vx;
+                        posY += vy;
+                        vy += 0.2; // gravity
+                        
+                        particle.style.opacity = opacity;
+                        particle.style.left = posX + 'px';
+                        particle.style.top = posY + 'px';
+                        
+                        if (opacity <= 0) {
+                            clearInterval(interval);
+                            particle.remove();
+                        }
+                    }, 30);
+                }
+            }
+            
+            // Create score popup
+            function createScorePopup(x, y, text) {
+                const popup = document.createElement('div');
+                popup.className = 'score-popup';
+                popup.textContent = text;
+                popup.style.left = x + 'px';
+                popup.style.top = y + 'px';
+                document.body.appendChild(popup);
+                
+                // Remove after animation completes
+                setTimeout(() => {
+                    popup.remove();
+                }, 1500);
+            }
+            
+            
+        }
+        
+        // Start overlay effects
+        createOverlayEffects();
+        
+        // Original juice effects (keep this as backup)
+        class JuiceEffects {
+            constructor() {
+                this.container = document.getElementById('juice-effects-container') || document.body;
+                this.canvas = document.getElementById('canvas1');
+                this.hasAudio = false; // Audio disabled by default
+                
+                // Character overlay is hidden but still used for applying effects
+                this.characterOverlay = null;
+                
+                // Track effects active status
+                this.isActive = true;
+                console.log("🎮 Game juice effects initialized - Visual Only Mode");
+                
+                // Apply direct CSS to document head for immediate effect
+                this.injectStyles();
+            }
+            
+            createCharacterOverlay() {
+                // We're not creating a visible overlay character anymore
+                // but we'll keep this method for compatibility
+                return null;
+            }
+            
+            injectStyles() {
+                // Add CSS directly to ensure animations work
+                const styleEl = document.createElement('style');
+                styleEl.textContent = `
+                    @keyframes character-squash {
+                        0% { transform: scaleY(1) scaleX(1); }
+                        50% { transform: scaleY(0.7) scaleX(1.3); }
+                        100% { transform: scaleY(1) scaleX(1); }
+                    }
+                    
+                    @keyframes character-stretch {
+                        0% { transform: scaleY(1) scaleX(1); }
+                        50% { transform: scaleY(1.3) scaleX(0.7); }
+                        100% { transform: scaleY(1) scaleX(1); }
+                    }
+                    
+                    @keyframes shake {
+                        0%, 100% { transform: translate(0, 0); }
+                        10% { transform: translate(-5px, 5px); }
+                        20% { transform: translate(5px, -5px); }
+                        30% { transform: translate(-6px, -6px); }
+                        40% { transform: translate(6px, 6px); }
+                        50% { transform: translate(-4px, -4px); }
+                        60% { transform: translate(4px, 4px); }
+                        70% { transform: translate(-6px, -2px); }
+                        80% { transform: translate(2px, -6px); }
+                        90% { transform: translate(-5px, 5px); }
+                    }
+                    
+                    .score-popup {
+                        position: absolute;
+                        font-family: 'Bangers', cursive;
+                        color: white;
+                        font-size: 30px;
+                        text-shadow: 2px 2px 0 #000;
+                        pointer-events: none;
+                        z-index: 9600;
+                        animation: scorePopup 1s forwards;
+                    }
+                    
+                    @keyframes scorePopup {
+                        0% { transform: scale(0.5); opacity: 0; }
+                        10% { transform: scale(1.2); opacity: 1; }
+                        20% { transform: scale(1); opacity: 1; }
+                        80% { transform: scale(1) translateY(-20px); opacity: 1; }
+                        100% { transform: scale(1) translateY(-30px); opacity: 0; }
+                    }
+                    
+                    .combo-popup {
+                        position: absolute;
+                        font-family: 'Bangers', cursive;
+                        color: #FFD700;
+                        font-size: 40px;
+                        text-shadow: 2px 2px 0 #000, 0 0 10px rgba(255, 215, 0, 0.7);
+                        pointer-events: none;
+                        z-index: 9600;
+                        animation: comboPopup 1.5s forwards;
+                    }
+                    
+                    @keyframes comboPopup {
+                        0% { transform: scale(0.5); opacity: 0; }
+                        10% { transform: scale(1.5); opacity: 1; }
+                        30% { transform: scale(1.2); opacity: 1; }
+                        90% { transform: scale(1.2) translateY(-30px); opacity: 1; }
+                        100% { transform: scale(1) translateY(-40px); opacity: 0; }
+                    }
+                    
+                    .particle {
+                        position: absolute;
+                        pointer-events: none;
+                        z-index: 9500;
+                        width: 15px;
+                        height: 15px;
+                        background-color: white;
+                        border-radius: 50%;
+                        box-shadow: 0 0 10px gold;
+                    }
+                    
+                    .particle.star {
+                        clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+                    }
+                    
+                    .particle.flame {
+                        background: linear-gradient(to top, #FF5722, #FFC107);
+                        border-radius: 50% 50% 0 50%;
+                        transform: rotate(45deg);
+                    }
+                `;
+                document.head.appendChild(styleEl);
+            }
+            
+            // Simplified version that doesn't require sound files
+            playSound(soundName) {
+                // Audio disabled to prevent errors
+                return false;
+            }
+            
+            // Apply squash effect to canvas directly
+            applySquash(duration = 300) {
+                if (!this.isActive) return;
+                console.log("Applying squash effect");
+                
+                // Apply effect to canvas directly
+                if (this.canvas) {
+                    this.canvas.style.animation = `character-squash ${duration}ms ease-in-out`;
+                    
+                    // Reset animation when done
+                    setTimeout(() => {
+                        this.canvas.style.animation = '';
+                    }, duration);
+                }
+            }
+            
+            // Apply stretch effect to canvas directly
+            applyStretch(duration = 300) {
+                if (!this.isActive) return;
+                console.log("Applying stretch effect");
+                
+                // Apply effect to canvas directly
+                if (this.canvas) {
+                    this.canvas.style.animation = `character-stretch ${duration}ms ease-in-out`;
+                    
+                    // Reset animation when done
+                    setTimeout(() => {
+                        this.canvas.style.animation = '';
+                    }, duration);
+                }
+            }
+            
+            // Screen shake effect
+            screenShake(intensity = 5, duration = 300) {
+                if (!this.canvas || !this.isActive) return;
+                console.log("Applying screen shake");
+                
+                // Apply to whole document body for more visible effect
+                document.body.style.animation = `shake ${duration}ms ease-in-out`;
+                setTimeout(() => {
+                    document.body.style.animation = '';
+                }, duration);
+            }
+            
+            // Score popup animations
+            showScorePopup(x, y, value, isCombo = false) {
+                if (!this.isActive) return;
+                console.log("Showing score popup:", value);
+                
+                // Fix coordinates if not provided
+                if (!x || !y) {
+                    const canvasRect = this.canvas ? this.canvas.getBoundingClientRect() : null;
+                    x = canvasRect ? canvasRect.left + canvasRect.width / 2 : window.innerWidth / 2;
+                    y = canvasRect ? canvasRect.top + canvasRect.height / 2 : window.innerHeight / 2;
+                }
+                
+                const popup = document.createElement('div');
+                popup.className = isCombo ? 'combo-popup' : 'score-popup';
+                popup.textContent = isCombo ? `+${value} COMBO!` : `+${value}`;
+                popup.style.left = `${x}px`;
+                popup.style.top = `${y}px`;
+                
+                document.body.appendChild(popup);
+                
+                // Remove after animation completes
+                setTimeout(() => {
+                    popup.remove();
+                }, isCombo ? 1500 : 1000);
+            }
+            
+            // Particle effects - simplified
+            createParticles(x, y, type = 'star', count = 5) {
+                if (!this.isActive) return;
+                console.log("Creating particles");
+                
+                // Fix coordinates if not provided
+                if (!x || !y) {
+                    const canvasRect = this.canvas ? this.canvas.getBoundingClientRect() : null;
+                    x = canvasRect ? canvasRect.left + canvasRect.width / 2 : window.innerWidth / 2;
+                    y = canvasRect ? canvasRect.top + canvasRect.height / 2 : window.innerHeight / 2;
+                }
+                
+                for (let i = 0; i < count; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = `particle ${type}`;
+                    
+                    // Random position offset
+                    const offsetX = (Math.random() * 40) - 20;
+                    const offsetY = (Math.random() * 40) - 20;
+                    
+                    particle.style.left = `${x + offsetX}px`;
+                    particle.style.top = `${y + offsetY}px`;
+                    
+                    // Random size
+                    const size = (Math.random() * 10) + 10; // Bigger for visibility
+                    particle.style.width = `${size}px`;
+                    particle.style.height = `${size}px`;
+                    
+                    // Random color
+                    if (type === 'star') {
+                        const hue = Math.floor(Math.random() * 60);
+                        particle.style.backgroundColor = `hsl(${hue}, 100%, 75%)`;
+                    }
+                    
+                    document.body.appendChild(particle);
+                    
+                    // Animate and remove
+                    let opacity = 1;
+                    let posX = parseFloat(particle.style.left);
+                    let posY = parseFloat(particle.style.top);
+                    const velX = (Math.random() * 8) - 4;
+                    const velY = (Math.random() * -8) - 4; // Upward
+                    
+                    const interval = setInterval(() => {
+                        opacity -= 0.02; // Slower fade
+                        posX += velX;
+                        posY += velY;
+                        
+                        particle.style.opacity = opacity;
+                        particle.style.left = `${posX}px`;
+                        particle.style.top = `${posY}px`;
+                        
+                        if (opacity <= 0) {
+                            clearInterval(interval);
+                            particle.remove();
+                        }
+                    }, 50);
+                }
+            }
+        }
+        
+        // Create global instance of juice effects
+        window.juiceEffects = new JuiceEffects();
+
+        // Immediately attach to game when loaded
+        window.addEventListener('load', function() {
+            console.log("Window loaded, setting up juice effects integration");
+            
+            // Force apply effects periodically but without overlay characters
+            setInterval(() => {
+                // Apply random effects
+                const screenWidth = window.innerWidth;
+                const screenHeight = window.innerHeight;
+                
+                // Create particles at random locations
+                window.juiceEffects.createParticles(
+                    Math.random() * screenWidth, 
+                    Math.random() * screenHeight, 
+                    'star', 
+                    5
+                );
+                
+                // Screen shake occasionally
+                if (Math.random() > 0.85) {
+                    window.juiceEffects.screenShake(10, 500);
+                }
+            }, 7000);
+            
+            // Add keyboard event listeners for immediate feedback
+            document.addEventListener('keydown', (e) => {
+                // Keep particles for ArrowUp but remove stretch effect
+                if (e.key === 'ArrowUp') {
+                    console.log("Jump key pressed, applying particles only");
+                    
+                    // Create particles at canvas center
+                    if (window.juiceEffects.canvas) {
+                        const canvasRect = window.juiceEffects.canvas.getBoundingClientRect();
+                        window.juiceEffects.createParticles(
+                            canvasRect.left + canvasRect.width / 2, 
+                            canvasRect.top + canvasRect.height / 2 + 100, 
+                            'star', 
+                            10
+                        );
+                    }
+                }
+            });
+            
+            // Add Play Again button that appears on game over
+            function checkForGameOver() {
+                if (window.gameInstance && window.gameInstance.gameOver) {
+                    console.log("Game over detected, adding play again button");
+                    
+                    // Check if button already exists
+                    const existingButton = document.getElementById("play-again-button");
+                    if (!existingButton) {
+                        const canvas = document.getElementById("canvas1");
+                        if (canvas) {
+                            const buttonContainer = document.createElement("div");
+                            buttonContainer.id = "play-again-container";
+                            buttonContainer.style.position = "absolute";
+                            buttonContainer.style.top = canvas.offsetTop + canvas.offsetHeight / 2 + 170 + "px";
+                            buttonContainer.style.left = canvas.offsetLeft + canvas.offsetWidth / 2 + "px";
+                            buttonContainer.style.transform = "translate(-50%, -50%)";
+                            buttonContainer.style.zIndex = "9999";
+                            
+                            const playAgainButton = document.createElement("button");
+                            playAgainButton.id = "play-again-button";
+                            playAgainButton.textContent = "PLAY AGAIN";
+                            playAgainButton.style.padding = "15px 30px";
+                            playAgainButton.style.fontSize = "20px";
+                            playAgainButton.style.fontFamily = "Bangers, cursive";
+                            playAgainButton.style.backgroundColor = "#ff5a5f";
+                            playAgainButton.style.color = "white";
+                            playAgainButton.style.border = "none";
+                            playAgainButton.style.borderRadius = "8px";
+                            playAgainButton.style.cursor = "pointer";
+                            playAgainButton.style.boxShadow = "0 4px 0 #c04046, 0 6px 10px rgba(0,0,0,0.2)";
+                            
+                            playAgainButton.onclick = function() {
+                                console.log("Play Again clicked");
+                                // Reset the game
+                                window.gameInstance.reset();
+                                // Remove the button
+                                buttonContainer.remove();
+                            };
+                            
+                            buttonContainer.appendChild(playAgainButton);
+                            document.body.appendChild(buttonContainer);
+                        }
+                    }
+            } else {
+                    // If game is not over, ensure the button is removed
+                    const buttonContainer = document.getElementById("play-again-container");
+                    if (buttonContainer) {
+                        buttonContainer.remove();
+                    }
+                }
+            }
+            
+            // Check for game over state periodically
+            setInterval(checkForGameOver, 1000);
+        });
+    </script>
+
+    <!-- Add this script after the load event script to ensure everything is initialized -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize audio when the DOM is fully loaded
+            if (typeof initAudio === 'function') {
+                // Initialize audio system
+                initAudio();
+                console.log('Audio system initialized');
+                
+                // Make sure audio context is resumed on common user interactions
+                const resumeAudioContext = () => {
+                    if (window.audioManager && window.audioManager.audioContext) {
+                        if (window.audioManager.audioContext.state === 'suspended') {
+                            window.audioManager.audioContext.resume().then(() => {
+                                console.log('AudioContext resumed by user interaction');
+                            });
+                        }
+                    }
+                };
+                
+                // Add listeners to common interaction events
+                ['click', 'touchstart', 'keydown'].forEach(event => {
+                    document.addEventListener(event, resumeAudioContext);
+                });
+                
+                // Make sure we're not muted unless explicitly requested
+                if (window.setAudioMuted) {
+                    // Only set to false if not already set in localStorage
+                    if (localStorage.getItem('audioMuted') !== 'true') {
+                        window.setAudioMuted(false);
+                    }
+                }
+            } else {
+                console.warn('initAudio function not found');
+            }
+        });
+    </script>
+
+    <!-- Add this script right after the audio elements to ensure fall sound is preloaded -->
+    <script>
+        // Preload fall sound explicitly
+        document.addEventListener('DOMContentLoaded', function() {
+            // Preload fall sound
+            const fallSound = document.getElementById('sound-fall');
+            if (fallSound) {
+                // Force preload
+                fallSound.load();
+                console.log('Fall sound preloaded');
+                
+                // Test the fall sound on page load (will be silent due to browser restrictions)
+                fallSound.volume = 0;
+                const playPromise = fallSound.play();
+                if (playPromise) {
+                    playPromise.then(() => {
+                        fallSound.pause();
+                        fallSound.currentTime = 0;
+                        fallSound.volume = 1.0;
+                        console.log('Fall sound successfully tested');
+                    }).catch(e => {
+                        console.warn('Could not test fall sound due to browser restrictions:', e);
+                    });
+                }
+            } else {
+                console.warn('Fall sound element not found for preloading');
+            }
+            
+            // Also create and preload a direct Audio object
+            const audioFall = new Audio('sound effects/fall.mp3');
+            audioFall.preload = 'auto';
+            audioFall.load();
+            
+            // Store it globally for easy access
+            window.fallAudio = audioFall;
+        });
+    </script>
+
+    <!-- Add right after the audio elements to ensure audio is always unmuted -->
+    <script>
+        // Force unmute audio on game load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Clear any previously saved mute state
+            localStorage.removeItem('audioMuted');
+            
+            // Unmute all audio elements
+            const allAudio = document.querySelectorAll('audio');
+            allAudio.forEach(audio => {
+                audio.muted = false;
+            });
+            
+            // Set an interval to check and unmute audio periodically
+            setInterval(() => {
+                // Check if window.audioManager exists
+                if (window.audioManager) {
+                    // Force audio to be unmuted
+                    window.audioManager.setMuted(false);
+                    
+                    // Tell the parent window about this unmuted state
+                    try {
+                        window.parent.postMessage({
+                            type: 'FORCE_AUDIO_UNMUTE',
+                            message: 'Game needs audio to be unmuted'
+                        }, '*');
+                    } catch (e) {
+                        console.warn('Could not send unmute message to parent window:', e);
+                    }
+                }
+                
+                // Also unmute any HTML audio elements
+                document.querySelectorAll('audio').forEach(audio => {
+                    audio.muted = false;
+                });
+            }, 1000); // Check every second
+        });
+        
+        // Override the mute button behavior in parent window
+        window.addEventListener('message', function(event) {
+            if (event.data?.type === 'AUDIO_CONTROL_INITIALIZED') {
+                // Send a message back to parent to unmute
+                try {
+                    window.parent.postMessage({
+                        type: 'FORCE_AUDIO_UNMUTE',
+                        message: 'Game needs audio to be unmuted'
+                    }, '*');
+                } catch (e) {
+                    console.warn('Could not send unmute message to parent window:', e);
+                }
+            }
+        });
+    </script>
+
+    <!-- Additional script to play audio on first user interaction -->
+    <script>
+        // Add this at the very end to ensure it overrides any other behavior
+        document.addEventListener('DOMContentLoaded', function() {
+            // Create a silent audio for unlocking audio
+            const unlockAudio = document.createElement('audio');
+            unlockAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjM1LjEwNAAAAAAAAAAAAAAA//tQwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAFAAAC/ABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVWqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqr///////////////////////////////////////////8AAAAATGF2YzU4LjU5AAAAAAAAAAAAAAAAJAYHAQAAAAAAn+cDhQAAAAAAAAAAAAAAAAAAAP/7UMQAAApkTrBUyIAB0xWkJZmQASsQE+0+S7kU1jdJwF3BESaz+EUQMVHjZo/CXM9lI5s6YA6v30zpmDP//Ew50fnP/y55Zuc3MduWz///5bu/+cAf//3IEYbO///+oAgGP/////gmO74j//yICI4DgQVAUDw4L///8eCiTFiS4//+AYYYt9HlFX///+SQgXL//EgIE5//+WhfL28XbxdvF28XbxdvF28XbxdvF28XbxdvF28XbxdvF28XbxdvF28X//yYQgE//8ySggQI//8+bJ7Z7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J//8gIgI//8mEQhBP//JrJ7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J7J//8GgBAgCEIGf//xEAACd34pAA0gQCLf//+cAATQ7k8//5MABAtD//pAAB4v//MAAGP//wQAQg///8yACQBQpb//+EAAkCrq///+gAAUCL1///wgAOh////wwAJgAif///KAAJAMov//9AADIBC////CAAeAREf//+aAAWAaJP//+EABsAUS///9AAOhbLO//6IAAjAUG///wgAQD7//9uAACmQFX///tAAQAWEv//+cAACwGRH///XAA8BkKP//+SAACQXRb///1QARgOCf///2QALgZC3///qgAaAMEn//+SAAoAcK///+qABYB4nf///VAAiAkJf///qAAoA0TP///rgAWALlnAAA=';
+            unlockAudio.load();
+            
+            // Function to unlock audio on any user interaction
+            const unlockAudioPlayback = () => {
+                // Play the silent audio
+                const playPromise = unlockAudio.play();
+                if (playPromise) {
+                    playPromise.then(() => {
+                        console.log('Audio playback unlocked by user interaction');
+                        
+                        // Try to play background music
+                        const bgMusic = document.getElementById('bg-music');
+                        if (bgMusic) {
+                            bgMusic.muted = false;
+                            bgMusic.volume = 0.5;
+                            bgMusic.play().then(() => {
+                                console.log('Background music started playing successfully');
+                            }).catch(err => {
+                                console.warn('Could not play background music:', err);
+                            });
+                        }
+                        
+                        // Also try to use AudioManager if available
+                        if (window.audioManager) {
+                            window.audioManager.setMuted(false);
+                            // If playBackgroundMusic method exists, call it
+                            if (typeof window.audioManager.playBackgroundMusic === 'function') {
+                                window.audioManager.playBackgroundMusic();
+                            }
+                        }
+                    }).catch(err => {
+                        console.warn('Could not unlock audio playback:', err);
+                    });
+                }
+                
+                // Remove these event listeners after first interaction
+                ['click', 'touchstart', 'keydown'].forEach(evt => {
+                    document.removeEventListener(evt, unlockAudioPlayback);
+                });
+            };
+            
+            // Add listeners for user interaction
+            ['click', 'touchstart', 'keydown'].forEach(evt => {
+                document.addEventListener(evt, unlockAudioPlayback);
+            });
+        });
     </script>
 </body>
 </html> 

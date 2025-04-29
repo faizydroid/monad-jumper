@@ -17,6 +17,7 @@ const Web3Context = createContext();
 const SUPABASE_URL = import.meta.env.VITE_REACT_APP_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY;
 const GAME_CONTRACT_ADDRESS = import.meta.env.VITE_REACT_APP_GAME_CONTRACT_ADDRESS;
+const RPC_URL = import.meta.env.VITE_RPC_URL;
 
 // Add more detailed logging for Supabase configuration
 console.log('Supabase config:', { 
@@ -65,8 +66,6 @@ try {
   console.error('❌ Failed to initialize Supabase client:', error);
   supabase = null;
 }
-
-const RPC_URL = 'https://prettiest-snowy-pine.monad-testnet.quiknode.pro/4fc856936286525197c30da74dd994d2c7710e93';
 
 // Near the top of the file, add this provider detection function
 const detectProviders = () => {

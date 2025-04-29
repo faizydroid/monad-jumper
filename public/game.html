@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Doodle Jump</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        #canvas1 {
+            border: 5px solid black;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        #bg, #monad0, #virus, #green_platform, #blue_platform, #brown_platform, #white_platform, #bullet {
+            display: none;
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-image: url('images/bg.jpg');
+            background-size: cover;
+            background-position: center;
+            z-index: 10;
+            padding: 20px;
+        }
+
+        .game-title {
+            font-family: 'Bangers', cursive;
+            font-size: 64px;
+            color: white;
+            text-align: center;
+            margin-bottom: 40px;
+            text-shadow: 4px 4px 0 #000;
+        }
+
+        #playButton {
+            display: block;
+            margin: 20px auto;
+            background: linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%);
+            color: white;
+            font-family: 'Bangers', cursive;
+            font-size: 32px;
+            padding: 20px 40px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 10px 0 rgba(220, 50, 50, 0.5), 0 14px 24px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s;
+            letter-spacing: 2px;
+        }
+
+        #playButton:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 14px 0 rgba(220, 50, 50, 0.5), 0 18px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        #errorMessage {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            background-color: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            display: none;
+            z-index: 100;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            }
+        }
+        
+        /* Text popup animation */
+        @keyframes textpopup {
+            0% { transform: scale(0.5); opacity: 0; }
+            20% { transform: scale(1.2); opacity: 1; }
+            80% { transform: scale(1.0); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        
+        .score-popup {
+            position: absolute;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+            font-weight: bold;
+            font-size: 24px;
+            color: #FFD700;
+            text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+            pointer-events: none;
+            user-select: none;
+            z-index: 1000;
+            transform-origin: center center;
+            animation: textpopup 1s ease-out forwards;
+        }
+        
+        .score-popup.combo {
+            color: #FF5252;
+            font-size: 32px;
+            text-shadow: 3px 3px 0 #000;
+        }
+    </style>
+</head>
+<body>
+    <!-- Game canvas -->
+    <canvas id="canvas1"></canvas>
+    
+
+    <!-- Error message container -->
+    <div id="errorMessage"></div>
+    
+    <!-- Game images -->
+    <img src='images/background.png' id='bg' /> 
+    <img src='images/monad0.png' id='monad0' /> 
+    <img src='images/bullet.png' id='bullet' /> 
+    <img src='images/green_platform.png' id='green_platform' />
+    <img src='images/blue_platform.png' id='blue_platform' />
+    <img src='images/brown_platform.png' id='brown_platform' />
+    
+    <!-- Game scripts -->
+    <script type="module" src="/js/background.js"></script>
+    <script type="module" src="/js/bullet.js"></script>
+    <script type="module" src="/js/enemy.js"></script>
+    <script type="module" src="/js/input.js"></script>
+    <script type="module" src="/js/platform.js"></script>
+    <script type="module" src="/js/particles.js"></script>
+    <script type="module" src="/js/player.js"></script>
+    <script type="module" src="/js/main.js"></script>
+    
+    <!-- Simple start script -->
+    <script>
+        // Global audio initialization function
+        window.initializeAudio = function() {
+            console.log('Initializing audio system...');
+            
+            // Ensure all audio elements have proper volume
+            document.querySelectorAll('audio').forEach(audio => {
+                audio.muted = false;
+                // Set fixed volume for all audio
+                audio.volume = 0.5;
+            });
+            
+            // Set localStorage states
+            localStorage.setItem('audioMuted', 'false');
+            localStorage.setItem('bgMusicPlaying', 'false');
+            
+            console.log('Audio initialization complete - background music disabled');
+        };
+        
+        // Global audio utilities
+        window.AudioUtils = {
+            // Preload a sound to ensure it can be played later
+            preloadSound: function(soundName) {
+                console.log(`AudioUtils: Preloading ${soundName} sound`);
+                
+                // First try to preload the HTML audio element
+                const soundElement = document.getElementById(`sound-${soundName}`);
+                if (soundElement) {
+                    console.log(`AudioUtils: Preloading element for ${soundName}`);
+                    soundElement.load();
+                    
+                    // Try to play at silent volume then immediately pause to overcome autoplay restrictions
+                    try {
+                        soundElement.volume = 0.01;
+                        soundElement.muted = true;
+                        const playPromise = soundElement.play();
+                        
+                        if (playPromise !== undefined) {
+                            playPromise.then(() => {
+                                setTimeout(() => {
+                                    soundElement.pause();
+                                    soundElement.currentTime = 0;
+                                    soundElement.volume = 0.5;
+                                    soundElement.muted = false;
+                                    console.log(`AudioUtils: Successfully preloaded ${soundName} element`);
+                                }, 50);
+                            }).catch(e => {
+                                console.warn(`AudioUtils: Could not preload ${soundName} element: ${e}`);
+                                // If element preload fails, try creating a new audio object
+                                this.preloadWithObject(soundName);
+                            });
+                        }
+                    } catch (e) {
+                        console.error(`AudioUtils: Error preloading ${soundName}:`, e);
+                    }
+                } else {
+                    // Fallback to creating a new audio object
+                    this.preloadWithObject(soundName);
+                }
+            },
+            
+            // Preload by creating a new Audio object
+            preloadWithObject: function(soundName) {
+                // Try with different paths
+                const paths = [
+                    `sound effects/${soundName}.mp3`,
+                    `/sound effects/${soundName}.mp3`
+                ];
+                
+                // Also try WAV for jump
+                if (soundName === 'jump') {
+                    paths.push(`sound effects/${soundName}.wav`);
+                }
+                
+                // Try to preload at least one path
+                for (const path of paths) {
+                    try {
+                        console.log(`AudioUtils: Preloading ${path} with new Audio`);
+                        const audio = new Audio(path);
+                        
+                        // Set handlers before load attempt
+                        audio.onloadeddata = () => console.log(`AudioUtils: Successfully loaded ${path}`);
+                        audio.onerror = (e) => console.log(`AudioUtils: Failed to load ${path}:`, e);
+                        
+                        // Force load
+                        audio.load();
+                        
+                        // Try silent play/pause trick
+                        audio.volume = 0.01;
+                        audio.muted = true;
+                        audio.play().then(() => {
+                            setTimeout(() => {
+                                audio.pause();
+                                console.log(`AudioUtils: Successfully preloaded ${path}`);
+                            }, 50);
+                        }).catch(e => {
+                            console.log(`AudioUtils: Failed to preplay ${path}:`, e);
+                        });
+                    } catch (e) {
+                        console.log(`AudioUtils: Error creating Audio for ${path}:`, e);
+                    }
+                }
+            },
+
+            // Play a sound using multiple methods to ensure it works
+            playSound: function(soundName, volume = 1.0) {
+                console.log(`AudioUtils: Attempting to play ${soundName} sound`);
+                let played = false;
+                
+                // First try the HTML audio element
+                const soundElement = document.getElementById(`sound-${soundName}`);
+                if (soundElement) {
+                    try {
+                        console.log(`AudioUtils: Found sound-${soundName} element`);
+                        soundElement.volume = volume;
+                        soundElement.currentTime = 0;
+                        soundElement.muted = false;
+                        const playPromise = soundElement.play();
+                        if (playPromise !== undefined) {
+                            played = true;
+                            playPromise.catch(e => {
+                                console.error(`AudioUtils: Error playing ${soundName} from element:`, e);
+                                this.fallbackPlay(soundName, volume);
+                            });
+                        }
+                    } catch (e) {
+                        console.error(`AudioUtils: Error with element play for ${soundName}:`, e);
+                    }
+                }
+                
+                // If element not found or couldn't play, try fallbacks
+                if (!played) {
+                    this.fallbackPlay(soundName, volume);
+                }
+                
+                return played;
+            },
+            
+            // Fallback methods for sound playback
+            fallbackPlay: function(soundName, volume = 1.0) {
+                console.log(`AudioUtils: Using fallback methods for ${soundName}`);
+                let played = false;
+                
+                // Try AudioManager if available
+                if (window.audioManager && typeof window.audioManager.play === 'function') {
+                    try {
+                        window.audioManager.play(soundName, volume);
+                        played = true;
+                        console.log(`AudioUtils: Played ${soundName} via AudioManager`);
+                    } catch (e) {
+                        console.log(`AudioUtils: AudioManager error for ${soundName}:`, e);
+                    }
+                }
+                
+                // Try direct Audio API with different paths
+                if (!played) {
+                    const paths = [
+                        `sound effects/${soundName}.mp3`,
+                        `/sound effects/${soundName}.mp3`,
+                        `sounds/${soundName}.mp3`,
+                        `/sounds/${soundName}.mp3`
+                    ];
+                    
+                    // Also check if WAV version exists for some sounds
+                    if (soundName === 'jump') {
+                        paths.push(`sound effects/${soundName}.wav`);
+                        paths.push(`/sound effects/${soundName}.wav`);
+                    }
+                    
+                    // Try each path until one works
+                    for (const path of paths) {
+                        try {
+                            console.log(`AudioUtils: Trying direct play from ${path}`);
+                            const audio = new Audio(path);
+                            audio.volume = volume;
+                            audio.play().then(() => {
+                                played = true;
+                                console.log(`AudioUtils: Successfully played ${path}`);
+                            }).catch(e => {
+                                console.log(`AudioUtils: Failed to play ${path}:`, e);
+                            });
+                            
+                            if (played) break;
+                        } catch (e) {
+                            console.log(`AudioUtils: Error creating Audio for ${path}:`, e);
+                        }
+                    }
+                }
+                
+                return played;
+            }
+        };
+        
+        // Error handling for debugging
+        function showError(message) {
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            console.error(message);
+        }
+
+        // Override console.error to show in UI
+        const originalConsoleError = console.error;
+        console.error = function() {
+            // Call the original console.error
+            originalConsoleError.apply(console, arguments);
+            
+            // Display in UI
+            showError(Array.from(arguments).join(' '));
+        };
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize audio immediately
+            if (typeof window.initializeAudio === 'function') {
+                window.initializeAudio();
+            }
+            
+            // Listen for messages from parent window
+            window.addEventListener('message', function(event) {
+                try {
+                    if (event.data && event.data.type === 'FORCE_AUDIO_UNMUTE') {
+                        console.log('Received audio settings message from parent');
+                        
+                        // Set all sound effects to play normally
+                        document.querySelectorAll('audio').forEach(audio => {
+                            audio.muted = false;
+                            audio.volume = 0.5;
+                        });
+                    }
+                    
+                    // Ignore all music-related messages
+                } catch (e) {
+                    console.error('Error handling message from parent:', e);
+                }
+            });
+            
+            // Get the play button
+            const playButton = document.getElementById('playButton');
+            const startScreen = document.getElementById('startScreen');
+            const canvas = document.getElementById('canvas1');
+            
+            // Add white_platform image that might be missing
+            const whitePlatform = document.createElement('img');
+            whitePlatform.id = 'white_platform';
+            whitePlatform.src = 'images/white_platform.png';
+            whitePlatform.style.display = 'none';
+            document.body.appendChild(whitePlatform);
+            
+            // Ensure virus image exists
+            if (!document.getElementById('virus')) {
+                const virusImg = document.createElement('img');
+                virusImg.id = 'virus';
+                virusImg.src = 'images/virus.png';
+                virusImg.style.display = 'none';
+                document.body.appendChild(virusImg);
+            }
+            
+            // Debugging: Log the global window.gameInstance
+            console.log('Initial game instance check:', window.gameInstance);
+            
+            // Check if the game instance is available
+            let checkGameInstance = function() {
+                if (window.gameInstance) {
+                    console.log('Game instance found and ready');
+                    return true;
+                }
+                console.warn('Game instance not found');
+                return false;
+            };
+            
+            // Force game init right away to ensure it's ready
+            try {
+                const event = new Event('forceGameInit');
+                window.dispatchEvent(event);
+                console.log('Dispatched forceGameInit event');
+                
+                // Re-check after a short delay
+                setTimeout(function() {
+                    console.log('Checking game instance availability:', !!window.gameInstance);
+                }, 100);
+            } catch (e) {
+                console.error('Error dispatching init event:', e);
+            }
+            
+            // Add click handler to start the game
+            playButton.addEventListener('click', function() {
+                try {
+                    // Hide the start screen
+                    startScreen.style.display = 'none';
+                    
+                    // Show the canvas
+                    canvas.style.display = 'block';
+                    
+                    // Ensure audio effects are enabled
+                    document.querySelectorAll('audio').forEach(audio => {
+                        audio.muted = false;
+                        audio.volume = 0.5;
+                    });
+                    
+                    // Set localStorage state
+                    localStorage.setItem('audioMuted', 'false');
+                    
+                    // Try to start the game if it's available
+                    if (checkGameInstance()) {
+                        console.log('Starting game from play button');
+                        window.gameInstance.startGame();
+                    } else {
+                        console.warn('Game instance not found, trying to initialize...');
+                        
+                        // Force the game to initialize if not found
+                        const event = new Event('forceGameInit');
+                        window.dispatchEvent(event);
+                        
+                        // Try again after a short delay
+                        setTimeout(function() {
+                            if (window.gameInstance) {
+                                console.log('Game instance initialized, starting game');
+                                window.gameInstance.startGame();
+                            } else {
+                                console.error('Failed to initialize game instance');
+                                showError('Could not start the game. Please reload the page.');
+                            }
+                        }, 500);
+                    }
+                } catch (e) {
+                    console.error('Error starting game:', e);
+                }
+            });
+
+            // Add fallback implementation for juiceEffects if not already defined
+            if (!window.juiceEffects) {
+                console.log("Creating fallback juiceEffects implementation");
+                window.juiceEffects = {
+                    // Screen shake implementation
+                    screenShake: function(intensity = 5, duration = 300) {
+                        console.log(`SCREEN SHAKE triggered with intensity ${intensity}, duration ${duration}`);
+                        const canvas = document.getElementById('canvas1');
+                        if (!canvas) {
+                            console.error("Cannot find canvas for screen shake");
+                            return;
+                        }
+                        
+                        // Create a style element if it doesn't exist
+                        let styleEl = document.getElementById('juice-style');
+                        if (!styleEl) {
+                            styleEl = document.createElement('style');
+                            styleEl.id = 'juice-style';
+                            styleEl.textContent = `
+                                @keyframes shake {
+                                    0%, 100% { transform: translate(0, 0); }
+                                    10% { transform: translate(-${intensity/2}px, ${intensity/2}px); }
+                                    20% { transform: translate(${intensity/2}px, -${intensity/2}px); }
+                                    30% { transform: translate(-${intensity/1.5}px, -${intensity/1.5}px); }
+                                    40% { transform: translate(${intensity/1.5}px, ${intensity/1.5}px); }
+                                    50% { transform: translate(-${intensity/2}px, -${intensity/2}px); }
+                                    60% { transform: translate(${intensity/2}px, ${intensity/2}px); }
+                                    70% { transform: translate(-${intensity/3}px, -${intensity/5}px); }
+                                    80% { transform: translate(${intensity/5}px, -${intensity/3}px); }
+                                    90% { transform: translate(-${intensity/2}px, ${intensity/2}px); }
+                                }
+                            `;
+                            document.head.appendChild(styleEl);
+                        }
+                        
+                        // Force reset any existing animation first
+                        canvas.style.animation = 'none';
+                        
+                        // Trigger reflow to ensure animation restarts properly
+                        void canvas.offsetWidth;
+                        
+                        console.log(`Applying shake animation for ${duration}ms`);
+                        
+                        // Scale the intensity - higher is stronger shake
+                        const scaledDuration = Math.min(Math.max(duration, 100), 2000);
+                        
+                        // Apply animation to canvas
+                        canvas.style.animation = `shake ${scaledDuration}ms ease-in-out`;
+                        
+                        // Remove animation after it completes
+                        setTimeout(() => {
+                            canvas.style.animation = '';
+                        }, scaledDuration);
+                    },
+                    
+                    // Simple particle effect
+                    createParticles: function(x, y, type, count, duration) {
+                        console.log(`Particles at ${x},${y}`);
+                    },
+                    
+                    // Popup text implementation
+                    showScorePopup: function(x, y, text, isCombo) {
+                        // Get the canvas to position relative to it
+                        const canvas = document.getElementById('canvas1');
+                        if (!canvas) {
+                            console.log("Cannot show score popup: canvas not found");
+                            return;
+                        }
+                        
+                        // Create popup element
+                        const popup = document.createElement('div');
+                        popup.className = isCombo ? 'score-popup combo' : 'score-popup';
+                        popup.textContent = text;
+                        
+                        // Set position relative to canvas
+                        const canvasRect = canvas.getBoundingClientRect();
+                        const relX = x / canvas.width * canvasRect.width;
+                        const relY = y / canvas.height * canvasRect.height;
+                        
+                        popup.style.left = (canvasRect.left + relX - (popup.offsetWidth || 100) / 2) + 'px';
+                        popup.style.top = (canvasRect.top + relY) + 'px';
+                        
+                        // Style based on combo status
+                        if (isCombo) {
+                            popup.style.fontSize = '28px';
+                            popup.style.color = '#FF5722'; // Orange for combos
+                        }
+                        
+                        // Add to document
+                        document.body.appendChild(popup);
+                        
+                        // Fix position after we know the element size
+                        setTimeout(() => {
+                            popup.style.left = (canvasRect.left + relX - popup.offsetWidth / 2) + 'px';
+                        }, 10);
+                        
+                        // Remove after animation completes
+                        setTimeout(() => {
+                            if (popup.parentNode) {
+                                popup.parentNode.removeChild(popup);
+                            }
+                        }, 1200);
+                    }
+                };
+            }
+        });
+    </script>
+
+    <!-- Add missing audio elements -->
+    <audio id="sound-jump" src="/sounds/jump.mp3" preload="auto"></audio>
+    <audio id="sound-land" src="/sounds/land.mp3" preload="auto"></audio>
+    <audio id="sound-boost" src="/sounds/boost.mp3" preload="auto"></audio>
+    <audio id="sound-combo" src="/sounds/combo.mp3" preload="auto"></audio>
+    <audio id="sound-hit" src="/sounds/hit.mp3" preload="auto"></audio>
+    <audio id="sound-dramatic" src="/sounds/dramatic.mp3" preload="auto"></audio>
+    <audio id="sound-spring" src="/sounds/spring.mp3" preload="auto"></audio>
+    <audio id="sound-fall" src="sound effects/fall.mp3" preload="auto"></audio>
+</body>
+</html> 
