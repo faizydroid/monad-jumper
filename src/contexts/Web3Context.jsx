@@ -721,7 +721,7 @@ export function Web3Provider({ children }) {
           
           if (accounts.length > 0) {
             setAccount(accounts[0]);
-            
+      
             // Set up the provider and contract
             await setupProviderAndContract(accounts[0]);
             
@@ -732,8 +732,8 @@ export function Web3Provider({ children }) {
             setIsConnected(true);
             
             console.log('Wallet connected:', accounts[0]);
-            return true;
-          }
+          return true;
+        }
         } catch (error) {
           // Specifically handle extension messaging errors
           if (error.message && (
@@ -749,7 +749,7 @@ export function Web3Provider({ children }) {
         }
       } else {
         setProviderError('MetaMask not installed');
-        return false;
+      return false;
       }
     } catch (error) {
       console.error('Unexpected error in connectWallet:', error);
@@ -1116,9 +1116,9 @@ export function Web3Provider({ children }) {
       // Format into leaderboard entries
       const formattedLeaderboard = sortedScores.map(item => {
         const address = item.wallet_address.toLowerCase();
-        
-        // Format the entry (using username from the joined users table if available)
-        const username = item.users?.username || 
+          
+          // Format the entry (using username from the joined users table if available)
+          const username = item.users?.username || 
           `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
         
         return {

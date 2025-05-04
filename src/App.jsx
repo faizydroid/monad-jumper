@@ -405,6 +405,175 @@ const NFTMintModal = ({ isOpen, onClose }) => {
   );
 };
 
+// Add this ReviveModal component after the NFTMintModal component
+const ReviveModal = ({ isOpen, onClose, onRevive, hasUsedRevive }) => {
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const { address } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+  
+  const handleRevive = async () => {
+    if (!address) {
+      setError("Please connect your wallet first");
+      return;
+    }
+    
+    setIsPurchasing(true);
+    setError(null);
+    
+    try {
+      // Revive contract address
+      const reviveContractAddress = "0xf8e81D47203A594245E36C48e151709F0C19fBe8";
+      
+      console.log("Sending revive transaction with 0.5 MON to address:", reviveContractAddress);
+      
+      // Use wagmi's writeContractAsync
+      const hash = await writeContractAsync({
+        address: reviveContractAddress,
+        abi: [
+          {
+            name: "purchaseRevive",
+            type: "function",
+            stateMutability: "payable",
+            inputs: [],
+            outputs: [],
+          }
+        ],
+        functionName: "purchaseRevive",
+        value: parseEther("0.5"),
+      });
+      
+      console.log("Revive transaction sent:", hash);
+      
+      // Show success state
+      setSuccess(true);
+      
+      // Call onRevive callback to continue the game
+      setTimeout(() => {
+        onRevive();
+        onClose();
+      }, 1500);
+    } catch (err) {
+      console.error("Revive error:", err);
+      
+      if (err.message?.includes("insufficient funds")) {
+        setError("You need 0.5 MON to revive");
+      } else if (err.message?.includes("Player has already used their revive")) {
+        setError("You've already used your revive for this game session");
+      } else if (err.message?.includes("rejected")) {
+        setError("Transaction rejected in your wallet");
+      } else {
+        setError(err.message || "Failed to revive. Please try again.");
+      }
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+  
+  // If already used revive, show different message
+  if (hasUsedRevive) {
+    return (
+      <SimpleModal isOpen={isOpen} onClose={onClose} title="Out of Revives">
+        <div className="revive-modal-content" style={{textAlign: 'center'}}>
+          <div style={{fontSize: '64px', margin: '20px 0'}}>💀</div>
+          <h2 style={{color: '#FF5252', marginBottom: '20px'}}>No More Revives!</h2>
+          <p>You've already used your revive for this game.</p>
+          <p>Start a new game to try again!</p>
+          
+          <button 
+            onClick={onClose} 
+            style={{
+              background: 'linear-gradient(90deg, #4CAF50 0%, #45A049 100%)',
+              border: 'none',
+              padding: '15px 30px',
+              borderRadius: '50px',
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: '18px',
+              margin: '30px 0 10px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            Play Again
+          </button>
+        </div>
+      </SimpleModal>
+    );
+  }
+  
+  // If purchase was successful
+  if (success) {
+    return (
+      <SimpleModal isOpen={isOpen} onClose={onClose} title="Revive Successful!">
+        <div className="revive-success-content" style={{textAlign: 'center'}}>
+          <div style={{fontSize: '64px', margin: '20px 0'}}>🎉</div>
+          <h2 style={{color: '#4CAF50', marginBottom: '20px'}}>Revive Purchased!</h2>
+          <p>Get ready to continue your jump!</p>
+        </div>
+      </SimpleModal>
+    );
+  }
+  
+  return (
+    <SimpleModal isOpen={isOpen} onClose={onClose} title="Revive Your Jump?">
+      <div className="revive-modal-content">
+        <p>Don't let your jump end here! Continue from where you left off.</p>
+        <p>Cost: <strong>0.5 MON</strong></p>
+        
+        {error && (
+          <div className="error-message" style={{color: '#FF5252', margin: '15px 0', padding: '10px', background: 'rgba(255,82,82,0.1)', borderRadius: '4px'}}>
+            {error}
+          </div>
+        )}
+        
+        <div className="revive-actions" style={{marginTop: '20px', display: 'flex', gap: '10px'}}>
+          <button 
+            onClick={handleRevive} 
+            disabled={isPurchasing}
+            className="revive-now-btn"
+            style={{
+              background: isPurchasing ? '#888' : 'linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%)',
+              border: 'none',
+              padding: '12px 20px',
+              borderRadius: '50px',
+              color: 'white',
+              flex: '1',
+              cursor: isPurchasing ? 'not-allowed' : 'pointer',
+              position: 'relative'
+            }}
+          >
+            {isPurchasing ? 'Processing...' : 'Buy Revive (0.5 MON)'}
+            {isPurchasing && (
+              <span className="spinner" style={{
+                width: '20px',
+                height: '20px',
+                border: '2px solid rgba(255,255,255,0.3)',
+                borderTop: '2px solid white',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                position: 'absolute',
+                right: '15px',
+                top: 'calc(50% - 10px)'
+              }}></span>
+            )}
+          </button>
+          
+          <button 
+            onClick={onClose}
+            style={{padding: '12px', background: 'transparent', border: '1px solid #ccc', borderRadius: '50px', color: 'white'}}
+            disabled={isPurchasing}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </SimpleModal>
+  );
+};
+
 // Add this special function at the top of the file
 function forceReloadIframe(iframeRef, newGameId) {
   // Don't do anything if no iframe reference
@@ -1423,6 +1592,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   const handlePlayAgain = useCallback(() => {
     console.log("🔄 Play Again clicked");
     
+    // Reset revive status for new game
+    setHasUsedRevive(false);
+    setCurrentGameState(null);
+    
     // Increment games counter in Supabase
     if (address && incrementGamesPlayed) {
       incrementGamesPlayed(address)
@@ -1720,6 +1893,26 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       const data = event.data;
       
       if (data && typeof data === 'object') {
+        // Handle death events to show revive modal before game over
+        if (data.type === 'playerDeath' || data.type === 'PLAYER_DEATH') {
+          console.log('Player death detected, score:', data.score || data.data?.score);
+          
+          // Store current game state for potential revive
+          const gameState = {
+            score: data.score || data.data?.score || 0,
+            position: data.position || data.data?.position,
+            jumps: data.jumps || data.data?.jumps || window.__jumpCount || 0
+          };
+          
+          setCurrentGameState(gameState);
+          
+          // Only show revive modal if player hasn't used a revive yet
+          if (!hasUsedRevive) {
+            setShowReviveModal(true);
+            return; // Don't proceed to game over yet
+          }
+        }
+        
         if (data.type === 'gameOver' || data.type === 'GAME_OVER') {
           console.log('Game Over with score:', data.score || data.data?.finalScore);
           
@@ -1767,7 +1960,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     return () => {
       window.removeEventListener('message', handleIframeMessage);
     };
-  }, [onGameOver, iframeRef, isConnected, openConnectModal]);
+  }, [onGameOver, iframeRef, isConnected, openConnectModal, hasUsedRevive]);
 
   // Add this at the top of your component
   useEffect(() => {
@@ -2267,6 +2460,69 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     return () => window.removeEventListener('message', handleGameReload);
   }, [address, supabase, iframeRef]);
 
+  // Add revive related state
+  const [showReviveModal, setShowReviveModal] = useState(false);
+  const [hasUsedRevive, setHasUsedRevive] = useState(false);
+  const [currentGameState, setCurrentGameState] = useState(null);
+  
+  // Add this near the other useEffect blocks to check if player has already used revive
+  useEffect(() => {
+    const checkReviveStatus = async () => {
+      if (!address || !publicClient) return;
+      
+      try {
+        const reviveContractAddress = "0xf8e81D47203A594245E36C48e151709F0C19fBe8";
+        
+        // Check if player has already used revive for this session
+        const hasUsed = await publicClient.readContract({
+          address: reviveContractAddress,
+          abi: [
+            {
+              name: "checkReviveStatus",
+              type: "function",
+              stateMutability: "view",
+              inputs: [{ type: "address", name: "player" }],
+              outputs: [{ type: "bool" }]
+            }
+          ],
+          functionName: "checkReviveStatus",
+          args: [address]
+        });
+        
+        console.log("Revive status checked:", hasUsed);
+        setHasUsedRevive(hasUsed);
+      } catch (error) {
+        console.error("Error checking revive status:", error);
+      }
+    };
+    
+    checkReviveStatus();
+  }, [address, publicClient]);
+  
+  // Add revive handler function
+  const handleRevive = useCallback(() => {
+    // Mark player as having used revive
+    setHasUsedRevive(true);
+    
+    // Close revive modal
+    setShowReviveModal(false);
+    
+    // Resume game from stored state
+    if (currentGameState && iframeRef.current && iframeRef.current.contentWindow) {
+      try {
+        console.log("Reviving game with state:", currentGameState);
+        
+        // Send revive message to game iframe
+        iframeRef.current.contentWindow.postMessage({
+          type: 'REVIVE_PLAYER',
+          data: currentGameState
+        }, '*');
+      } catch (err) {
+        console.error("Error reviving game:", err);
+      }
+    }
+  }, [currentGameState, iframeRef]);
+
   if (providerError) {
     return (
       <div className="wallet-error">
@@ -2605,6 +2861,24 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         ></iframe>
         </div>
       </div>
+      
+      {showReviveModal && (
+        <ReviveModal 
+          isOpen={true}
+          onClose={() => {
+            setShowReviveModal(false);
+            // Send message to show game over screen
+            if (iframeRef.current && iframeRef.current.contentWindow) {
+              iframeRef.current.contentWindow.postMessage({
+                type: 'CANCEL_REVIVE',
+                data: { showGameOver: true }
+              }, '*');
+            }
+          }}
+          onRevive={handleRevive}
+          hasUsedRevive={hasUsedRevive}
+        />
+      )}
     </div>
   );
 }
