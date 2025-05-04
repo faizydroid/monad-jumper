@@ -265,7 +265,7 @@ export class Player {
             // Special handling for brown platforms
             if (platform.type === 'brown') {
                 brownPlatforms.push(platform);
-            } else {
+                        } else {
                 candidatePlatforms.push(platform);
             }
         }

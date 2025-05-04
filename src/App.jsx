@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
-import { useAccount, useConnect, useDisconnect, useWalletClient, usePublicClient, useReadContract } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useWalletClient, usePublicClient, useReadContract, useConfig, useWriteContract } from 'wagmi';
 import './App.css';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AdminDashboard from './components/AdminDashboard';
@@ -351,7 +351,7 @@ const NFTMintModal = ({ isOpen, onClose }) => {
   return (
     <SimpleModal isOpen={isOpen} onClose={onClose} title="Mint Character NFT">
       <div className="mint-modal-content">
-        <p>Mint your unique JumpNads character NFT to play the game!</p>
+        <p>Mint your JumpNads character NFT to play the game!</p>
         <p>Cost: <strong>1 MON</strong></p>
         
         {error && (
