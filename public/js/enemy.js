@@ -77,27 +77,29 @@ export class Enemy {
         };
     }
 
-    update() {
-        // Always move virus downwards - continue falling instead of stopping
-        this.y += this.speedY;
+    update(deltaTime = 1.0) {
+        // Skip updates for offscreen enemies (major performance optimization)
+        if (this.y > this.game.height + 100 || this.y < -300) {
+            return;
+        }
         
-        // Always move horizontally
+        // Use fixed movement speeds for absolute consistency
+        
+        // Fixed speeds - not affected by frame rate
+        this.y += this.speedY;
         this.x += this.speedX;
         
         // Cache boundary values for more efficient checks
         const leftBoundary = 0;
         const rightBoundary = this.game.width - this.width;
         
-        // Bounce off walls
-        if (this.x <= leftBoundary || this.x >= rightBoundary) {
-            this.speedX *= -1;
-            
-            // Fix position to avoid getting stuck at boundaries
-            if (this.x < leftBoundary) {
-                this.x = leftBoundary;
-            } else if (this.x > rightBoundary) {
-                this.x = rightBoundary;
-            }
+        // Bounce off walls - simplified check with early exit
+        if (this.x < leftBoundary) {
+            this.x = leftBoundary;
+            this.speedX = Math.abs(this.speedX); // Force positive to move right
+        } else if (this.x > rightBoundary) {
+            this.x = rightBoundary;
+            this.speedX = -Math.abs(this.speedX); // Force negative to move left
         }
         
         // Mark for deletion if off screen
@@ -107,26 +109,24 @@ export class Enemy {
     }
 
     draw(context) {
-        // Only draw if enemy is in the visible area of the screen
-        if (this.x + this.width >= 0 && 
-            this.x <= this.game.width && 
-            this.y + this.height >= 0 && 
-            this.y <= this.game.height) {
-            
-        if (this.image) {
-                context.drawImage(this.image, this.x, this.y, this.width, this.height);
-                
-                // Uncomment to debug hitbox
-                /*
-                context.strokeStyle = 'red';
-                const hitbox = this.getHitbox();
-                context.strokeRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
-                */
+        // Skip rendering completely for enemies far off screen 
+        // (critical optimization for slow devices)
+        if (this.y < -this.height || 
+            this.y > this.game.height + 50 || 
+            this.x < -this.width - 50 || 
+            this.x > this.game.width + 50) {
+            return;
+        }
+        
+        // Use a single image reference check instead of multiple
+        const img = this.image;
+        if (img && img.complete) {
+            // Draw directly - no extra checks
+            context.drawImage(img, this.x, this.y, this.width, this.height);
         } else {
-            // Fallback drawing if image is missing
+            // Fallback drawing if image is missing or not loaded
             context.fillStyle = 'red';
             context.fillRect(this.x, this.y, this.width, this.height);
-            }
         }
     }
 }

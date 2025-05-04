@@ -11,6 +11,7 @@ const Leaderboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const loadingTimeoutRef = useRef(null);
   const fetchedRef = useRef(false);
+  const boardRef = useRef(null);
 
   // Fetch jumps leaderboard when component mounts or tab changes
   useEffect(() => {
@@ -52,6 +53,28 @@ const Leaderboard = () => {
     };
   }, [activeTab, fetchJumpsLeaderboard, jumpsLeaderboard.length]);
 
+  // Scroll to top when tab changes
+  useEffect(() => {
+    if (boardRef.current) {
+      boardRef.current.scrollTop = 0;
+    }
+  }, [activeTab]);
+
+  // Function to render medal or rank number with better styling
+  const renderRank = (index) => {
+    if (index < 3) {
+      return (
+        <span className="medal">
+          {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+        </span>
+      );
+    } else if (index < 10) {
+      return <span className="top-ten-rank">{`#${index + 1}`}</span>;
+    } else {
+      return <span className="normal-rank">{`#${index + 1}`}</span>;
+    }
+  };
+
   return (
     <div className="leaderboard-container">
       <h2 className="leaderboard-title">🏆 TOP PLAYERS 🏆</h2>
@@ -71,7 +94,7 @@ const Leaderboard = () => {
         </button>
       </div>
       
-      <div className="leaderboard-board">
+      <div className="leaderboard-board" ref={boardRef}>
         {isLoading ? (
           <div className="loading-indicator">Loading...</div>
         ) : activeTab === 'scores' ? (
@@ -83,21 +106,16 @@ const Leaderboard = () => {
               {leaderboard.map((entry, index) => (
                 <div 
                   key={`${entry.address}-${entry.score}`} 
-                  className={`leaderboard-row ${index < 3 ? 'top-three' : ''} ${index === 0 ? 'first-place' : ''}`}
+                  className={`leaderboard-row ${index < 3 ? 'top-three' : ''} ${index === 0 ? 'first-place' : ''} ${index >= 10 ? 'extended-list' : ''}`}
                 >
                   <div className="rank">
-                    {index < 3 ? (
-                      <span className="medal">
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                      </span>
-                    ) : (
-                      `#${index + 1}`
-                    )}
+                    {renderRank(index)}
                   </div>
                   <div className="player-name">{entry.player}</div>
                   <div className="score-bubble">{Number(entry.score).toLocaleString()}</div>
                 </div>
               ))}
+              <div className="list-end-marker">• • •</div>
             </div>
           )
         ) : (
@@ -109,21 +127,16 @@ const Leaderboard = () => {
               {jumpsLeaderboard.map((entry, index) => (
                 <div 
                   key={`${entry.address}-${entry.jumps}`} 
-                  className={`leaderboard-row ${index < 3 ? 'top-three' : ''} ${index === 0 ? 'first-place' : ''}`}
+                  className={`leaderboard-row ${index < 3 ? 'top-three' : ''} ${index === 0 ? 'first-place' : ''} ${index >= 10 ? 'extended-list' : ''}`}
                 >
                   <div className="rank">
-                    {index < 3 ? (
-                      <span className="medal">
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                      </span>
-                    ) : (
-                      `#${index + 1}`
-                    )}
+                    {renderRank(index)}
                   </div>
                   <div className="player-name">{entry.player}</div>
                   <div className="score-bubble jumps-bubble">{Number(entry.jumps).toLocaleString()}</div>
                 </div>
               ))}
+              <div className="list-end-marker">• • •</div>
             </div>
           )
         )}

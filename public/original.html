@@ -1334,9 +1334,6 @@
       // ... existing code ...
     </script>
 
-    <!-- Include NadsBot tracking script -->
-    <script src="nadsbot-tracking.js"></script>
-
     <!-- Game juice JavaScript functions -->
     <script>
         console.log("🎮 Game juice effects script loaded");
@@ -1681,64 +1678,10 @@
                 }, isCombo ? 1500 : 1000);
             }
             
-            // Particle effects - simplified
+            // Completely empty implementation - no particles at all
             createParticles(x, y, type = 'star', count = 5) {
-                if (!this.isActive) return;
-                console.log("Creating particles");
-                
-                // Fix coordinates if not provided
-                if (!x || !y) {
-                    const canvasRect = this.canvas ? this.canvas.getBoundingClientRect() : null;
-                    x = canvasRect ? canvasRect.left + canvasRect.width / 2 : window.innerWidth / 2;
-                    y = canvasRect ? canvasRect.top + canvasRect.height / 2 : window.innerHeight / 2;
-                }
-                
-                for (let i = 0; i < count; i++) {
-                    const particle = document.createElement('div');
-                    particle.className = `particle ${type}`;
-                    
-                    // Random position offset
-                    const offsetX = (Math.random() * 40) - 20;
-                    const offsetY = (Math.random() * 40) - 20;
-                    
-                    particle.style.left = `${x + offsetX}px`;
-                    particle.style.top = `${y + offsetY}px`;
-                    
-                    // Random size
-                    const size = (Math.random() * 10) + 10; // Bigger for visibility
-                    particle.style.width = `${size}px`;
-                    particle.style.height = `${size}px`;
-                    
-                    // Random color
-                    if (type === 'star') {
-                        const hue = Math.floor(Math.random() * 60);
-                        particle.style.backgroundColor = `hsl(${hue}, 100%, 75%)`;
-                    }
-                    
-                    document.body.appendChild(particle);
-                    
-                    // Animate and remove
-                    let opacity = 1;
-                    let posX = parseFloat(particle.style.left);
-                    let posY = parseFloat(particle.style.top);
-                    const velX = (Math.random() * 8) - 4;
-                    const velY = (Math.random() * -8) - 4; // Upward
-                    
-                    const interval = setInterval(() => {
-                        opacity -= 0.02; // Slower fade
-                        posX += velX;
-                        posY += velY;
-                        
-                        particle.style.opacity = opacity;
-                        particle.style.left = `${posX}px`;
-                        particle.style.top = `${posY}px`;
-                        
-                        if (opacity <= 0) {
-                            clearInterval(interval);
-                            particle.remove();
-                        }
-                    }, 50);
-                }
+                // Do nothing - particles disabled for performance
+                return null;
             }
         }
         
@@ -1749,99 +1692,10 @@
         window.addEventListener('load', function() {
             console.log("Window loaded, setting up juice effects integration");
             
-            // Force apply effects periodically but without overlay characters
-            setInterval(() => {
-                // Apply random effects
-                const screenWidth = window.innerWidth;
-                const screenHeight = window.innerHeight;
-                
-                // Create particles at random locations
-                window.juiceEffects.createParticles(
-                    Math.random() * screenWidth, 
-                    Math.random() * screenHeight, 
-                    'star', 
-                    5
-                );
-                
-                // Screen shake occasionally
-                if (Math.random() > 0.85) {
-                    window.juiceEffects.screenShake(10, 500);
-                }
-            }, 7000);
-            
             // Add keyboard event listeners for immediate feedback
             document.addEventListener('keydown', (e) => {
-                // Keep particles for ArrowUp but remove stretch effect
-                if (e.key === 'ArrowUp') {
-                    console.log("Jump key pressed, applying particles only");
-                    
-                    // Create particles at canvas center
-                    if (window.juiceEffects.canvas) {
-                        const canvasRect = window.juiceEffects.canvas.getBoundingClientRect();
-                        window.juiceEffects.createParticles(
-                            canvasRect.left + canvasRect.width / 2, 
-                            canvasRect.top + canvasRect.height / 2 + 100, 
-                            'star', 
-                            10
-                        );
-                    }
-                }
+                // No particle effects for key presses - disabled for performance
             });
-            
-            // Add Play Again button that appears on game over
-            function checkForGameOver() {
-                if (window.gameInstance && window.gameInstance.gameOver) {
-                    console.log("Game over detected, adding play again button");
-                    
-                    // Check if button already exists
-                    const existingButton = document.getElementById("play-again-button");
-                    if (!existingButton) {
-                        const canvas = document.getElementById("canvas1");
-                        if (canvas) {
-                            const buttonContainer = document.createElement("div");
-                            buttonContainer.id = "play-again-container";
-                            buttonContainer.style.position = "absolute";
-                            buttonContainer.style.top = canvas.offsetTop + canvas.offsetHeight / 2 + 170 + "px";
-                            buttonContainer.style.left = canvas.offsetLeft + canvas.offsetWidth / 2 + "px";
-                            buttonContainer.style.transform = "translate(-50%, -50%)";
-                            buttonContainer.style.zIndex = "9999";
-                            
-                            const playAgainButton = document.createElement("button");
-                            playAgainButton.id = "play-again-button";
-                            playAgainButton.textContent = "PLAY AGAIN";
-                            playAgainButton.style.padding = "15px 30px";
-                            playAgainButton.style.fontSize = "20px";
-                            playAgainButton.style.fontFamily = "Bangers, cursive";
-                            playAgainButton.style.backgroundColor = "#ff5a5f";
-                            playAgainButton.style.color = "white";
-                            playAgainButton.style.border = "none";
-                            playAgainButton.style.borderRadius = "8px";
-                            playAgainButton.style.cursor = "pointer";
-                            playAgainButton.style.boxShadow = "0 4px 0 #c04046, 0 6px 10px rgba(0,0,0,0.2)";
-                            
-                            playAgainButton.onclick = function() {
-                                console.log("Play Again clicked");
-                                // Reset the game
-                                window.gameInstance.reset();
-                                // Remove the button
-                                buttonContainer.remove();
-                            };
-                            
-                            buttonContainer.appendChild(playAgainButton);
-                            document.body.appendChild(buttonContainer);
-                        }
-                    }
-            } else {
-                    // If game is not over, ensure the button is removed
-                    const buttonContainer = document.getElementById("play-again-container");
-                    if (buttonContainer) {
-                        buttonContainer.remove();
-                    }
-                }
-            }
-            
-            // Check for game over state periodically
-            setInterval(checkForGameOver, 1000);
         });
     </script>
 

@@ -3,11 +3,11 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 import '@rainbow-me/rainbowkit/styles.css'
-import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit'
-import { WagmiConfig, createConfig } from 'wagmi'
+import { getDefaultConfig, RainbowKitProvider } from '@rainbow-me/rainbowkit'
+import { WagmiProvider } from 'wagmi'
 import { monadTestnet } from './config/chains'
 import { BrowserRouter } from 'react-router-dom'
-import { http } from 'viem'
+import { http } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // Create ErrorBoundary component for top-level error handling
@@ -112,32 +112,27 @@ const queryClient = new QueryClient({
   },
 })
 
-// Configure chains with a transport
-const config = createConfig({
+// Use the new getDefaultConfig API for RainbowKit v2
+const wagmiConfig = getDefaultConfig({
+  appName: 'JumpNads',
+  projectId: import.meta.env.VITE_PROJECT_ID,
   chains: [monadTestnet],
   transports: {
     [monadTestnet.id]: http(monadTestnet.rpcUrls.default.http[0])
   }
 })
 
-// Get rainbowkit wallets
-const { connectors } = getDefaultWallets({
-  appName: 'JumpNads',
-  projectId: import.meta.env.VITE_PROJECT_ID,
-  chains: [monadTestnet]
-})
-
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <WagmiConfig config={config}>
-          <RainbowKitProvider chains={[monadTestnet]} showRecentTransactions={true}>
+        <WagmiProvider config={wagmiConfig}>
+          <RainbowKitProvider>
             <BrowserRouter>
               <App />
             </BrowserRouter>
           </RainbowKitProvider>
-        </WagmiConfig>
+        </WagmiProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   </React.StrictMode>

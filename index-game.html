@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Doodle Jump</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fredoka:wght@400;600&family=Short+Stack&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        #canvas1 {
+            border: 5px solid black;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 100%;
+            max-height: 100%;
+            display: none; /* Hide canvas initially */
+        }
+
+        #bg, #monad0, #virus, #green_platform, #blue_platform, #brown_platform, #white_platform, #bullet {
+            display: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            width: 100%;
+            overflow: hidden;
+            background-image: url('/public/images/iframebg.jpg');
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas1"></canvas>
+    <img src='/public/images/background.png' id='bg' /> 
+    <img src='/public/images/monad0.png' id='monad0' /> 
+    <img src='/public/images/virus.png' id='virus' /> 
+    <img src='/public/images/bullet.png' id='bullet' /> 
+    <img src='/public/images/green_platform.png' id='green_platform' />
+    <img src='/public/images/blue_platform.png' id='blue_platform' />
+    <img src='/public/images/brown_platform.png' id='brown_platform' />
+    <img src='/public/images/white_platform.png' id='white_platform' />
+    
+    <!-- Game juice effects container -->
+    <div id="juice-effects-container"></div>
+    
+    <!-- Audio elements for sound effects -->
+    <audio id="sound-jump" src="/public/sounds/jump.mp3" preload="auto"></audio>
+    <audio id="sound-land" src="/public/sounds/land.mp3" preload="auto"></audio>
+    <audio id="sound-boost" src="/public/sounds/boost.mp3" preload="auto"></audio>
+    <audio id="sound-combo" src="/public/sounds/combo.mp3" preload="auto"></audio>
+    <audio id="sound-hit" src="/public/sounds/hit.mp3" preload="auto"></audio>
+    <audio id="sound-dramatic" src="/public/sounds/dramatic.mp3" preload="auto"></audio>
+    <audio id="sound-spring" src="/public/sounds/spring.mp3" preload="auto"></audio>
+    <audio id="sound-fall" src="/public/sound effects/fall.mp3" preload="auto"></audio>
+    
+    <script type="module" src="/public/js/background.js"></script>
+    <script type="module" src="/public/js/bullet.js"></script>
+    <script type="module" src="/public/js/enemy.js"></script>
+    <script type="module" src="/public/js/input.js"></script>
+    <script type="module" src="/public/js/platform.js"></script>
+    <script type="module" src="/public/js/player.js"></script>
+    <script type="module" src="/public/js/main.js"></script>
+</body>
+</html> 

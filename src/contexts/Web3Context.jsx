@@ -709,71 +709,95 @@ export function Web3Provider({ children }) {
   }, [provider]);
 
   // Modified to use the safer approach for wallet connections
-  const connectWallet = useCallback(async (directAddress) => {
+  const connectWallet = useCallback(async () => {
     try {
-      // Use our safer checker function
-      if (!isWalletAvailable()) {
-        console.warn("No wallet detected.");
-        setProviderError("No wallet detected. Please install MetaMask.");
-        return false;
-      }
+      setIsLoading(true);
       
-      // Reset error flags - user is explicitly requesting connection
-      window.__ethereum_access_error = false;
-      window.__RECOVERY_MODE = false;
-      
-      // Create safe wrapper for ethereum
-      const safeEthereum = customWalletProvider();
-      if (!safeEthereum) {
-        console.error("Failed to create safe ethereum wrapper");
-        setProviderError("Error connecting to wallet. Please refresh and try again.");
-        return false;
-      }
-      
-      // Request accounts without additional network operations
-      await safeEthereum.request({ method: "eth_requestAccounts" });
-      console.log("Wallet connected!");
-      
-      // Initialize provider with the connected wallet
-      try {
-        const web3Provider = new ethers.providers.Web3Provider(
-          safeEthereum,
-          {
-            name: 'Monad Network',
-            chainId: monadTestnet.id
+      // Check if wallet is already available
+      if (window.ethereum) {
+        try {
+          // Request account access
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          
+          if (accounts.length > 0) {
+            setAccount(accounts[0]);
+            
+            // Set up the provider and contract
+            await setupProviderAndContract(accounts[0]);
+            
+            // Check for username on successful connection
+            await checkUsername(accounts[0]);
+            
+            // Set connected state
+            setIsConnected(true);
+            
+            console.log('Wallet connected:', accounts[0]);
+            return true;
           }
-        );
-        
-        setProvider(web3Provider);
-        console.log("Provider initialized with connected wallet");
-        
-        // Get connected accounts
-        const accounts = await web3Provider.listAccounts();
-        const connectedAddress = accounts[0] || directAddress;
-        
-        if (connectedAddress) {
-          await handleAccountChange(connectedAddress);
-          return true;
+        } catch (error) {
+          // Specifically handle extension messaging errors
+          if (error.message && (
+              error.message.includes('chrome.runtime.sendMessage()') || 
+              error.message.includes('has not been authorized yet')
+            )) {
+            console.warn('Chrome extension messaging error - this is normal in some browsers:', error.message);
+            // Continue execution, don't treat this as a critical error
+          } else {
+            console.error('Error connecting wallet:', error);
+            setProviderError(error.message || 'Failed to connect wallet');
+          }
         }
-      } catch (providerError) {
-        console.error("Error initializing provider:", providerError);
-        // Continue with fallback approach
+      } else {
+        setProviderError('MetaMask not installed');
+        return false;
       }
-      
-      // If direct address was provided, use it
-      if (directAddress) {
-        console.log("Using direct address:", directAddress);
-        await handleAccountChange(directAddress);
-      return true;
-      }
-      
-      console.error("Failed to get connected account");
-      return false;
     } catch (error) {
-      console.error("Error connecting wallet:", error);
+      console.error('Unexpected error in connectWallet:', error);
+      setProviderError(error.message || 'Failed to connect wallet');
       return false;
+    } finally {
+      setIsLoading(false);
     }
-  }, [handleAccountChange]);
+    
+    return false;
+  }, []);
+
+  // Also, wrap any ethereum event listeners in try/catch
+  useEffect(() => {
+    if (window.ethereum) {
+      // Handle account changes
+      const handleAccountsChanged = (accounts) => {
+        if (accounts.length === 0) {
+          console.log('Please connect to MetaMask.');
+          setAccount(null);
+          setIsConnected(false);
+        } else {
+          setAccount(accounts[0]);
+          setIsConnected(true);
+        }
+      };
+      
+      try {
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        
+        // Handle chain changes
+        window.ethereum.on('chainChanged', () => {
+          window.location.reload();
+        });
+      } catch (error) {
+        console.warn('Error setting up ethereum event listeners:', error);
+      }
+      
+      // Cleanup
+      return () => {
+        try {
+          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        } catch (error) {
+          console.warn('Error removing ethereum event listeners:', error);
+        }
+      };
+    }
+  }, []);
 
   // Add persistent username check to avoid redundant modals
   const checkAndLoadUsername = useCallback(async (walletAddress) => {
@@ -1044,10 +1068,10 @@ export function Web3Provider({ children }) {
       // If no supabase client, or if we're in development and mocking is enabled, use mock data
       if (!supabase || (import.meta.env.DEV && import.meta.env.VITE_MOCK_DATA === 'true')) {
         console.log('Using mock leaderboard data');
-        const mockLeaderboard = Array.from({ length: 10 }, (_, i) => ({
+        const mockLeaderboard = Array.from({ length: 50 }, (_, i) => ({
           player: `Player${i + 1}`,
           address: `0x${i.toString().padStart(40, '0')}`,
-          score: 1000 - i * 100,
+          score: 1000 - i * 20,
           timestamp: new Date().toLocaleDateString()
         }));
         
@@ -1055,7 +1079,7 @@ export function Web3Provider({ children }) {
         return mockLeaderboard;
       }
       
-      // Fetch top 10 scores with unique users in a single query
+      // Fetch scores with unique users in a single query
       const { data: scores, error: scoreError } = await supabase
         .from('scores')
         .select(`
@@ -1066,36 +1090,43 @@ export function Web3Provider({ children }) {
           users:wallet_address(username)
         `)
         .order('score', { ascending: false })
-        .limit(100);  // Fetch more than needed to filter unique
+        .limit(200);  // Fetch more than needed to filter unique
       
       if (scoreError) throw scoreError;
       console.log('Raw scores fetched:', scores?.length || 0);
       
       // Process scores to keep only the highest score per user
-      const uniqueAddresses = new Set();
-      const formattedLeaderboard = [];
+      const uniqueAddresses = new Map();
       
+      // First pass - determine highest score per wallet
       scores?.forEach(item => {
         const address = item.wallet_address.toLowerCase();
-        if (!uniqueAddresses.has(address)) {
-          uniqueAddresses.add(address);
-          
-          // Format the entry (using username from the joined users table if available)
-          const username = item.users?.username || 
+        const existingEntry = uniqueAddresses.get(address);
+        
+        if (!existingEntry || item.score > existingEntry.score) {
+          uniqueAddresses.set(address, item);
+        }
+      });
+      
+      // Convert Map to Array and sort by score descending, then take top 50
+      const sortedScores = Array.from(uniqueAddresses.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 50);
+      
+      // Format into leaderboard entries
+      const formattedLeaderboard = sortedScores.map(item => {
+        const address = item.wallet_address.toLowerCase();
+        
+        // Format the entry (using username from the joined users table if available)
+        const username = item.users?.username || 
           `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
         
-          formattedLeaderboard.push({
+        return {
           player: username,
           address: address,
           score: item.score,
           timestamp: new Date(item.created_at).toLocaleDateString()
-          });
-          
-          // Only keep top 10
-          if (formattedLeaderboard.length >= 10) {
-            return;
-          }
-        }
+        };
       });
       
       console.log('Final leaderboard with unique users:', formattedLeaderboard.length);
@@ -1869,10 +1900,10 @@ export function Web3Provider({ children }) {
       // If no supabase client, or if we're in development and mocking is enabled, use mock data
       if (!supabase || (import.meta.env.DEV && import.meta.env.VITE_MOCK_DATA === 'true')) {
         console.log('Using mock jumps leaderboard data');
-        const mockJumpsLeaderboard = Array.from({ length: 10 }, (_, i) => ({
+        const mockJumpsLeaderboard = Array.from({ length: 50 }, (_, i) => ({
           player: `Jumper${i + 1}`,
           address: `0x${i.toString().padStart(40, '0')}`,
-          jumps: 5000 - i * 400,
+          jumps: 5000 - i * 80,
           timestamp: new Date().toLocaleDateString()
         }));
         
@@ -1890,13 +1921,32 @@ export function Web3Provider({ children }) {
           users:wallet_address(username)
         `)
         .order('count', { ascending: false })
-        .limit(10);
+        .limit(100); // Fetch more than needed to deduplicate
       
       if (jumpersError) throw jumpersError;
       console.log('Jumpers fetched:', jumpers?.length || 0);
       
-      // Process jumpers to format for display
-      const formattedJumpsLeaderboard = jumpers?.map(item => {
+      // Process jumpers to keep only highest jump count per wallet
+      const uniqueAddresses = new Map();
+      const dedupedJumpers = [];
+      
+      // First pass - find highest jump count per wallet
+      jumpers?.forEach(item => {
+        const address = item.wallet_address.toLowerCase();
+        const existingEntry = uniqueAddresses.get(address);
+        
+        if (!existingEntry || item.count > existingEntry.count) {
+          uniqueAddresses.set(address, item);
+        }
+      });
+      
+      // Convert Map to Array and sort by count descending
+      const sortedJumpers = Array.from(uniqueAddresses.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 50); // Keep top 50
+      
+      // Format jumpers for display
+      const formattedJumpsLeaderboard = sortedJumpers.map(item => {
         const address = item.wallet_address.toLowerCase();
         
         // Format the entry (using username from the joined users table if available)

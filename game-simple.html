@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doodle Jump Simple</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #canvas1 {
+            border: 5px solid white;
+            max-width: 95%;
+            max-height: 95%;
+        }
+        img {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas1" width="400" height="600"></canvas>
+    <img src="/public/images/background.png" id="bg">
+    <img src="/public/images/monad0.png" id="monad0">
+    <img src="/public/images/virus.png" id="virus">
+    <img src="/public/images/bullet.png" id="bullet">
+    <img src="/public/images/green_platform.png" id="green_platform">
+    <img src="/public/images/blue_platform.png" id="blue_platform">
+    <img src="/public/images/brown_platform.png" id="brown_platform">
+    <img src="/public/images/white_platform.png" id="white_platform">
+
+    <script>
+        // Main game script
+        window.addEventListener('load', function() {
+            // Get canvas and context
+            const canvas = document.getElementById('canvas1');
+            const ctx = canvas.getContext('2d');
+            
+            // Game variables
+            let score = 0;
+            let gameOver = false;
+            
+            // Player
+            const player = {
+                x: canvas.width / 2 - 20,
+                y: canvas.height - 100,
+                width: 40,
+                height: 50,
+                speedY: 0,
+                gravity: 0.5,
+                jumpPower: -12,
+                image: document.getElementById('monad0')
+            };
+            
+            // Platforms
+            const platforms = [];
+            const platformTypes = ['green', 'blue', 'brown', 'white'];
+            const platformImages = {
+                green: document.getElementById('green_platform'),
+                blue: document.getElementById('blue_platform'),
+                brown: document.getElementById('brown_platform'),
+                white: document.getElementById('white_platform')
+            };
+            
+            // Initial platforms
+            function createPlatforms() {
+                // Create initial platform under player
+                platforms.push({
+                    x: canvas.width / 2 - 50,
+                    y: canvas.height - 50,
+                    width: 100,
+                    height: 20,
+                    type: 'green',
+                    image: platformImages.green
+                });
+                
+                // Create some platforms above
+                for (let i = 0; i < 10; i++) {
+                    const platformX = Math.random() * (canvas.width - 100);
+                    const platformY = canvas.height - 100 - i * 100;
+                    const type = platformTypes[Math.floor(Math.random() * platformTypes.length)];
+                    
+                    platforms.push({
+                        x: platformX, 
+                        y: platformY,
+                        width: 100,
+                        height: 20,
+                        type: type,
+                        image: platformImages[type]
+                    });
+                }
+            }
+            
+            // Generate new platform
+            function addPlatform() {
+                const platformX = Math.random() * (canvas.width - 100);
+                const platformY = platforms[0].y - 100;
+                const type = platformTypes[Math.floor(Math.random() * platformTypes.length)];
+                
+                platforms.push({
+                    x: platformX, 
+                    y: platformY,
+                    width: 100,
+                    height: 20,
+                    type: type,
+                    image: platformImages[type]
+                });
+            }
+            
+            // Handle player jump
+            function jump() {
+                player.speedY = player.jumpPower;
+            }
+            
+            // Check collision with platforms
+            function checkPlatformCollision() {
+                for (let i = 0; i < platforms.length; i++) {
+                    const platform = platforms[i];
+                    
+                    // Only check collision if player is falling
+                    if (player.speedY > 0) {
+                        const playerBottom = player.y + player.height;
+                        const withinX = player.x < platform.x + platform.width && 
+                                        player.x + player.width > platform.x;
+                        const landedOnPlatform = playerBottom >= platform.y && 
+                                                 playerBottom <= platform.y + platform.height;
+                        
+                        if (withinX && landedOnPlatform) {
+                            // Skip broken platforms
+                            if (platform.type === 'brown') continue;
+                            
+                            // Jump higher on special platforms
+                            if (platform.type === 'blue') {
+                                player.speedY = player.jumpPower * 1.5;
+                            } else {
+                                player.speedY = player.jumpPower;
+                            }
+                            
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            
+            // Input handling
+            window.addEventListener('keydown', function(e) {
+                if (e.key === 'ArrowLeft' || e.key === 'a') {
+                    player.x -= 10;
+                } else if (e.key === 'ArrowRight' || e.key === 'd') {
+                    player.x += 10;
+                }
+                
+                // Handle wrapping around the screen
+                if (player.x < -player.width/2) {
+                    player.x = canvas.width - player.width/2;
+                } else if (player.x > canvas.width - player.width/2) {
+                    player.x = -player.width/2;
+                }
+            });
+            
+            // Mobile touch controls
+            canvas.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                const touchX = e.touches[0].clientX;
+                const canvasRect = canvas.getBoundingClientRect();
+                const canvasCenterX = canvasRect.left + canvasRect.width / 2;
+                
+                if (touchX < canvasCenterX) {
+                    player.x -= 20;
+                } else {
+                    player.x += 20;
+                }
+                
+                // Handle wrapping around the screen
+                if (player.x < -player.width/2) {
+                    player.x = canvas.width - player.width/2;
+                } else if (player.x > canvas.width - player.width/2) {
+                    player.x = -player.width/2;
+                }
+            });
+            
+            // Update function
+            function update() {
+                if (gameOver) return;
+                
+                // Apply gravity
+                player.speedY += player.gravity;
+                player.y += player.speedY;
+                
+                // Check for collision with platforms
+                checkPlatformCollision();
+                
+                // Camera movement when player goes high enough
+                const maxHeight = canvas.height * 0.4;
+                if (player.y < maxHeight) {
+                    const diff = maxHeight - player.y;
+                    player.y = maxHeight;
+                    
+                    // Move platforms down
+                    platforms.forEach(platform => {
+                        platform.y += diff;
+                    });
+                    
+                    // Remove platforms that go off screen
+                    platforms.forEach((platform, index) => {
+                        if (platform.y > canvas.height) {
+                            platforms.splice(index, 1);
+                            score++;
+                            addPlatform();
+                        }
+                    });
+                }
+                
+                // Check if player falls off screen
+                if (player.y > canvas.height) {
+                    gameOver = true;
+                }
+            }
+            
+            // Draw function
+            function draw() {
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw background
+                ctx.fillStyle = '#87CEEB';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw platforms
+                platforms.forEach(platform => {
+                    ctx.drawImage(platform.image, platform.x, platform.y, platform.width, platform.height);
+                });
+                
+                // Draw player
+                ctx.drawImage(player.image, player.x, player.y, player.width, player.height);
+                
+                // Draw score
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.fillText('Score: ' + score, 10, 30);
+                
+                // Draw game over
+                if (gameOver) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.font = '30px Arial';
+                    ctx.fillText('GAME OVER', canvas.width/2 - 80, canvas.height/2 - 30);
+                    ctx.fillText('Score: ' + score, canvas.width/2 - 50, canvas.height/2 + 10);
+                    ctx.font = '20px Arial';
+                    ctx.fillText('Click to play again', canvas.width/2 - 80, canvas.height/2 + 50);
+                }
+            }
+            
+            // Game loop
+            function gameLoop() {
+                update();
+                draw();
+                
+                if (!gameOver) {
+                    requestAnimationFrame(gameLoop);
+                }
+            }
+            
+            // Reset game
+            function resetGame() {
+                player.x = canvas.width / 2 - 20;
+                player.y = canvas.height - 100;
+                player.speedY = 0;
+                
+                platforms.length = 0;
+                createPlatforms();
+                
+                score = 0;
+                gameOver = false;
+                
+                gameLoop();
+            }
+            
+            // Click to restart
+            canvas.addEventListener('click', function() {
+                if (gameOver) {
+                    resetGame();
+                }
+            });
+            
+            // Initialize and start game
+            createPlatforms();
+            gameLoop();
+        });
+    </script>
+</body>
+</html> 

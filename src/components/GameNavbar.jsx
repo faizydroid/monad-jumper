@@ -189,7 +189,7 @@ export default function GameNavbar() {
           
           <div className="high-score">
             <span role="img" aria-label="trophy">🏆</span>
-            <span className="score-label">Hi-Score:</span>
+            <span className="score-label"></span>
             <span className="score-value">{playerHighScore || 0}</span>
           </div>
           

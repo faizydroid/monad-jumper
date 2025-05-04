@@ -10,39 +10,51 @@ export class Bullet {
         this.vy = -15
         this.markedForDeletion = false
         
-        // Play sound once during construction
+        // Play sound through AudioManager first, fallback to direct Audio API
         try {
-            const audio = new Audio('sound effects/bullet.mp3')
-            audio.volume = 0.5 // Lower volume for less audio processing
-            audio.play().catch(() => {})
-        } catch (e) {}
+            if (window.audioManager && typeof window.audioManager.play === 'function') {
+                window.audioManager.play('bullet', 0.5);
+            } else {
+                // Fallback to direct Audio API
+                const audio = new Audio('sound effects/bullet.mp3');
+                audio.volume = 0.5; // Lower volume
+                audio.play().catch(e => console.warn('Could not play bullet sound:', e));
+            }
+        } catch (e) {
+            console.warn('Error playing bullet sound:', e);
+        }
     }
 
-    update() {
-        // Update position
-        this.y += this.vy
+    update(deltaTime = 1/60) {
+        // Scale speed with deltaTime for consistent bullet movement
+        
+        // Velocity scaled by deltaTime
+        const BASE_SPEED = -15 * 60; // Units per second
+        const scaledVelocity = BASE_SPEED * deltaTime;
+        
+        this.y += scaledVelocity;
         
         // Mark for deletion if off screen
         if(this.y < -this.height){
-            this.markedForDeletion = true
-            return
+            this.markedForDeletion = true;
+            return;
         }
         
         // Check for collision with enemies
         if (!this.player || !this.player.game || !this.player.game.enemies || this.player.game.enemies.length === 0) {
-            return
+            return;
         }
         
         // Cache bullet bounds for collision detection
-        const bulletLeft = this.x
-        const bulletRight = this.x + this.width
-        const bulletTop = this.y
-        const bulletBottom = this.y + this.height
+        const bulletLeft = this.x;
+        const bulletRight = this.x + this.width;
+        const bulletTop = this.y;
+        const bulletBottom = this.y + this.height;
         
         // Use for loop instead of forEach for better performance with early exit
-        const enemies = this.player.game.enemies
+        const enemies = this.player.game.enemies;
         for (let i = 0; i < enemies.length; i++) {
-            const enemy = enemies[i]
+            const enemy = enemies[i];
             
             // Get the reduced hitbox of the enemy if available, otherwise use full size
             let enemyHitbox;
@@ -58,10 +70,10 @@ export class Bullet {
             }
             
             // Cache enemy bounds
-            const enemyLeft = enemyHitbox.x
-            const enemyRight = enemyHitbox.x + enemyHitbox.width
-            const enemyTop = enemyHitbox.y
-            const enemyBottom = enemyHitbox.y + enemyHitbox.height
+            const enemyLeft = enemyHitbox.x;
+            const enemyRight = enemyHitbox.x + enemyHitbox.width;
+            const enemyTop = enemyHitbox.y;
+            const enemyBottom = enemyHitbox.y + enemyHitbox.height;
             
             // Check collision using cached values
             if (bulletLeft < enemyRight &&
@@ -70,30 +82,51 @@ export class Bullet {
                 bulletBottom > enemyTop) {
                 
                 // Mark both bullet and enemy for deletion
-                this.markedForDeletion = true
-                enemy.markedForDeletion = true
+                this.markedForDeletion = true;
+                enemy.markedForDeletion = true;
                 
                 // Add points to score
-                this.player.game.score += 10
+                this.player.game.score += 10;
                 
-                // Play hit sound with reduced volume
+                // Play hit sound through AudioManager first, fallback to direct Audio API
                 try {
-                    const hitSound = new Audio('sound effects/hit.mp3')
-                    hitSound.volume = 0.3
-                    hitSound.play().catch(() => {})
-                } catch (e) {}
+                    if (window.audioManager && typeof window.audioManager.play === 'function') {
+                        window.audioManager.play('collision', 0.3);
+                    } else {
+                        // Fallback to direct Audio API
+                        const hitSound = new Audio('sound effects/crash.mp3');
+                        hitSound.volume = 0.3;
+                        hitSound.play().catch(e => console.warn('Could not play hit sound:', e));
+                    }
+                } catch (e) {
+                    console.warn('Error playing hit sound:', e);
+                }
                 
                 // Create particle effect for enemy destruction
-                this.createExplosion(enemy.x + enemy.width/2, enemy.y + enemy.height/2)
+                this.createExplosion(enemy.x + enemy.width/2, enemy.y + enemy.height/2);
                 
                 // Exit the loop once a collision is found
-                break
+                break;
             }
         }
     }
     
     // Create explosion effect when bullet hits enemy
     createExplosion(x, y) {
+        // Play hit sound through AudioManager first, fallback to direct Audio API
+        try {
+            if (window.audioManager && typeof window.audioManager.play === 'function') {
+                window.audioManager.play('collision', 0.3);
+            } else {
+                // Fallback to direct Audio API
+                const hitSound = new Audio('sound effects/crash.mp3');
+                hitSound.volume = 0.3;
+                hitSound.play().catch(e => console.warn('Could not play hit sound:', e));
+            }
+        } catch (e) {
+            console.warn('Error playing hit sound:', e);
+        }
+        
         // Only create effect if the juice effects system exists
         if (!window.juiceEffects || typeof window.juiceEffects.createParticle !== 'function') {
             return

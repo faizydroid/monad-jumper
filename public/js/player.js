@@ -19,216 +19,130 @@ export class Player {
         this.bullets = []
         this.bulletTimer = 0
         this.bulletInterval = 100
-        this.jumpRequested = false
         this.lastPlatformType = null
-        this.lastTxTime = 0
-        this.txCooldown = 500 // 500ms cooldown between transactions
-        this.lastJumpRequestTime = 0
+        this.jumpedPlatforms = new Set()
     }
 
-    update(inputHandler) {
-        // If game is over, don't process any more jumps
+    update(inputHandler, deltaTime = 1/60, gyroData) {
+        // If game is over, don't process any more updates
         if (this.game.gameOver) {
             return;
         }
         
-        // If we've been waiting for a jump transaction more than 2 seconds, force continue
-        if (this.jumpRequested && Date.now() - this.lastJumpRequestTime > 2000) {
-            console.log('Jump transaction taking too long - forcing continuation');
-            this.jumpRequested = false;
-        }
+        // Fixed gameplay constants for consistent physics
+        const PLAYER_SPEED = 8 * 60; // Speed units per second
+        const GRAVITY = 0.5; // Original gravity value without deltaTime scaling
 
         // Check if player has fallen off the screen
         if (this.y > this.game.height) {
-            if (!this.game.gameOver) {  // Add check to prevent multiple triggers
-                console.log('Player fell off screen, triggering game over');
+            if (!this.game.gameOver) {
                 this.game.gameOver = true;
-                
-                // Create a global function to directly play the fall sound
-                // This helps avoid scope and context issues
-                window.playFallSound = function() {
-                    console.log("Global playFallSound triggered");
-                    // We'll try multiple methods in sequence
-                    
-                    // Method 1: Direct inline audio element in the DOM
-                    const audioEl = document.createElement('audio');
-                    audioEl.src = 'sound effects/fall.mp3';
-                    audioEl.volume = 1.0;
-                    audioEl.controls = false; // No visible controls
-                    audioEl.style.display = 'none'; // Hide element
-                    document.body.appendChild(audioEl);
-                    
-                    // Play with timeout to ensure it's properly loaded
-                    setTimeout(() => {
-                        audioEl.play()
-                            .then(() => {
-                                console.log("Fall sound played via inline element");
-                                // Remove the element after playing
-                                setTimeout(() => audioEl.remove(), 3000);
-                            })
-                            .catch(e => {
-                                console.error("Inline element play failed:", e);
-                                // Try embedded audio element as fallback
-                                const fallbackEl = document.getElementById('sound-fall');
-                                if (fallbackEl) {
-                                    fallbackEl.currentTime = 0;
-                                    fallbackEl.volume = 1.0;
-                                    fallbackEl.play()
-                                        .then(() => console.log("Fall sound played via fallback element"))
-                                        .catch(e => console.error("Fallback element play failed:", e));
-                                }
-                            });
-                    }, 100);
-                };
-                
-                // Execute the global function
-                window.playFallSound();
-                
-                // Also try our other methods in parallel
-                // DIRECT APPROACH: Play fall sound immediately with multiple methods
-                console.log('Attempting to play fall sound directly');
-                
-                // Method 1: Direct audio element with inline creation to avoid autoplay issues
-                try {
-                    const fallSound = new Audio('sound effects/fall.mp3');
-                    fallSound.volume = 1.0;
-                    document.body.appendChild(fallSound); // Adding to DOM helps on some browsers
-                    fallSound.oncanplaythrough = function() {
-                        console.log('Fall sound loaded, playing now');
-                        fallSound.play()
-                            .then(() => console.log('Fall sound played successfully'))
-                            .catch(e => console.error('Error playing fall sound:', e));
-                    };
-                    fallSound.onerror = function() {
-                        console.error('Error loading fall sound');
-                    };
-                    fallSound.load();
-                } catch (e) {
-                    console.error('Error creating fall sound:', e);
-                }
-                
-                // Method 2: Use existing audio element if available
-                try {
-                    const fallSoundElement = document.getElementById('sound-fall');
-                    if (fallSoundElement) {
-                        console.log('Found sound-fall element, playing it');
-                        fallSoundElement.volume = 1.0;
-                        fallSoundElement.currentTime = 0;
-                        fallSoundElement.play()
-                            .then(() => console.log('Fall sound element played successfully'))
-                            .catch(e => console.error('Error playing fall sound element:', e));
-                    }
-                } catch (e) {
-                    console.error('Error with fall sound element:', e);
-                }
-                
-                // Method 3: Use AudioUtils if available (as a backup)
-                if (window.AudioUtils) {
-                    console.log('Using AudioUtils to play fall sound');
-                    window.AudioUtils.playSound('fall', 1.0);
-                }
-                
-                // Pause any enemy sounds
-                for (const enemy of this.game.enemies) {
-                    if (enemy.audio && typeof enemy.audio.pause === 'function') {
-                        enemy.audio.pause();
-                    }
-                }
-                
-                // Let the game's checkGameOver method handle showing the game over screen
+                this.game.deathReason = "fall";
                 this.game.checkGameOver();
             }
             return;
         }
 
-        // horizontal movement - optimize by only calculating when necessary
+        // Horizontal movement - scale by deltaTime for frame-rate independence
         if(inputHandler.keys.includes('ArrowLeft')){
-            this.vx = -this.max_vx;
+            this.vx = -PLAYER_SPEED * deltaTime;
         }
         else if(inputHandler.keys.includes('ArrowRight')){
-            this.vx = this.max_vx;
+            this.vx = PLAYER_SPEED * deltaTime;
         }
         else if(this.vx !== 0) {
             this.vx = 0;
         }
         
-        // Only update x position if there's velocity
+        // Only update x position if there's velocity - normalized by delta time
         if(this.vx !== 0) {
+            // Apply movement scaled by deltaTime
             this.x += this.vx;
 
-            // horizontal boundary - only check when we've moved
+            // Horizontal boundary - only check when we've moved
             if(this.x < -this.width/2) this.x = this.game.width - (this.width/2);
             else if(this.x + (this.width/2) > this.game.width) this.x = -this.width/2;
         }
 
-        // vertical movement
-        if(this.vy > this.weight) {  
-            const platformType = this.onPlatform();
+        // Apply gravity first
+        if(this.vy < this.max_vy) {
+            this.vy += GRAVITY; // Original gravity without deltaTime scaling
+        }
+
+        // Variable to track if we've had a platform collision
+        let hadPlatformCollision = false;
+        
+        // Optimized collision detection - only use sub-stepping for extreme velocities
+        if (Math.abs(this.vy) > 15) { // Only use expensive sub-stepping when absolutely necessary
+            // Use just 2 or 3 steps max to reduce performance impact
+            const steps = Math.min(3, Math.ceil(Math.abs(this.vy) / 10));
+            const stepVy = this.vy / steps;
+            
+            // Apply each step separately with early exit
+            for (let i = 0; i < steps && !hadPlatformCollision; i++) {
+                this.y += stepVy;
+                
+                // Only check collisions with platforms that are close to the player
+                // to avoid unnecessary collision checks
+                const platformType = this.onPlatform();
+                if (platformType) {
+                    this.lastPlatformType = platformType;
+                    this.processJump(platformType);
+                    hadPlatformCollision = true;
+                    break;
+                }
+            }
+        } else {
+            // For normal speeds, just do a single movement and collision check
+            // Move the player
+            if (this.y > this.min_y || this.vy > GRAVITY) {
+                this.y += this.vy;
+            }
+            
+            // Then check for platform collision
+            if (this.vy > GRAVITY) {
+                const platformType = this.onPlatform();
             if (platformType) {
                 this.lastPlatformType = platformType;
-                this.jumpRequested = true;
-                // Start jump immediately but process transaction in background
                 this.processJump(platformType);
+                    hadPlatformCollision = true;
             }
         }
-
-        // Apply gravity and update vertical position
-        if(this.vy < this.max_vy) this.vy += this.weight;
-        
-        // Only update Y if we need to
-        if(this.y > this.min_y || this.vy > this.weight) {
-            this.y += this.vy;
         }
 
-        // World scrolling when player reaches upper threshold
-        if(this.y <= this.min_y && this.vy < this.weight) {
-            this.game.vy = -this.vy;
+        // World scrolling when player reaches upper threshold - original calculations
+        if(this.y <= this.min_y && this.vy < GRAVITY) {
+            this.game.vy = -this.vy; // Use the original vy value
             this.y = this.min_y;
         }
         else if(this.game.vy !== 0) {
             this.game.vy = 0;
         }
 
-        // Check for collision with enemies only if we've moved
+        // Check for collision - only done when necessary
         if((this.vx !== 0 || this.vy !== 0) && this.collision()){
-            console.log('Player collided with virus, triggering game over');
             this.game.gameOver = true;
-            
-            // Pause any enemy sounds (use for...of for better performance with early exit)
-            for(const enemy of this.game.enemies) {
-                if (enemy.audio && typeof enemy.audio.pause === 'function') {
-                    enemy.audio.pause();
-                }
-            }
-            
-            // Play crash sound
-            try {
-                new Audio('sound effects/crash.mp3').play().catch(e => console.log("Error playing crash sound"));
-            } catch (e) {
-                console.log("Error playing crash sound:", e);
-            }
-            
-            // Let the game's checkGameOver method handle showing the game over screen
+            this.game.deathReason = "collision";
             this.game.checkGameOver();
             return; // Stop further processing
         }
 
-        // Update bullets - use direct loop for better performance
+        // Update bullets with deltaTime
         for(let i = 0; i < this.bullets.length; i++) {
-            this.bullets[i].update();
+            this.bullets[i].update(deltaTime);
         }
 
-        // Optimize bullet filtering - only filter if needed
+        // Remove deleted bullets
         if(this.bullets.some(bullet => bullet.markedForDeletion)) {
             this.bullets = this.bullets.filter(bullet => !bullet.markedForDeletion);
         }
 
-        // Shooting logic
+        // Shooting logic with fixed time intervals factoring deltaTime
         if (inputHandler.keys.includes(' ') && this.bulletTimer > this.bulletInterval){
             this.shootTop();
             this.bulletTimer = 0;
         } else {
-            this.bulletTimer += 10;
+            this.bulletTimer += 10 * 60 * deltaTime; // Scale by deltaTime (10 units per frame @ 60fps)
         }
     }
 
@@ -300,7 +214,7 @@ export class Player {
                 return true;
             }
         }
-        
+      
         return false;
     }
 
@@ -313,63 +227,72 @@ export class Player {
         const playerHitBox = {
             x: this.x + 15, 
             y: this.y, 
-            width: this.width - 30, // Return to narrower hitbox width
+            width: this.width - 30,
             height: this.height
         };
-        
-        // Only consider bottom 10% of player for platform collision
-        const feetHeight = this.height * 0.1;
-        const feetTop = playerHitBox.y + playerHitBox.height - feetHeight;
         
         // Cache player bounds - focus on feet area
         const playerLeft = playerHitBox.x;
         const playerRight = playerHitBox.x + playerHitBox.width;
         const playerBottom = playerHitBox.y + playerHitBox.height;
         
-        // Predict next position based on velocity to prevent tunneling
-        const nextPlayerBottom = playerBottom + this.vy;
+        // Skip collision detection entirely if:
+        // 1. Player is moving upward fast (like from a spring) OR
+        // 2. Player recently jumped from a spring (within last 500ms)
+        const recentSpringJump = this.lastSpringJump && (Date.now() - this.lastSpringJump < 500);
+        if (this.vy < -10 || recentSpringJump) {
+            return null;
+        }
         
-        // Track if we found a brown platform
-        let foundBrownPlatform = null;
-        let closestGreenPlatform = null;
-        let minGreenDistance = Infinity;
+        // Performance optimization: Only check platforms that are near the player vertically
+        // This drastically reduces the number of platforms we need to check
+        const checkDistance = Math.max(20, Math.abs(this.vy) * 2); // Check further when moving fast
         
-        // Use for loop for better performance
+        // First, find candidate platforms using vertical distance culling
+        const candidatePlatforms = [];
+        const brownPlatforms = [];
+        
         for (let i = 0; i < this.game.platforms.length; i++) {
             const platform = this.game.platforms[i];
             
-            // Calculate platform bounds once
-            const platformLeft = platform.x;
-            const platformRight = platform.x + platform.width;
+            // Skip platforms that are far away vertically
+            const verticalDistance = Math.abs(platform.y - playerBottom);
+            if (verticalDistance > checkDistance) continue;
+            
+            // Skip platforms that don't overlap horizontally
+            if (platform.x > playerRight || platform.x + platform.width < playerLeft) continue;
+            
+            // Special handling for brown platforms
+            if (platform.type === 'brown') {
+                brownPlatforms.push(platform);
+            } else {
+                candidatePlatforms.push(platform);
+            }
+        }
+        
+        // Improved tunneling prevention - increase the prediction distance based on velocity
+        const velocityFactor = Math.max(1, Math.abs(this.vy) / 2);
+        const nextPlayerBottom = playerBottom + (this.vy * velocityFactor);
+        
+        // Check collision with regular platforms (non-brown)
+        for (let i = 0; i < candidatePlatforms.length; i++) {
+            const platform = candidatePlatforms[i];
             const platformTop = platform.y;
             
-            // X-axis collision: player overlaps platform horizontally - more precise check
-            const X_test = (playerLeft < platformRight - 5 && playerRight > platformLeft + 5);
-            
-            // Skip X-axis check if we're not aligned with the platform
-            if (!X_test) continue;
-            
-            // Enhanced Y-axis collision with smaller tolerance
-            // Current collision: only if feet are very close to platform (within 5 pixels)
+            // Enhanced Y-axis collision detection - ONLY check when player is falling or at peak
             const currentY_test = (this.vy >= 0) && // Only when falling or at peak
-                              (platformTop - playerBottom >= -5) && 
-                              (platformTop - playerBottom <= 5);
-                              
-            // Predictive collision: check if player will pass through platform in the next frame
+                             (platformTop - playerBottom >= -8) && 
+                             (platformTop - playerBottom <= 8);
+                             
+            // Predictive collision check - ONLY when player is falling
             const nextY_test = (this.vy > 0) && // Only when falling
-                              (playerBottom <= platformTop) && 
-                              (nextPlayerBottom >= platformTop) &&
-                              (nextPlayerBottom <= platformTop + 10); // Don't detect too far below
+                             (playerBottom <= platformTop) && 
+                             (nextPlayerBottom >= platformTop) &&
+                             (nextPlayerBottom <= platformTop + 15);
             
             // Check if this is a valid platform we're colliding with
             if (currentY_test || nextY_test) {
-                if (platform.type === 'brown') {
-                    // Found a brown platform - mark it but keep checking for other platforms
-                    foundBrownPlatform = platform;
-                    platform.markedForDeletion = true;
-                    
-                    // Don't return yet - continue to check for green platforms below
-                } else if (platform.type === 'white') {
+                if (platform.type === 'white') {
                     // Mark white platforms for deletion and return immediately
                     platform.markedForDeletion = true;
                     
@@ -380,223 +303,78 @@ export class Player {
                     
                     return platform.type;
                 } else {
-                    // For green/blue/spring platforms, check if we're on them
-                    
+                    // For green/blue/spring platforms
                     // If we're using the predictive check, adjust player position
                     if (nextY_test && !currentY_test) {
                         this.y = platformTop - playerHitBox.height;
+                        // Reset vertical velocity immediately to prevent any residual downward movement
+                        this.vy = 0;
                     }
                     
-                    // Return the regular platform type immediately if no brown platform was found
-                    if (!foundBrownPlatform) {
+                    // If we didn't find any brown platforms, return this type
+                    if (brownPlatforms.length === 0) {
                         return platform.type;
-                    }
-                    
-                    // Otherwise check if this green platform is close enough to detect
-                    const distanceFromBrown = platform.y - foundBrownPlatform.y;
-                    if (distanceFromBrown > 0 && distanceFromBrown < minGreenDistance) {
-                        closestGreenPlatform = platform;
-                        minGreenDistance = distanceFromBrown;
                     }
                 }
             }
-            
-            // Also track green platforms directly below but not colliding yet
-            if (platform.type !== 'brown' && platform.type !== 'white' && X_test && platformTop > playerBottom) {
-                const distance = platformTop - playerBottom;
-                if (distance < minGreenDistance && distance < 100) { // Only consider platforms within reasonable distance
-                    closestGreenPlatform = platform;
-                    minGreenDistance = distance;
-            }
-            }
         }
         
-        // If we found a brown platform and no other collisions, return its type
-        if (foundBrownPlatform) {
+        // Check brown platforms if no regular platform collision was detected
+        if (brownPlatforms.length > 0) {
+            // Mark all brown platforms for deletion
+            for (let i = 0; i < brownPlatforms.length; i++) {
+                brownPlatforms[i].markedForDeletion = true;
+            }
+            
             // Set a small downward velocity immediately to help detect platforms below
             this.vy = Math.max(this.vy, 2);
-            return foundBrownPlatform.type;
+            return 'brown';
         }
       
         return null;
     }
-
+        
     shootTop() {
         this.bullets.push(new Bullet(this))
     }
 
-    // Modified to handle jumping immediately and then process transaction
-    processJump(platformType) {
-        // Don't process jumps if the game is over
-        if (this.game.gameOver) {
-            console.log("Game already over, not counting additional jumps");
-            return;
-        }
-
-        // Process the jump mechanics immediately based on platform type
-        switch(platformType) {
-            case 'white': 
-            case 'blue': 
-            case 'green':
-                this.vy = this.min_vy;
-                // Play appropriate sound
-                try {
-                    const soundFile = platformType === 'white' ? 
-                        'sound effects/single_jump.mp3' : 
-                        'sound effects/jump.wav';
-                    new Audio(soundFile).play().catch(e => console.log("Error playing jump sound"));
-                } catch (e) {}
-                break;
-                
-            case 'brown':
-                // Set a small positive velocity to help detect platforms below
-                this.vy = 2;
-                try {
-                    new Audio('sound effects/no_jump.mp3').play().catch(e => {});
-                } catch (e) {}
-                break;
-                
-            case 'spring':
-                // Super high jump for spring platforms (2x higher instead of 5x)
-                this.vy = this.min_vy * 2;
-                try {
-                    // Use AudioManager to play spring sound if available
-                    if (window.audioManager) {
-                        window.audioManager.play('spring', 1.0);
-                    } else {
-                        // Fallback to direct Audio API if AudioManager not available
-                        new Audio('sound effects/spring.mp3').play().catch(e => {});
-                    }
-                } catch (e) {
-                    console.log("Error playing spring sound:", e);
-                }
-                
-                // Find and set the spring platform pressed state - only process springs
-                if (this.game.platforms) {
-                    // Only perform this check for spring types
-                    const playerHitBox = {
-                        x: this.x + 15, 
-                        y: this.y, 
-                        width: this.width - 30, 
-                        height: this.height
-                    };
-                    
-                    // Cache player bounds
-                    const playerLeft = playerHitBox.x;
-                    const playerRight = playerHitBox.x + playerHitBox.width;
-                    const playerBottom = playerHitBox.y + playerHitBox.height;
-                    
-                    console.log(`Looking for spring platforms near player at (${playerLeft},${playerBottom})`);
-                    let found = false;
-                    
-                    // Check only spring platforms for better performance
-                    for (const platform of this.game.platforms) {
-                        if (platform.type === 'spring') {
-                            const platformLeft = platform.x;
-                            const platformRight = platform.x + platform.width;
-                            const platformTop = platform.y;
-                            
-                            console.log(`Found spring platform at (${platformLeft},${platformTop})`);
-                            
-                            // Simplified collision check with wider tolerance
-                            if (playerLeft < platformRight && 
-                                playerRight > platformLeft && 
-                                Math.abs(playerBottom - platformTop) < 30) { // Increased collision tolerance
-                                
-                                console.log("SPRING COLLISION DETECTED - ACTIVATING PLATFORM");
-                                platform.setPressed();
-                                found = true;
-                                
-                                // Force a stronger screen shake directly
-                                if (window.juiceEffects && typeof window.juiceEffects.screenShake === 'function') {
-                                    window.juiceEffects.screenShake(25, 1000); // Stronger shake
-                                }
-                                
-                                // Create visual particle effects if juiceEffects is available
-                                if (window.juiceEffects) {
-                                    // Create particles at player position
-                                    const x = this.x + this.width/2;
-                                    const y = this.y + this.height;
-                                    
-                                    // Create upward-moving particles
-                                    window.juiceEffects.createParticles(x, y, 'star', 15, 1200);
-                                    
-                                    // Show boost text
-                                    if (typeof window.juiceEffects.showScorePopup === 'function') {
-                                        window.juiceEffects.showScorePopup(x, y + 30, "SPRING JUMP!", true);
-                                    }
-                                }
-                                
-                                break; // Exit once we've found and set the spring
-                            }
-                        }
-                    }
-                    
-                    if (!found) {
-                        console.log("No spring platforms found in collision range");
-                        
-                        // Fallback - apply screen shake anyway for spring jumps
-                        if (window.juiceEffects && typeof window.juiceEffects.screenShake === 'function') {
-                            console.log("Applying fallback screen shake for spring jump");
-                            window.juiceEffects.screenShake(15, 800);
-                        }
-                    }
-                }
-                break;
-        }
-        
-        // Track jump in parent window
-        if (window.parent && typeof window.parent.handleJumpTransaction === 'function') {
-            try {
-                // This ensures the jump is counted in the parent window
-                window.parent.handleJumpTransaction(platformType)
-                    .then(success => {
-                        console.log(success ? "Jump transaction successful" : "Jump transaction failed, but gameplay continues");
-                    })
-                    .catch(() => {
-                        console.log("Jump transaction error, but gameplay continues");
-                    });
-            } catch (error) {
-                console.log("Jump transaction failed, but gameplay continues");
-            }
-        }
-        
-        // Increment jump count
-        window.__jumpCount = (window.__jumpCount || 0) + 1;
-        
-        // Store the jump count so it doesn't change after game over
-        this.game.__finalJumpCount = window.__jumpCount;
-        
-        // Notify parent of the current count
-        if (window.parent) {
-            window.parent.postMessage({ 
-                type: 'JUMP_PERFORMED', 
-                jumpCount: window.__jumpCount 
-            }, '*');
-        }
-    }
-
     // This is the original method kept for reference but not used directly anymore
     async jump(platformType) {
-        // Store when we requested the jump
-        this.lastJumpRequestTime = Date.now();
-        this.jumpRequested = true;
+        // Play appropriate sound through AudioManager first, fallback to direct Audio API
+        try {
+            if (window.audioManager && typeof window.audioManager.play === 'function') {
+                if (platformType === 'white') {
+                    window.audioManager.play('singleJump', 0.7);
+                } else if (platformType === 'blue' || platformType === 'green') {
+                    window.audioManager.play('jump', 0.7);
+                } else if (platformType === 'brown') {
+                    window.audioManager.play('noJump', 0.7);
+                } else if (platformType === 'spring') {
+                    window.audioManager.play('spring', 0.7);
+                }
+            } else {
+                // Fallback to direct Audio API
+                if (platformType === 'white') {
+                    new Audio('sound effects/single_jump.mp3').play().catch(e => {});
+                } else if (platformType === 'blue' || platformType === 'green') {
+                    new Audio('sound effects/jump.wav').play().catch(e => {});
+                } else if (platformType === 'brown') {
+                    new Audio('sound effects/no_jump.mp3').play().catch(e => {});
+                } else if (platformType === 'spring') {
+                    new Audio('sound effects/spring.mp3').play().catch(e => {});
+                }
+            }
+        } catch (e) {
+            console.warn('Error playing jump sound:', e);
+        }
 
         // Instead of waiting for transaction, immediately apply jump physics
-        if(platformType=='white' || platformType=='blue' || platformType=='green') {
+        if (platformType === 'white' || platformType === 'blue' || platformType === 'green') {
             this.vy = this.min_vy;
-            if(platformType=='white') new Audio('sound effects/single_jump.mp3').play();
-            else if(platformType=='blue' || platformType=='green') new Audio('sound effects/jump.wav').play();
-        } else if(platformType=='brown') {
-            new Audio('sound effects/no_jump.mp3').play();
-        }
-        
-        // Start the transaction in the background
-        try {
-            // Send transaction but don't await it
-            window.parent.postMessage({ type: 'JUMP', data: { platformType } }, '*');
-        } catch (error) {
-            console.error('Error sending jump message:', error);
+        } else if (platformType === 'brown') {
+            this.vy = 2;
+        } else if (platformType === 'spring') {
+            this.vy = -36;
         }
         
         // Always return true so game continues
@@ -605,12 +383,123 @@ export class Player {
 
     jump() {
         if (this.canJump) {
-            // Play jump sound with near-zero latency
-            if (window.audioManager) {
-                window.audioManager.play('jump');
+            // Play jump sound with near-zero latency using AudioManager
+            try {
+                if (window.audioManager && typeof window.audioManager.play === 'function') {
+                    window.audioManager.play('jump', 0.7);
+                } else {
+                    new Audio('sound effects/jump.wav').play().catch(e => {});
+                }
+            } catch (e) {
+                console.warn('Error playing jump sound:', e);
             }
             
-            // Rest of your jump code...
+            // Don't increment jump count here - let processJump handle it
+            // The processJump method will only count first jumps on platforms
+            
+            // Rest of jump code...
         }
+    }
+
+    // Modified to restore original jump heights
+    processJump(platformType) {
+        // Create unique platform ID based on position
+        const platform = this.game.platforms.find(p => 
+            p.type === platformType && 
+            Math.abs((this.y + this.height) - p.y) < 10 &&
+            this.x + this.width > p.x &&
+            this.x < p.x + p.width
+        );
+        
+        if (!platform) return;
+        
+        // Create a unique ID for this platform
+        const platformId = `${platform.id || `${platform.x.toFixed(0)}-${platform.y.toFixed(0)}`}`;
+        
+        // Check if we've already jumped on this platform
+        const isFirstJump = !this.jumpedPlatforms.has(platformId);
+        
+        // Play appropriate sound for the platform type
+        try {
+            if (window.audioManager && typeof window.audioManager.play === 'function') {
+                if (platformType === 'white') {
+                    window.audioManager.play('singleJump', 0.7);
+                } else if (platformType === 'blue' || platformType === 'green') {
+                    window.audioManager.play('jump', 0.7);
+                } else if (platformType === 'brown') {
+                    window.audioManager.play('noJump', 0.7);
+                } else if (platformType === 'spring') {
+                    window.audioManager.play('spring', 0.7);
+                }
+            }
+        } catch (e) {
+            console.warn('Error playing platform sound:', e);
+        }
+        
+        // Use original jump velocity values
+        switch(platformType) {
+            case 'white': 
+            case 'blue': 
+            case 'green':
+                // Standard jump with original velocity
+                this.vy = this.min_vy; // Using the original -18 value
+                break;
+                
+            case 'brown':
+                // Original small positive velocity for falling
+                this.vy = 2;
+                break;
+                
+            case 'spring':
+                // Original super high jump velocity
+                this.vy = -36; // Original fixed value
+                
+                // When jumping from spring, temporarily ignore platform collisions
+                // by setting a flag or timer that prevents collisions for a short time
+                this.lastSpringJump = Date.now();
+                
+                // We still need to set spring platforms to pressed state
+                // This is essential for gameplay visuals
+                const playerBottom = this.y + this.height;
+                for (const p of this.game.platforms) {
+                    if (p.type === 'spring' && 
+                        Math.abs(p.y - playerBottom) < 30 &&
+                        this.x + this.width > p.x &&
+                        this.x < p.x + p.width) {
+                        p.setPressed();
+                        break;
+                    }
+                }
+                break;
+        }
+        
+        // Increment jump count only if this is the first time on this platform
+        if (isFirstJump) {
+            window.__jumpCount = (window.__jumpCount || 0) + 1;
+            console.log(`🦘 First jump on platform ${platformId} - count: ${window.__jumpCount}`);
+            
+            // Notify parent of jump for UI updates
+            if (typeof sendMessageToParent === 'function') {
+                sendMessageToParent({
+                    type: 'JUMP_PERFORMED',
+                    data: {
+                        jumpCount: window.__jumpCount,
+                        timestamp: Date.now()
+                    }
+                });
+            }
+            
+            // Add to the set of jumped platforms
+            this.jumpedPlatforms.add(platformId);
+        } else {
+            console.log(`Repeated jump on platform ${platformId} - not counting`);
+        }
+    }
+
+    // Also update the reset method in Game class to clear jumpedPlatforms
+    reset() {
+        // Reset the set of jumped platforms
+        this.jumpedPlatforms.clear();
+        // Rest of reset code...
     }
 }

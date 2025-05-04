@@ -7,6 +7,7 @@ import { FaHome, FaGift, FaShoppingCart, FaCalendarCheck, FaDiscord, FaTwitter }
 import ShopContent from './ShopContent';
 import RewardsContent from './RewardsContent';
 import DailyQuestContent from './DailyQuestContent';
+import MusicPlayer from './MusicPlayer';
 
 export default function Navbar() {
   const { account, username, playerHighScore } = useWeb3();
@@ -177,6 +178,9 @@ export default function Navbar() {
           </div>
         </div>
       </nav>
+      
+      {/* Add MusicPlayer component here which will be positioned fixed */}
+      <MusicPlayer />
       
       {/* Content Panel System */}
       {!isGameScreen && (

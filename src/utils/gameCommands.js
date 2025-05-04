@@ -31,7 +31,7 @@ export const setupGameCommands = (iframe, options) => {
       // Quick validation
       if (!event.data || typeof event.data !== 'object') return;
       
-      const { type, data } = event.data;
+      const { type, data, transactionRequired, gameOverId } = event.data;
       
       // Skip common messages that flood the console
       if (type === 'GET_HIGH_SCORE' || type === 'GET_ACCOUNT') {
@@ -41,6 +41,7 @@ export const setupGameCommands = (iframe, options) => {
       // Generate a unique message ID that includes relevant properties but not timestamps
       // This helps deduplicate functionally identical messages
       const messageProps = { type };
+      if (gameOverId) messageProps.gameOverId = gameOverId; // Use the provided ID if available
       if (data) {
         if (data.jumpCount) messageProps.jumpCount = data.jumpCount;
         if (data.score) messageProps.score = data.score;
@@ -96,8 +97,8 @@ export const setupGameCommands = (iframe, options) => {
             onScoreUpdate(finalScore);
           }
           
-          // Process game over and save all data
-          if (typeof onGameOver === 'function') {
+          // ONLY execute the transaction if the transactionRequired flag is set
+          if (transactionRequired === true && typeof onGameOver === 'function') {
             console.log(`Calling updateScore with jump count: ${jumpCount}`);
             try {
               const result = await onGameOver(finalScore);
@@ -105,12 +106,20 @@ export const setupGameCommands = (iframe, options) => {
             } catch (error) {
               console.error(`Failed to process game over transaction:`, error);
             }
+          } else {
+            console.log(`Transaction not required or skipped for this message`);
           }
           
           // Reset game over flag after processing completes
           setTimeout(() => {
             window.__gameOverProcessed = false;
           }, 10000);
+          break;
+          
+        // Handle the BUNDLE_JUMPS message type from older implementations
+        case 'BUNDLE_JUMPS':
+          // We now skip this message type completely as we only use the GAME_OVER type
+          console.log('Received legacy BUNDLE_JUMPS message, ignoring to prevent duplicate transactions');
           break;
       }
     } finally {

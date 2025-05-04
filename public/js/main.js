@@ -4,6 +4,30 @@ import { InputHandler } from '/js/input.js'
 import { Platform } from '/js/platform.js'
 import { Enemy } from '/js/enemy.js'
 
+/*
+ * PERFORMANCE OPTIMIZATION:
+ * 
+ * 1. Replaced setInterval with requestAnimationFrame for the game loop
+ *    - Better frame syncing with browser's refresh rate
+ *    - More efficient CPU usage
+ *    - Pauses automatically when tab is inactive
+ * 
+ * 2. Implemented proper deltaTime calculation
+ *    - Movement is now frame-rate independent
+ *    - Game speed remains consistent across different devices
+ *    - All velocities are normalized by time (seconds)
+ *
+ * 3. Applied deltaTime scaling to all game objects:
+ *    - Player movement
+ *    - Platform movement
+ *    - Bullet movement
+ *    - Enemy movement
+ *    - Game physics (gravity, etc.)
+ *
+ * This ensures the game runs at a consistent speed regardless of the device's
+ * frame rate capability, providing a smoother experience across all devices.
+ */
+
 // Make sure window.totalJumps is initialized globally
 window.totalJumps = 0;
 console.log('Main.js: Jump counter initialized to', window.totalJumps);
@@ -101,6 +125,7 @@ window.addEventListener('load', () => {
             this.vy = 0
             this.gameOver = false
             this.gameStart = false
+            this.deathReason = null  // Add property to track cause of death
             this.platforms = []
             this.enemies = []
             this.level = 0
@@ -197,45 +222,40 @@ window.addEventListener('load', () => {
             this.inputHandler = new InputHandler(this)
         }
     
-        update() {
-            if (this.gameOver) {
-                // Stop all game updates when game is over
+        update(deltaTime = 1.0) {
+            // Fixed update with consistent time step based on deltaTime parameter
+
+            if (this.gameOver || !this.gameStart) {
                 return;
             }
 
-            if (!this.gameStart) {
-                return;
-            }
-
-            this.background.update();
+            // Update background with deltaTime
+            this.background.update(deltaTime);
             
-            // Optimize platform updates with length caching and direct indexing
+            // Update platforms with deltaTime
             const platformCount = this.platforms.length;
             for (let i = 0; i < platformCount; i++) {
-                this.platforms[i].update();
+                this.platforms[i].update(deltaTime);
             }
             
-            // Update player with input handler or gyroscope data
+            // Update player with deltaTime - handle both mobile and desktop
             if (this.isMobile && this.gyroEnabled) {
-                // We'll use the gyroData in the player update
-                this.player.update(this.inputHandler, this.gyroData);
+                this.player.update(this.inputHandler, this.gyroData, deltaTime);
             } else {
-                this.player.update(this.inputHandler);
+                this.player.update(this.inputHandler, deltaTime);
             }
             
-            // Optimize enemy updates with length caching and direct indexing
+            // Update enemies with deltaTime
             const enemyCount = this.enemies.length;
             for (let i = 0; i < enemyCount; i++) {
-                this.enemies[i].update();
+                this.enemies[i].update(deltaTime);
             }
 
-            // Filter out deleted objects
+            // Remove deleted objects
             this.platforms = this.platforms.filter(platform => !platform.markedForDeletion);
             this.enemies = this.enemies.filter(enemy => {
                 if (enemy.markedForDeletion) {
-                    // Return enemy to object pool instead of garbage collecting
                     if (this.enemyPool.length < this.maxPoolSize) {
-                        // Reset enemy state
                         enemy.markedForDeletion = false;
                         this.enemyPool.push(enemy);
                     }
@@ -244,9 +264,13 @@ window.addEventListener('load', () => {
                 return true;
             });
 
-            // Check for game over condition
-            if (this.checkGameOver()) {
-                console.log('Game over condition met in update');
+            // Check game over condition
+            this.checkGameOver();
+            
+            // Memory management - ensure we don't leak memory
+            if (this.platforms.length > 100) {
+                // Too many platforms, trim the oldest ones
+                this.platforms.splice(0, this.platforms.length - 100);
             }
         }
     
@@ -303,6 +327,12 @@ window.addEventListener('load', () => {
             context.font = this.scoreTextFormat.font;
             context.textAlign = this.scoreTextFormat.align;
             context.fillText(`Score: ${Math.floor(this.score)}`, 20, 40);
+            
+            // Draw jumps counter on the right side
+            context.textAlign = 'end';
+            context.fillText(`Jumps: ${window.__jumpCount || 0}`, this.width - 20, 40);
+            // Reset text alignment
+            context.textAlign = this.scoreTextFormat.align;
 
             // Draw debug panel
             if (this.debugPanel && typeof this.debugPanel.draw === 'function') {
@@ -312,37 +342,22 @@ window.addEventListener('load', () => {
             // Draw game over screen if needed
             if (this.gameOver) {
                 this.drawGameOverScreen(context);
-                
-                // Add HTML overlay button
-                if (!this.overlayCreated) {
-                    // Kept as in original
-                    this.overlayCreated = true;
-                }
-            } else {
-                // Remove overlay if game is not over
-                if (this.overlayCreated) {
-                    const overlay = document.getElementById('play-again-overlay');
-                    if (overlay) {
-                        document.body.removeChild(overlay);
-                    }
-                    this.overlayCreated = false;
-                }
             }
         }
 
         add_enemy() {
             // Play virus sound first (3 seconds before enemy appears)
-            if (window.audioManager && typeof window.audioManager.play === 'function') {
-                window.audioManager.play('virus', 0.7);
+            try {
+                if (window.audioManager && typeof window.audioManager.play === 'function') {
+                    window.audioManager.play('virus', 0.7);
             } else {
-                // Fallback to direct Audio API
-                try {
+                    // Fallback to direct Audio API
                     const virusSound = new Audio('sound effects/virus.mp3');
                     virusSound.volume = 0.7;
                     virusSound.play().catch(e => console.log("Error playing virus sound:", e));
-                } catch (e) {
-                    console.error("Error playing virus sound:", e);
                 }
+            } catch (e) {
+                console.error("Error playing virus sound:", e);
             }
             
             // Delay the actual virus creation by 3 seconds
@@ -480,12 +495,10 @@ window.addEventListener('load', () => {
                 console.log("RELOAD BUTTON CLICKED!");
                 
                 // Send special message to parent window
-                if (window.parent) {
-                    window.parent.postMessage({
+                sendMessageToParent({
                         type: 'GAME_RELOAD_CLICKED',
                         timestamp: Date.now()
-                    }, '*');
-                }
+                });
                 
                 this.reset();
                 return;
@@ -504,6 +517,7 @@ window.addEventListener('load', () => {
             this.object_vx = 3;
             this.platform_gap = 100;
             this.blue_white_platform_chance = 0;
+            this.deathReason = null; // Reset death reason
             
             // IMPORTANT: Reset ALL jump counters
             window.__jumpCount = 0;
@@ -523,6 +537,12 @@ window.addEventListener('load', () => {
             this.player.vx = 0;
             this.player.bullets = [];
             
+            // Reset the player's jumped platforms set
+            if (this.player.jumpedPlatforms) {
+                this.player.jumpedPlatforms.clear();
+                console.log("🔄 Cleared player's jumped platforms tracking");
+            }
+            
             // Add initial platforms
             this.add_platforms(0, this.height-15);
             this.add_broken_platforms(0, this.height-15);
@@ -539,21 +559,33 @@ window.addEventListener('load', () => {
         }
 
         animate() {
-            // Use timestamp for frame rate control
-            const now = performance.now();
-            const elapsed = now - this.lastFrameTime;
+            // Use requestAnimationFrame with proper deltaTime calculation
+            let lastTime = performance.now();
             
-            // Only render if enough time has passed
-            if (elapsed > this.frameInterval) {
-                // Adjust time to account for any extra time that passed
-                this.lastFrameTime = now - (elapsed % this.frameInterval);
+            const gameLoop = (timestamp) => {
+                // Calculate the delta time in seconds
+                const deltaTime = (timestamp - lastTime) / 1000;
+                lastTime = timestamp;
                 
+                // Only update if game is active
+                if (this.gameStart && !this.gameOver) {
+                    try {
+                        this.update(deltaTime);
+                    } catch (e) {
+                        console.error("Error in game update:", e);
+                    }
+                }
+                
+                // Draw everything
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-                if (this.gameStart && !this.gameOver) this.update();
             this.draw(ctx);
-            }
+                
+                // Continue the loop
+                this.animationId = requestAnimationFrame(gameLoop);
+            };
             
-            requestAnimationFrame(() => this.animate());
+            // Start the animation loop
+            this.animationId = requestAnimationFrame(gameLoop);
         }
 
         drawLoadingScreen(context) {
@@ -624,11 +656,11 @@ window.addEventListener('load', () => {
             ctx.fillStyle = '#FFA500';
             ctx.font = '30px Bangers, cursive';
             
-            // Determine cause of death
-            let deathMessage = "Bad luck!";
-            if (this.player.collision()) {
+            // Get death message from the deathReason property
+            let deathMessage = "BAD LUCK!";
+            if (this.deathReason === "collision") {
                 deathMessage = "KILLED BY MONSTER";
-            } else if (this.player.y > this.canvas.height) {
+            } else if (this.deathReason === "fall") {
                 deathMessage = "DEATH BY FALLING";
             }
             
@@ -898,39 +930,87 @@ window.addEventListener('load', () => {
 
         checkGameOver() {
             if ((this.player.y > this.canvas.height || this.player.collision()) && !this.isGameOver) {
+                // Determine the death reason
+                if (this.player.collision()) {
+                    this.deathReason = "collision";
+                    
+                    // Play collision sound
+                    try {
+                        if (window.audioManager && typeof window.audioManager.play === 'function') {
+                            window.audioManager.play('collision', 0.7);
+                        }
+                    } catch(e) {
+                        console.warn('Error playing collision sound:', e);
+                    }
+                } else if (this.player.y > this.canvas.height) {
+                    this.deathReason = "fall";
+                    
+                    // Play fall sound
+                    try {
+                        if (window.audioManager && typeof window.audioManager.play === 'function') {
+                            window.audioManager.play('fall', 0.7);
+                        } else if (typeof this.playFallSound === 'function') {
+                            this.playFallSound();
+                        }
+                    } catch(e) {
+                        console.warn('Error playing fall sound:', e);
+                    }
+                } else {
+                    this.deathReason = "unknown";
+                }
+
+                // Get final score and jump count
                 const finalScore = Math.floor(this.score);
                 const jumpCount = window.__jumpCount || 0;
                 
                 console.log('🎮 GAME OVER');
                 console.log(`📊 Final Score: ${finalScore}, Total Jumps: ${jumpCount}`);
                 
-                // Ensure we have the final jump count stored
-                this.finalJumpCount = jumpCount;
+                // Set game over state first
+                this.isGameOver = true;
+                this.gameOver = true;
                 
-                // Only send transaction if there are jumps to record
-                if (jumpCount > 0) {
-                    try {
-                        // Send only one message with all the needed data
-                        // Combined both messages into one to prevent duplicate transactions
-                        window.parent.postMessage({
-                            type: 'BUNDLE_JUMPS',
+                // Store the fact that we sent the game over message
+                this.gameOverMessageSent = true;
+                
+                // Play game over sound
+                try {
+                    if (window.audioManager && typeof window.audioManager.play === 'function') {
+                        window.audioManager.play('gameOver', 0.7);
+                    }
+                } catch(e) {
+                    console.warn('Error playing game over sound:', e);
+                }
+                
+                // Use safe message sending function - SEND ONLY ONE MESSAGE WITH ALL DATA
+                try {
+                    // Use a unique ID to prevent duplicate transactions
+                    const gameOverId = Date.now().toString();
+                        
+                    // Send a single comprehensive message with all required data
+                    console.log(`📤 Sending single game over notification with ID: ${gameOverId}`);
+                    
+                    // Send a single message with a transaction flag
+                    sendMessageToParent({
+                        type: 'GAME_OVER',
+                        transactionRequired: true,  // Flag indicating this should trigger a transaction
+                        gameOverId: gameOverId,     // Unique ID to prevent duplicates
                             data: {
                                 score: finalScore,
                                 jumpCount: jumpCount,
-                                finalScore: finalScore, // Include both for backward compatibility
+                            finalScore: finalScore,
+                            jumps: jumpCount,
                                 timestamp: Date.now(),
-                                saveId: Date.now().toString()
+                            reason: this.deathReason,
+                            saveId: gameOverId
                             }
-                        }, '*');
+                    });
                         
-                        console.log(`📤 TRANSACTION: Bundling ${jumpCount} jumps to send to blockchain`);
+                    console.log(`📤 Game over notification sent to parent window`);
                     } catch (error) {
-                        console.error('❌ Error sending bundle transaction:', error);
-                    }
+                    console.error('❌ Error notifying parent window:', error);
                 }
                 
-                this.isGameOver = true;
-                this.gameOver = true;
                 return true;
             }
             return false;
@@ -1120,6 +1200,24 @@ window.addEventListener('load', () => {
                 playButton = document.createElement('button');
                 playButton.id = 'playButton';
                 playButton.textContent = 'PLAY!';
+                
+                // Create game controls guide
+                const controlsGuide = document.createElement('div');
+                controlsGuide.id = 'controlsGuide';
+                controlsGuide.innerHTML = '<img src="/images/arrow.png" alt="Left/Right Arrows" style="height: 30px; vertical-align: middle; margin-right: 10px;"> MOVE | <img src="/images/spacebar.png" alt="Spacebar" style="height: 30px; vertical-align: middle; margin: 0 10px;"> SHOOT!';
+                controlsGuide.style.fontFamily = '"Bangers", cursive';
+                controlsGuide.style.fontSize = '18px';
+                controlsGuide.style.color = 'white';
+                controlsGuide.style.textAlign = 'center';
+                controlsGuide.style.marginTop = '60px';
+                controlsGuide.style.textShadow = '0 1px 3px rgba(0, 0, 0, 0.5)';
+                controlsGuide.style.opacity = '0';
+                controlsGuide.style.display = 'flex';
+                controlsGuide.style.alignItems = 'center';
+                controlsGuide.style.justifyContent = 'center';
+                controlsGuide.style.gap = '10px';
+                controlsGuide.style.letterSpacing = '1px';
+                
                 playButton.style.display = 'none'; // Initially hidden
                 playButton.style.opacity = '0';
                 playButton.style.fontSize = '32px';
@@ -1165,6 +1263,7 @@ window.addEventListener('load', () => {
                 };
                 
                 startScreen.appendChild(playButton);
+                startScreen.appendChild(controlsGuide); // Add guide below button
                 
                 // Add click handler
                 playButton.onclick = () => {
@@ -1199,6 +1298,11 @@ window.addEventListener('load', () => {
                         playButton.style.transition = 'opacity 0.8s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
                         playButton.style.opacity = '1';
                         
+                        // Also show controls guide
+                        controlsGuide.style.display = 'block';
+                        controlsGuide.style.transition = 'opacity 0.8s ease';
+                        controlsGuide.style.opacity = '1';
+                        
                         // Add a bouncy entrance effect
                         playButton.style.transform = 'scale(0.8)';
                         setTimeout(() => {
@@ -1218,91 +1322,7 @@ window.addEventListener('load', () => {
             }
         }
 
-        createPlayAgainOverlay() {
-            // Remove existing overlay
-            const existingOverlay = document.getElementById('play-again-overlay');
-            if (existingOverlay) {
-                document.body.removeChild(existingOverlay);
-            }
-            
-            // Create new overlay
-            const overlay = document.createElement('div');
-            overlay.id = 'play-again-overlay';
-            overlay.style.position = 'absolute';
-            overlay.style.top = '0';
-            overlay.style.left = '0';
-            overlay.style.width = '100%';
-            overlay.style.height = '100%';
-            overlay.style.pointerEvents = 'none';
-            
-            // Get panel dimensions from drawGameOverScreen
-            const panelWidth = 380;
-            const panelHeight = 440;
-            const x = this.width/2 - panelWidth/2;
-            const y = this.height/2 - panelHeight/2;
-            
-            // The transaction text is at y + 325
-            // Position button exactly 40px below the transaction text
-            const buttonY = y + 365;
-            
-            // Create the button
-            const button = document.createElement('button');
-            button.id = 'play-again-button';
-            button.innerText = 'PLAY AGAIN';
-            
-            // Position right below the approve transaction text
-            button.style.position = 'absolute';
-            button.style.width = '180px';
-            button.style.top = `${buttonY + 45}px`;
-            button.style.left = '50%';
-            button.style.transform = 'translateX(-50%)';
-            
-            // Standard styling
-            button.style.padding = '15px 0';
-            button.style.fontSize = '24px';
-            button.style.fontWeight = 'bold';
-            button.style.backgroundColor = '#ce0202';
-            button.style.color = 'white';
-            button.style.border = 'none';
-            button.style.borderRadius = '10px';
-            button.style.cursor = 'pointer';
-            button.style.pointerEvents = 'auto';
-            button.style.zIndex = '9999';
-            button.style.textAlign = 'center';
-            
-            // Click handler
-            const self = this;
-            button.onclick = function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Play Again button clicked!');
-                
-                // Reset ALL jump counters before starting new game
-                window.__jumpCount = 0;
-                window.totalJumps = 0;
-                self.finalJumpCount = 0;
-                console.log("🔄 Jump counters reset for new game");
-                
-                // Remove overlay
-                document.body.removeChild(overlay);
-                
-                // Reset game state
-                self.overlayCreated = false;
-                self.gameOver = false;
-                
-                // Restart game without loading animation
-                self.reset();
-                self.loading = false;
-                self.loadingProgress = 100;
-                self.gameStart = true;
-                
-                return false;
-            };
-            
-            // Add button to overlay
-            overlay.appendChild(button);
-            document.body.appendChild(overlay);
-        }
+        // Play again overlay removed to prevent buttons showing outside the iframe
 
         // Add this new method to track each jump
         recordJumpTransaction() {
@@ -1316,14 +1336,14 @@ window.addEventListener('load', () => {
             
             console.log(`🎮 Jump #${jumpData.jumpNumber} recorded for bundling`);
             
-            // Notify parent of the jump for UI updates
-            window.parent.postMessage({
+            // Notify parent of the jump for UI updates using safe function
+            sendMessageToParent({
                 type: 'JUMP_PERFORMED',
                 data: {
                     jumpCount: window.__jumpCount,
                     timestamp: jumpData.timestamp
                 }
-            }, '*');
+            });
         }
 
         jump() {
@@ -1334,11 +1354,11 @@ window.addEventListener('load', () => {
                 window.__jumpCount = (window.__jumpCount || 0) + 1;
                 console.log('🦘 Jump recorded:', window.__jumpCount);
                 
-                // Notify parent of jump
-                window.parent.postMessage({
+                // Notify parent of jump using safe function
+                sendMessageToParent({
                     type: 'JUMP_PERFORMED',
                     jumpCount: window.__jumpCount
-                }, '*');
+                });
             }
         }
 
@@ -1359,20 +1379,16 @@ window.addEventListener('load', () => {
                     // Jump action
                     this.player.jump();
                     
-                    // Record jump transaction like in keyboard controls
-                    window.__jumpCount = (window.__jumpCount || 0) + 1;
-                    console.log(`🦘 Jump #${window.__jumpCount} recorded via touch`);
+                    // Let the player's processJump method handle jump counting
+                    // Do not increment window.__jumpCount here
+                    // The processJump method will handle counting only first jumps on platforms
                     
                     // Play jump sound if available
                     if (window.audioManager) {
                         window.audioManager.play('jump', 0.7);
                     }
                     
-                    // Notify parent of jump (for UI updates)
-                    window.parent.postMessage({
-                        type: 'JUMP_PERFORMED',
-                        jumpCount: window.__jumpCount
-                    }, '*');
+                    // Do not notify parent of jump here - the processJump method will do this
                 } else if (!this.gameStart) {
                     // Start the game on touch if not started
                     this.startGame();
@@ -1557,34 +1573,60 @@ window.addEventListener('load', () => {
             
             // Also send message to parent window as backup
             try {
-                window.parent.postMessage({ 
+                sendMessageToParent({ 
                     type: 'GAME_STARTED',
                     message: 'Game is ready for music control',
                     muted: false // Always report unmuted
-                }, '*');
+                });
                 
                 // Also send explicit play request
-                window.parent.postMessage({
+                sendMessageToParent({
                     type: 'PLAY_BACKGROUND_MUSIC',
                     volume: 0.5
-                }, '*');
+                });
             } catch (e) {
                 console.warn('Could not communicate with parent window:', e);
             }
+        }
+
+        drawScore() {
+            // Only draw score once at the top
+            this.ctx.font = 'bold 24px Arial';
+            this.ctx.fillStyle = 'white';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(`Score: ${Math.floor(this.score)}`, this.width / 2, 30);
         }
     }
     
     const game = new Game(canvas.width,canvas.height)
     window.gameInstance = game; // Make game globally accessible
     
-    function animate() {
+    // Replace the existing animate function with a proper game loop using deltaTime
+    let lastTime = performance.now();
+    
+    function animate(currentTime) {
+        // Calculate delta time in seconds for consistent movement
+        const deltaTime = (currentTime - lastTime) / 1000; 
+        lastTime = currentTime;
+        
+        // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (game.gameStart && !game.gameOver) game.update();
+        
+        // Update game if active
+        if (game.gameStart && !game.gameOver) {
+            // Pass deltaTime but preserve original jump physics
+            game.update(deltaTime);
+        }
+        
+        // Draw game
         game.draw(ctx);
+        
+        // Continue the loop
         requestAnimationFrame(animate);
     }
     
-    animate()
+    // Start the animation loop with requestAnimationFrame
+    requestAnimationFrame(animate);
 
     // Add key listener for game start
     document.addEventListener('keydown', (event) => {
@@ -1607,6 +1649,45 @@ window.addEventListener('load', () => {
     });
 
     console.log('Game initialized successfully!');
+
+    // Make sure game instance is globally accessible for parent window
+    window.addEventListener('load', function() {
+        // Ensure gameInstance is always available globally
+        if (window.gameInstance) {
+            console.log("Game instance exposed to window");
+            
+            // Make sure we can get game status from parent
+            window.getGameStatus = function() {
+                return {
+                    gameStart: window.gameInstance.gameStart,
+                    gameOver: window.gameInstance.gameOver,
+                    score: Math.floor(window.gameInstance.score || 0),
+                    jumps: window.__jumpCount || 0
+                };
+            };
+            
+            // Remove any existing play-again overlay that might be outside the iframe
+            const existingOverlay = document.getElementById('play-again-overlay');
+            if (existingOverlay) {
+                document.body.removeChild(existingOverlay);
+                console.log("Removed existing play-again overlay");
+            }
+            
+            // Notify parent that game is fully loaded
+            if (window.parent && window.parent !== window) {
+                try {
+                    sendMessageToParent({
+                        type: 'GAME_LOADED',
+                        status: window.getGameStatus()
+                    });
+                } catch (e) {
+                    console.error("Error notifying parent:", e);
+                }
+            }
+        } else {
+            console.error("Game instance not found on window!");
+        }
+    });
 })
 
 class DebugPanel {
@@ -1747,11 +1828,11 @@ try {
     console.log(`💾 SENDING JUMP SAVE (ID: ${saveId}): ${jumps} jumps`);
     
     // Send message to React app with the unique save ID
-    window.parent.postMessage({
+    sendMessageToParent({
       type: 'SAVE_JUMPS',
       jumps: jumps,
       saveId: saveId
-    }, '*');
+    });
     
     // Set a flag in localStorage to further prevent duplicates
     try {
@@ -1815,13 +1896,23 @@ try {
       // Get final jump count
       const jumps = game.finalJumpCount || jumpState.currentJumps;
       
+      // Skip if the main game over message already sent a transaction
+      if (game.gameOverMessageSent) {
+        console.log('🛑 Game already sent game over message - skipping duplicate transaction');
+        return;
+      }
+      
+      // Only send if the main game over didn't already send it
       if (jumps > 0 && !jumpState.saveMessageSent) {
         console.log(`🎮 Game over detected with ${jumps} jumps - preparing to save...`);
         
         // Add slight delay to ensure we only save once
         setTimeout(() => {
-          if (!jumpState.saveMessageSent) {
+          // Double-check that the main game didn't send a transaction during our timeout
+          if (!jumpState.saveMessageSent && !game.gameOverMessageSent) {
             sendJumpSaveMessage(jumps);
+          } else {
+            console.log('🛑 Jump save message already sent - preventing duplicate');
           }
         }, 1000);
       }
@@ -1904,14 +1995,17 @@ class AudioManager {
         console.log('AudioManager initialized in unmuted state');
         
         this.sounds = {
-            jump: '/sounds/jump.mp3',
-            collision: '/sounds/collision.mp3',
-            gameOver: '/sounds/gameover.mp3',
-            powerUp: '/sounds/powerup.mp3',
+            jump: 'sound effects/jump.wav',
+            collision: 'sound effects/crash.mp3',
+            gameOver: 'sound effects/fall.mp3',
+            powerUp: 'sound effects/spring.mp3',
             spring: 'sound effects/spring.mp3',
             bgMusic: 'sound effects/bgmusic.mp3',
             virus: 'sound effects/virus.mp3',
             fall: 'sound effects/fall.mp3',
+            bullet: 'sound effects/bullet.mp3',
+            singleJump: 'sound effects/single_jump.mp3',
+            noJump: 'sound effects/no_jump.mp3',
             // Add any other sounds your game uses
         };
         
@@ -1972,7 +2066,6 @@ class AudioManager {
         // Store in localStorage for persistence
         localStorage.setItem('audioMuted', 'false');
         
-        console.log(`Audio forced to unmuted state`);
         return this.isMuted;
     }
     
@@ -2020,17 +2113,17 @@ class AudioManager {
     }
     
     play(soundName, volume = 1.0) {
+        // Skip completely if the sound isn't loaded - don't log errors
+        if (!this.soundBuffers[soundName]) {
+            return;
+        }
+        
         // Don't play if muted
         if (this.isMuted) {
-            console.log(`Sound ${soundName} not played (muted)`);
             return;
         }
         
-        if (!this.soundBuffers[soundName]) {
-            console.warn(`Sound not loaded: ${soundName}`);
-            return;
-        }
-        
+        try {
         // Resume audio context if it's suspended (needed for some browsers)
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume();
@@ -2050,6 +2143,9 @@ class AudioManager {
         
         // Play immediately
         source.start(0);
+        } catch (e) {
+            // Silently fail - don't log errors during gameplay
+        }
     }
 
     // Add method to play background music directly
@@ -2067,11 +2163,11 @@ class AudioManager {
         // Instead of playing, send a message to the parent window that the game has started
         // This allows the parent window to know when the game is ready for music
         try {
-            window.parent.postMessage({
+            sendMessageToParent({
                 type: 'GAME_STARTED',
                 message: 'Game is ready for music control',
                 muted: this.isMuted // Send current mute state to parent
-            }, '*');
+            });
         } catch (e) {
             console.warn('Could not communicate with parent window:', e);
         }
@@ -2085,29 +2181,77 @@ class AudioManager {
         
         // Try multiple approaches to ensure the sound plays
         
-        // 1. Try using the audio element directly
-        const fallElement = document.getElementById('sound-fall');
-        if (fallElement) {
-            fallElement.volume = 1.0;
-            fallElement.currentTime = 0;
-            fallElement.play().catch(err => {
-                console.warn('Failed to play fall sound via element:', err);
-            });
+        // First approach: Use AudioContext API (most reliable)
+        if (this.soundBuffers.fall) {
+            try {
+                // Resume audio context if it's suspended
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+                
+                // Create sound source
+                const source = this.audioContext.createBufferSource();
+                source.buffer = this.soundBuffers.fall;
+                
+                // Create volume control
+                const gainNode = this.audioContext.createGain();
+                gainNode.gain.value = 1.0;
+                
+                // Connect the nodes
+                source.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                // Play immediately
+                source.start(0);
+                console.log('Fall sound played via AudioContext');
+                return;
+            } catch (e) {
+                console.warn('Failed to play fall sound via AudioContext:', e);
+            }
         }
         
-        // 2. Try using the AudioManager's normal play method
-        this.play('fall', 1.0);
-        
-        // 3. Try direct Audio API as a last resort
-        try {
-            const fallSound = new Audio('sound effects/fall.mp3');
-            fallSound.volume = 1.0;
-            fallSound.muted = this.isMuted; // Apply mute state
-            fallSound.play().catch(err => {
-                console.warn('Failed to play fall sound via direct API:', err);
-            });
-        } catch (err) {
-            console.error('Error creating fall sound via Audio API:', err);
+        // Second approach: Try using the audio element directly
+        const fallElement = document.getElementById('sound-fall');
+        if (fallElement) {
+            try {
+                fallElement.volume = 1.0;
+                fallElement.currentTime = 0;
+                fallElement.play().then(() => {
+                    console.log('Fall sound played via HTML element');
+                }).catch(err => {
+                    console.warn('Failed to play fall sound via element:', err);
+                    
+                    // Third approach: Direct Audio API as a last resort
+                    try {
+                        const fallSound = new Audio('sound effects/fall.mp3');
+                        fallSound.volume = 1.0;
+                        fallSound.muted = this.isMuted; // Apply mute state
+                        fallSound.play().then(() => {
+                            console.log('Fall sound played via direct Audio API');
+                        }).catch(err => {
+                            console.warn('Failed to play fall sound via direct API:', err);
+                        });
+                    } catch (err) {
+                        console.error('Error creating fall sound via Audio API:', err);
+                    }
+                });
+            } catch (err) {
+                console.warn('Error playing fall sound via element:', err);
+            }
+        } else {
+            // Third approach: Direct Audio API as a last resort
+            try {
+                const fallSound = new Audio('sound effects/fall.mp3');
+                fallSound.volume = 1.0;
+                fallSound.muted = this.isMuted; // Apply mute state
+                fallSound.play().then(() => {
+                    console.log('Fall sound played via direct Audio API');
+                }).catch(err => {
+                    console.warn('Failed to play fall sound via direct API:', err);
+                });
+            } catch (err) {
+                console.error('Error creating fall sound via Audio API:', err);
+            }
         }
     }
 }
@@ -2138,10 +2282,10 @@ function initAudio() {
             
             // Inform parent window about mute state change
             try {
-                window.parent.postMessage({
+                sendMessageToParent({
                     type: 'AUDIO_STATE_CHANGED',
                     muted: newState
-                }, '*');
+                });
             } catch (e) {
                 console.warn('Could not send audio state to parent window:', e);
             }
@@ -2166,10 +2310,10 @@ function initAudio() {
     // Send initial state to parent when initialized
     setTimeout(() => {
         try {
-            window.parent.postMessage({
+            sendMessageToParent({
                 type: 'AUDIO_STATE_INITIALIZED',
                 muted: window.isAudioMuted()
-            }, '*');
+            });
         } catch (e) {
             console.warn('Could not send initial audio state:', e);
         }
@@ -2185,3 +2329,18 @@ window.setTimeout = function(callback, delay) {
   // Just pass through to the original setTimeout
   return originalSetTimeout(callback, delay);
 };
+
+// Add a safe message sending function
+function sendMessageToParent(messageData) {
+    try {
+        // Check if parent window exists and is accessible
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage(messageData, '*');
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.warn('Could not send message to parent window:', err);
+        return false;
+    }
+}

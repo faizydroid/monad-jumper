@@ -2,6 +2,7 @@ import React from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
+import MusicPlayer from './MusicPlayer';
 
 const MobileHomePage = ({ 
   characterImg, 
@@ -63,6 +64,8 @@ const MobileHomePage = ({
           </>
         )}
       </div>
+      
+      <MusicPlayer />
       
       {process.env.NODE_ENV !== 'production' && (
         <div className="connection-status" style={{position: 'fixed', bottom: 5, left: 5, fontSize: '10px', opacity: 0.7}}>

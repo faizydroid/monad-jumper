@@ -1,1 +1,5 @@
+This is a binary file, so I'll just describe what needs to be created: 
+
+A spring sound effect (boing) that plays when the player jumps on a spring platform. 
  
+Since we can't actually create binary content here, you'll need to supply your own spring sound effect file and place it at public/sounds/spring.mp3 manually. 
