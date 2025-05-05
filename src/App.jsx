@@ -25,7 +25,6 @@ import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 import { FaXTwitter, FaDiscord } from "react-icons/fa6";
 import { monadTestnet } from './config/chains';
-import ReviveModal from './components/ReviveModal';
 
 // Global error handler for unhandled Chrome extension messaging errors
 if (typeof window !== 'undefined') {
@@ -401,6 +400,115 @@ const NFTMintModal = ({ isOpen, onClose }) => {
             Cancel
           </button>
         </div>
+      </div>
+    </SimpleModal>
+  );
+};
+
+// Add ReviveModal component after SimpleModal component
+const ReviveModal = ({ isOpen, onClose, onRevive, onCancel, revivePrice }) => {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState(null);
+  const [countdown, setCountdown] = useState(null);
+  
+  // Format the price for display
+  const displayPrice = revivePrice || '0.5';
+  
+  const handleReviveClick = async () => {
+    setIsProcessing(true);
+    setError(null);
+    
+    try {
+      await onRevive();
+      // Start countdown when transaction is complete
+      setCountdown(3);
+    } catch (err) {
+      console.error("Revive error:", err);
+      setError(err.message || "Failed to purchase revive. Please try again.");
+      setIsProcessing(false);
+    }
+  };
+  
+  // Handle countdown timer
+  useEffect(() => {
+    if (countdown === null) return;
+    
+    if (countdown <= 0) {
+      onClose();
+      return;
+    }
+    
+    const timer = setTimeout(() => {
+      setCountdown(countdown - 1);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [countdown, onClose]);
+  
+  return (
+    <SimpleModal isOpen={isOpen} onClose={onCancel} title="Continue Game?">
+      <div className="revive-modal-content" style={{textAlign: 'center'}}>
+        {countdown !== null ? (
+          <div className="revive-countdown" style={{textAlign: 'center', padding: '20px'}}>
+            <h2 style={{color: '#4CAF50', marginBottom: '20px'}}>Reviving...</h2>
+            <div style={{fontSize: '64px', margin: '20px 0'}}>{countdown}</div>
+            <p>Get ready to continue your game!</p>
+          </div>
+        ) : (
+          <>
+            <div style={{fontSize: '64px', margin: '20px 0'}}>💀</div>
+            <h2 style={{color: '#FF5252', marginBottom: '20px'}}>You Died!</h2>
+            <p>Want to continue from where you left off?</p>
+            <p style={{marginTop: '10px'}}><strong>Cost: {displayPrice} MON</strong></p>
+            
+            {error && (
+              <div className="error-message" style={{color: '#FF5252', margin: '15px 0', padding: '10px', background: 'rgba(255,82,82,0.1)', borderRadius: '4px'}}>
+                {error}
+              </div>
+            )}
+            
+            <div className="revive-actions" style={{marginTop: '20px', display: 'flex', gap: '10px'}}>
+              <button 
+                onClick={handleReviveClick} 
+                disabled={isProcessing}
+                className="revive-now-btn"
+                style={{
+                  background: isProcessing ? '#888' : 'linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%)',
+                  border: 'none',
+                  padding: '12px 20px',
+                  borderRadius: '50px',
+                  color: 'white',
+                  flex: '1',
+                  cursor: isProcessing ? 'not-allowed' : 'pointer',
+                  position: 'relative'
+                }}
+              >
+                {isProcessing ? 'Processing...' : `Revive Now (${displayPrice} MON)`}
+                {isProcessing && (
+                  <span className="spinner" style={{
+                    width: '20px',
+                    height: '20px',
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTop: '2px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                    position: 'absolute',
+                    right: '15px',
+                    top: 'calc(50% - 10px)'
+                  }}></span>
+                )}
+              </button>
+              
+              <button 
+                onClick={onCancel}
+                style={{padding: '12px', background: 'transparent', border: '1px solid #ccc', borderRadius: '50px', color: 'white'}}
+                disabled={isProcessing}
+              >
+                Game Over
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </SimpleModal>
   );
@@ -1004,15 +1112,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Add this after the state declarations in the GameComponent function 
   const [mintModalRequested, setMintModalRequested] = useState(false);
   
-  // Move revive states here before they're used in useEffect
-  const [showReviveModal, setShowReviveModal] = useState(false);
-  const [isReviving, setIsReviving] = useState(false);
-  const [reviveError, setReviveError] = useState(null);
-  const [hasUsedRevive, setHasUsedRevive] = useState(false);
-  const [currentGameScore, setCurrentGameScore] = useState(0);
-  const [fallDetected, setFallDetected] = useState(false);
-  const REVIVE_CONTRACT_ADDRESS = '0xf8e81D47203A594245E36C48e151709F0C19fBe8';
-  
   // Initialize fallback provider for offline mode
   useEffect(() => {
     // Create a fallback provider if we don't have one from web3
@@ -1429,13 +1528,12 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
 }, [isConnected, address, openConnectModal]);
 
-  // Modify the handlePlayAgain function to track games
-  const handlePlayAgainNew = useCallback(() => {
+  // Modify the existing handlePlayAgain function to reset revive state
+  const handlePlayAgain = useCallback(() => {
     console.log("🔄 Play Again clicked");
     
-    // Reset revive state for the new game
+    // Reset revive state
     setHasUsedRevive(false);
-    setFallDetected(false);
     
     // Increment games counter in Supabase
     if (address && incrementGamesPlayed) {
@@ -1484,19 +1582,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       console.warn("Could not store game session in sessionStorage:", e);
     }
     
-    // Explicitly tell the game to reset revive state
-    if (iframeRef.current && iframeRef.current.contentWindow) {
-      try {
-        iframeRef.current.contentWindow.postMessage({
-          type: 'PLAY_AGAIN',
-          resetRevive: true
-        }, '*');
-        console.log("📢 Sent PLAY_AGAIN message to iframe to reset revive state");
-      } catch (err) {
-        console.warn("Failed to send PLAY_AGAIN message:", err);
-      }
-    }
-    
     // Force iframe reload - use the existing function
     const newIframe = forceReloadIframe(iframeRef, newGameId);
     
@@ -1508,17 +1593,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           sessionId: newGameId
         }, '*');
         console.log("📢 Sent session ID to reloaded iframe:", newGameId);
-        
-        // Also send explicit reset revive state message after reload
-        newIframe.contentWindow.postMessage({
-          type: 'PLAY_AGAIN',
-          resetRevive: true
-        }, '*');
       }
     }, 1000);
     
     console.log("🎮 Game reset complete with new session ID:", newGameId);
-  }, [address, incrementGamesPlayed, setGameScore]);
+  }, [address, incrementGamesPlayed, setGameScore, iframeRef, setHasUsedRevive]);
 
   // Add a state to GameComponent for games played
   const [gamesPlayed, setGamesPlayed] = useState(0);
@@ -1753,90 +1832,46 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       const data = event.data;
       
       if (data && typeof data === 'object') {
-        console.log('Received message from game:', data.type, data);
-        
-        // Handle revive system initialization
-        if (data.type === 'REVIVE_SYSTEM_READY') {
-          console.log('💉 Revive system is ready in game!', data);
+        if (data.type === 'gameOver' || data.type === 'GAME_OVER') {
+          console.log('Game Over with score:', data.score || data.data?.finalScore);
           
-          // Send session ID to game
-          if (iframeRef.current && iframeRef.current.contentWindow) {
-            iframeRef.current.contentWindow.postMessage({
-              type: 'GAME_SESSION_ID',
-              sessionId: `session_${Date.now()}`
-            }, '*');
-            console.log('📤 Sent session ID to game');
-          }
-        }
-        
-        // Handle game restart notifications from the iframe
-        if (data.type === 'GAME_RESTART') {
-          console.log('Game restart detected within iframe!');
-          setHasUsedRevive(false);
-          setFallDetected(false);
+          // Extract the game data
+          const finalScore = data.score || data.data?.finalScore || 0;
+          const jumpCount = data.jumps || data.data?.jumpCount || window.totalJumps || 0;
           
-          // Send a new session ID
-          if (iframeRef.current && iframeRef.current.contentWindow) {
-            iframeRef.current.contentWindow.postMessage({
-              type: 'GAME_SESSION_ID',
-              sessionId: `session_${Date.now()}`
-            }, '*');
-          }
-          return;
-        }
-        
-        // Add this code to detect falls before game over
-        if (data.type === 'PLAYER_FALLING') {
-          console.log('🚨 PLAYER FALLING DETECTED!', data);
-          const { score, jumpCount, reason } = data.data || {};
+          // Update the game score
+          console.log(`Game over with score: ${finalScore}, jumps: ${jumpCount}`);
           
-          // Set current score for the revive popup
-          setCurrentGameScore(score || 0);
-          
-          // Send pause message to game to freeze it
-          if (iframeRef.current && iframeRef.current.contentWindow) {
-            iframeRef.current.contentWindow.postMessage({
-              type: 'PAUSE_GAME'
-            }, '*');
-            console.log('📤 Sent PAUSE_GAME to iframe');
-          }
-          
-          // Check if player has already used their revive this game
-          if (hasUsedRevive) {
-            console.log('Player already used revive this game session');
-            
-            // Send cancel revive message to let the game continue to game over
-            if (iframeRef.current && iframeRef.current.contentWindow) {
-              iframeRef.current.contentWindow.postMessage({
-                type: 'CANCEL_REVIVE',
-                reason: 'already_used'
-              }, '*');
+          // Call the handler from props or context
+          if (onGameOver && typeof onGameOver === 'function') {
+            try {
+              onGameOver(finalScore);
+            } catch (err) {
+              console.error('Error in onGameOver handler:', err);
             }
-            return;
           }
-          
-          // Show revive modal
-          setFallDetected(true);
-          setShowReviveModal(true);
-          console.log('🔄 Showing revive modal, fall reason:', reason);
-        }
-        
-        // Handle game over event
-        if (data.type === 'GAME_OVER' || data.type === 'gameOver') {
-          console.log('Game over event received');
-          
-          // If player has fallen but hasn't responded to revive prompt yet, keep showing it
-          if (fallDetected && showReviveModal) {
-            console.log('Game over while revive modal is showing - keeping modal open');
-            return;
+        } else if (data.type === 'GAME_RELOAD_CLICKED') {
+          // Safe handling for reload requests
+          console.log('Game reload requested');
+          // Handle reload logic safely
+        } else if (data.type === 'CONNECT_WALLET_REQUEST') {
+          // Safe handling for wallet connection requests
+          console.log('Wallet connection requested from game');
+          if (!isConnected && openConnectModal) {
+            try {
+              openConnectModal();
+            } catch (err) {
+              console.warn('Error opening connect modal:', err);
+            }
           }
-          
-          // Otherwise process game over normally
-          handleGameOver(data.data?.finalScore || 0);
+        } else if (data.type === 'GAME_LOADED') {
+          console.log('Game reports it is fully loaded');
+          // Can do any initialization that requires the game to be fully loaded
+          safePostMessage({
+            type: 'PARENT_READY',
+            timestamp: Date.now()
+          });
         }
-        
-        // Handle powerup events...
-        // [existing powerup code]
       }
     };
     
@@ -1844,7 +1879,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     return () => {
       window.removeEventListener('message', handleIframeMessage);
     };
-  }, [onGameOver, iframeRef, isConnected, openConnectModal, hasUsedRevive, fallDetected, currentGameScore]);
+  }, [onGameOver, iframeRef, isConnected, openConnectModal]);
 
   // Add this at the top of your component
   useEffect(() => {
@@ -2275,79 +2310,108 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }
   };
 
-  // Add a useEffect to check if player has already used a revive
+  // Inside the GameComponent function, add this useEffect
   useEffect(() => {
-    const checkReviveStatus = async () => {
-      if (!address || !publicClient) return;
+    // Direct console counter for reload clicks
+    let reloadClickCount = 0;
+    
+    const handleGameReload = async (event) => {
+      // Check if the message is from our game iframe
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
       
-      try {
-        console.log('Checking revive status for address:', address);
+      // Check for reload button click message
+      if (event.data?.type === 'GAME_RELOAD_CLICKED') {
+        reloadClickCount++;
+        console.log(`🔄 RELOAD CLICKED: Count = ${reloadClickCount}`);
         
-        const hasUsed = await publicClient.readContract({
-          address: REVIVE_CONTRACT_ADDRESS,
-          abi: [
-            {
-              name: 'checkReviveStatus',
-              type: 'function',
-              stateMutability: 'view',
-              inputs: [{ type: 'address', name: 'player' }],
-              outputs: [{ type: 'bool' }]
-            }
-          ],
-          functionName: 'checkReviveStatus',
-          args: [address]
-        });
-        
-        console.log('Player revive contract status:', hasUsed);
-        
-        // Only update if different from current state to avoid unnecessary rerenders
-        if (hasUsed !== hasUsedRevive) {
-          setHasUsedRevive(hasUsed);
+        // Only proceed if we have an address
+        if (!address) {
+          console.log("No wallet address available - can't update games count");
+          return;
         }
-      } catch (error) {
-        console.error('Error checking revive status:', error);
-        // Don't change state on error - keep previous value
+        
+        try {
+          // First, get current count from Supabase
+          const { data, error } = await supabase
+            .from('games')
+            .select('count')
+            .eq('wallet_address', address.toLowerCase())
+            .maybeSingle();
+            
+          if (error && error.code !== 'PGRST116') {
+            console.error("Error fetching games count:", error);
+            return;
+          }
+          
+          // Calculate new count (start at 1 if no existing record)
+          const currentCount = data?.count || 0;
+          const newCount = currentCount + 1;
+          
+          console.log(`Updating games count: ${currentCount} → ${newCount}`);
+          
+          // Use upsert for both insert and update cases
+          const { error: upsertError } = await supabase
+            .from('games')
+            .upsert({
+              wallet_address: address.toLowerCase(),
+              count: newCount
+            }, { onConflict: 'wallet_address' });
+          
+          if (upsertError) {
+            console.error("Error updating games count:", upsertError);
+            return;
+          }
+          
+          console.log(`✅ Games count updated successfully to ${newCount}`);
+          
+          // Update the state to reflect the new value
+          setGamesPlayed(newCount);
+        } catch (error) {
+          console.error("Error processing reload click:", error);
+        }
       }
     };
     
-    checkReviveStatus();
+    // Add event listener
+    window.addEventListener('message', handleGameReload);
     
-    // Also refresh revive status when game ID changes
-    const refreshInterval = setInterval(checkReviveStatus, 60000); // Check every minute
-    
-    return () => clearInterval(refreshInterval);
-  }, [address, publicClient, gameId]);
+    // Clean up
+    return () => window.removeEventListener('message', handleGameReload);
+  }, [address, supabase, iframeRef]);
+
+  // Add state for revive functionality
+  const [showReviveModal, setShowReviveModal] = useState(false);
+  const [hasUsedRevive, setHasUsedRevive] = useState(false);
+  const [revivePrice, setRevivePrice] = useState(0.5); // Default price
+  const [currentScore, setCurrentScore] = useState(0);
+  const [currentPosition, setCurrentPosition] = useState(null);
   
-  // Add the revive purchase function
+  // Add function to handle revive purchase
   const handleRevivePurchase = async () => {
     if (!address || !walletClient) {
-      setReviveError("Wallet not connected");
-      return;
-    }
-    
-    if (hasUsedRevive) {
-      setReviveError("You've already used your revive");
-      return;
+      throw new Error("Wallet not connected");
     }
     
     try {
-      setIsReviving(true);
-      setReviveError(null);
+      // Set the revive contract address
+      const reviveContractAddress = '0xf8e81D47203A594245E36C48e151709F0C19fBe8';
       
-      // Call the revive contract to purchase a revive
+      console.log("Purchasing revive for 0.5 MON to address:", reviveContractAddress);
+      
+      // Execute transaction to purchase revive
       const hash = await walletClient.writeContract({
-        address: REVIVE_CONTRACT_ADDRESS,
+        address: reviveContractAddress,
         abi: [
           {
-            name: 'purchaseRevive',
-            type: 'function',
-            stateMutability: 'payable',
+            name: "purchaseRevive",
+            type: "function",
+            stateMutability: "payable",
             inputs: [],
-            outputs: []
+            outputs: [],
           }
         ],
-        functionName: 'purchaseRevive',
-        value: parseEther("0.5") // 0.5 MON for revive
+        functionName: "purchaseRevive",
+        value: parseEther("0.5"),
       });
       
       console.log("Revive transaction sent:", hash);
@@ -2356,79 +2420,354 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       console.log("Revive transaction confirmed:", receipt);
       
-      // Record revive in database if needed
-      try {
-        await supabase.from('revive_attempts').insert({
-          wallet_address: address.toLowerCase(),
-          tx_hash: hash,
-          success: true,
-          score_at_revive: currentGameScore
-        });
-      } catch (dbError) {
-        console.error("Error recording revive in database:", dbError);
-      }
-      
-      // Update local state
+      // Mark player as having used their revive for this game
       setHasUsedRevive(true);
       
-      // Hide the revive modal
-      setShowReviveModal(false);
-      
-      // Resume the game by sending a message
-      if (iframeRef.current && iframeRef.current.contentWindow) {
-        iframeRef.current.contentWindow.postMessage({
-          type: 'RESUME_GAME',
-          revived: true
-        }, '*');
+      // Save revive purchase to Supabase
+      try {
+        if (supabase) {
+          await supabase.from('revive_attempts').insert({
+            wallet_address: address.toLowerCase(),
+            success: true,
+            score: currentScore,
+            tx_hash: hash.toString(),
+            timestamp: new Date().toISOString()
+          });
+          console.log("Revive attempt recorded in database");
+        }
+      } catch (dbError) {
+        console.error("Failed to record revive in database:", dbError);
       }
       
-      // Reset the fall detection flag
-      setFallDetected(false);
-      
+      return true;
     } catch (error) {
-      console.error("Error purchasing revive:", error);
+      console.error("Failed to purchase revive:", error);
       
-      let errorMessage = "Failed to purchase revive";
-      
-      if (error.message?.includes("insufficient funds")) {
-        errorMessage = "You need 0.5 MON to use a revive";
-      } else if (error.message?.includes("rejected")) {
-        errorMessage = "Transaction rejected in your wallet";
-      } else if (error.message?.includes("Player has already used")) {
-        errorMessage = "You've already used your revive";
-        setHasUsedRevive(true);
+      // Record failed attempt in Supabase
+      try {
+        if (supabase) {
+          await supabase.from('revive_attempts').insert({
+            wallet_address: address.toLowerCase(),
+            success: false,
+            score: currentScore,
+            timestamp: new Date().toISOString()
+          });
+        }
+      } catch (dbError) {
+        console.error("Failed to record failed revive in database:", dbError);
       }
       
-      setReviveError(errorMessage);
-    } finally {
-      setIsReviving(false);
+      throw error;
     }
   };
   
-  // Add the cancel revive function
-  const handleCancelRevive = () => {
-    console.log('Revive canceled by user, proceeding with game over');
+  // Modify the handlePlayAgain function to reset revive state
+  const handlePlayAgain = useCallback(() => {
+    console.log("🔄 Play Again clicked");
     
-    // Hide the modal immediately
+    // Reset revive state
+    setHasUsedRevive(false);
+    
+    // Increment games counter in Supabase
+    if (address && incrementGamesPlayed) {
+      incrementGamesPlayed(address)
+        .then(newCount => {
+          console.log(`Game count updated to: ${newCount}`);
+          // Update local state to reflect the new count
+        })
+        .catch(err => console.error("Failed to update game count:", err));
+    }
+    
+    // Clear all localStorage high scores to prevent fallback
+    try {
+      // Clear any potential localStorage high scores
+      localStorage.removeItem('highScore');
+      
+      // Clear address-specific high scores
+      if (address) {
+        localStorage.removeItem(`highScore_${address.toLowerCase()}`);
+      }
+      
+      console.log("🧹 Cleared localStorage high scores");
+    } catch (e) {
+      console.warn("Error clearing localStorage:", e);
+    }
+    
+    // Reset game state
+    setCurrentJumps(0);
+    setGameScore(0);
+    setShowPlayAgain(false);
+    setTransactionPending(false);
+    
+    // Force a new game session
+    const newGameId = Date.now().toString();
+    setGameId(newGameId);
+    
+    // Set the new session ID
+    window.__currentGameSessionId = newGameId;
+    window.__jumpCount = 0;
+    console.log("📢 Created new game session ID:", newGameId);
+    
+    // Store in session storage
+    try {
+      sessionStorage.setItem('current_game_session', newGameId);
+    } catch (e) {
+      console.warn("Could not store game session in sessionStorage:", e);
+    }
+    
+    // Force iframe reload - use the existing function
+    const newIframe = forceReloadIframe(iframeRef, newGameId);
+    
+    // Pass session ID to iframe after a short delay to ensure it's loaded
+    setTimeout(() => {
+      if (newIframe && newIframe.contentWindow) {
+        newIframe.contentWindow.postMessage({
+          type: 'GAME_SESSION_ID',
+          sessionId: newGameId
+        }, '*');
+        console.log("📢 Sent session ID to reloaded iframe:", newGameId);
+      }
+    }, 1000);
+    
+    console.log("🎮 Game reset complete with new session ID:", newGameId);
+  }, [address, incrementGamesPlayed, setGameScore, iframeRef, setHasUsedRevive]);
+
+  // ... existing code ...
+  
+  // Update script injection to override the game over function
+  useEffect(() => {
+    if (!iframeRef.current || !iframeRef.current.contentWindow) return;
+    
+    const injectScript = () => {
+      try {
+        const script = document.createElement('script');
+        script.textContent = `
+          // ... existing code ...
+          
+          // Update game over to collect NadsBot data and handle revive
+          if (typeof window.gameOver === 'function') {
+            const originalGameOver = window.gameOver;
+            window.gameOver = function(score) {
+              // Calculate session duration
+              const sessionDuration = Date.now() - window.__nadsBotData.sessionStartTime;
+              
+              // Get death reason (default to fall)
+              const deathReason = window.__nadsBotData.deaths?.reason || 'fall';
+              
+              // Get current position if available
+              const playerPosition = window.player ? {
+                x: window.player.x || 0,
+                y: window.player.y || 0
+              } : null;
+              
+              // Enhanced analytics data for NadsBot
+              const analyticsData = {
+                score: score || 0,
+                jumps: window.__jumpCount || 0,
+                deathReason: deathReason,
+                platformTypes: Object.keys(window.__nadsBotData.platformTypes || {})
+                  .filter(type => (window.__nadsBotData.platformTypes[type] || 0) > 0),
+                shotsFired: window.__nadsBotData.shotsFired || 0,
+                enemiesKilled: window.__nadsBotData.enemiesKilled || 0,
+                duration: sessionDuration,
+                timestamp: new Date().toISOString(),
+                position: playerPosition
+              };
+              
+              // Send enhanced data to parent with revive request
+              if (window.parent) {
+                try {
+                  window.parent.postMessage({
+                    type: 'PLAYER_DIED',
+                    data: {
+                      finalScore: score || 0,
+                      jumpCount: window.__jumpCount || 0,
+                      position: playerPosition,
+                      ...analyticsData
+                    }
+                  }, '*');
+                  console.log('🤖 Player died, sent analytics with revive request:', analyticsData);
+                  
+                  // Store the game state so we can resume after revive
+                  window.__gameState = {
+                    score: score || 0,
+                    position: playerPosition,
+                    platforms: window.platforms ? [...window.platforms] : [],
+                    enemies: window.enemies ? [...window.enemies] : []
+                  };
+                  
+                  // Don't call the original game over yet - wait for parent response
+                  // This prevents the game over screen from showing immediately
+                  return;
+                } catch (err) {
+                  console.error('Failed to send revive request:', err);
+                }
+              }
+              
+              // Call original game over function as fallback
+              return originalGameOver.apply(this, arguments);
+            };
+          }
+          
+          // Add function to revive player
+          window.revivePlayer = function() {
+            console.log("Reviving player...");
+            
+            if (!window.__gameState) {
+              console.error("No game state to restore for revive");
+              return false;
+            }
+            
+            try {
+              // Restore game state
+              const gameState = window.__gameState;
+              
+              // Implement revival logic here
+              if (window.player && gameState.position) {
+                // Set player position slightly higher to avoid immediate death
+                window.player.x = gameState.position.x;
+                window.player.y = gameState.position.y - 200; // Move up to avoid immediate death
+                
+                // Restore score if needed
+                if (typeof window.score !== 'undefined' && gameState.score) {
+                  window.score = gameState.score;
+                }
+                
+                // Reset velocity to prevent falling
+                if (window.player.velocityY) {
+                  window.player.velocityY = -15; // Give an upward boost
+                }
+                
+                // Restore game running state
+                if (typeof window.gameRunning !== 'undefined') {
+                  window.gameRunning = true;
+                }
+                
+                // Clear any game over UI
+                if (typeof window.hideGameOver === 'function') {
+                  window.hideGameOver();
+                }
+                
+                console.log("Player successfully revived at position:", 
+                  window.player.x, window.player.y, "with score:", window.score);
+                
+                return true;
+              } else {
+                console.error("Cannot revive: player or position not available");
+                return false;
+              }
+            } catch (error) {
+              console.error("Error during player revival:", error);
+              return false;
+            }
+          };
+          
+          console.log("✅ Advanced anti-loop protection, NadsBot tracking, and revive functionality installed");
+        `;
+        
+        // Add the script to the iframe's document
+        const iframeDocument = iframeRef.current.contentWindow.document;
+        iframeDocument.body.appendChild(script);
+        
+        // Set high score immediately
+        if (typeof playerHighScore !== 'undefined') {
+          iframeRef.current.contentWindow.setDirectHighScore(playerHighScore || 0);
+        }
+        
+        console.log("🔧 Injected scripts into game");
+      } catch (err) {
+        console.error("Error injecting script:", err);
+      }
+    };
+    
+    // Wait for iframe to load before injecting
+    iframeRef.current.addEventListener('load', injectScript);
+    
+    return () => {
+      if (iframeRef.current) {
+        iframeRef.current.removeEventListener('load', injectScript);
+      }
+    };
+  }, [iframeRef.current, playerHighScore]);
+  
+  // Add event listener to handle player death and revive
+  useEffect(() => {
+    const handlePlayerDied = (event) => {
+      // Only process if from our iframe
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
+      
+      // Listen for player death events from the game
+      if (event.data && event.data.type === 'PLAYER_DIED') {
+        console.log('Player died event received:', event.data);
+        
+        const { finalScore, position } = event.data.data || {};
+        
+        // Store current score and position for potential revive
+        setCurrentScore(finalScore || 0);
+        setCurrentPosition(position || null);
+        
+        // Check if player has already used their revive this game
+        if (hasUsedRevive) {
+          console.log("Player has already used revive this game - showing game over");
+          
+          // Tell the game to proceed with game over
+          if (iframeRef.current && iframeRef.current.contentWindow) {
+            try {
+              // Call original game over function
+              iframeRef.current.contentWindow.postMessage({
+                type: 'PROCEED_TO_GAME_OVER',
+                data: {}
+              }, '*');
+            } catch (err) {
+              console.error("Error sending proceed to game over message:", err);
+            }
+          }
+        } else {
+          // Show revive modal
+          console.log("Showing revive modal");
+          setShowReviveModal(true);
+        }
+      }
+    };
+    
+    window.addEventListener('message', handlePlayerDied);
+    return () => window.removeEventListener('message', handlePlayerDied);
+  }, [iframeRef, hasUsedRevive]);
+  
+  // Add function to handle revive cancellation
+  const handleReviveCancel = () => {
     setShowReviveModal(false);
     
     // Tell the game to proceed with game over
-    try {
-      if (iframeRef.current && iframeRef.current.contentWindow) {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      try {
         iframeRef.current.contentWindow.postMessage({
-          type: 'CANCEL_REVIVE',
-          proceed: true
+          type: 'PROCEED_TO_GAME_OVER',
+          data: {}
         }, '*');
+      } catch (err) {
+        console.error("Error sending proceed to game over message:", err);
       }
-    } catch (err) {
-      console.error('Error sending cancel message:', err);
     }
+  };
+  
+  // Add function to handle revive completion
+  const handleReviveComplete = () => {
+    setShowReviveModal(false);
     
-    // Reset fall detection but keep hasUsedRevive unchanged
-    setFallDetected(false);
-    
-    // Show play again button
-    setShowPlayAgain(true);
+    // Tell the game to revive the player
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage({
+          type: 'REVIVE_PLAYER',
+          data: {}
+        }, '*');
+        
+        console.log("Sent revive player message to game");
+      } catch (err) {
+        console.error("Error sending revive player message:", err);
+      }
+    }
   };
   
   if (providerError) {
@@ -2717,7 +3056,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             <button 
               onClick={() => {
                 document.getElementById('iframe-error-fallback').style.display = 'none';
-                handlePlayAgainNew();
+                handlePlayAgain();
               }}
               style={{
                 padding: '12px 24px',
@@ -2770,17 +3109,16 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         </div>
       </div>
       
-      {/* Add ReviveModal */}
-      <ReviveModal
-        isOpen={showReviveModal}
-        onClose={() => setShowReviveModal(false)}
-        onRevive={handleRevivePurchase}
-        onCancel={handleCancelRevive}
-        isReviving={isReviving}
-        reviveError={reviveError}
-        outOfRevives={hasUsedRevive}
-        score={currentGameScore}
-      />
+      {/* Revive Modal */}
+      {showReviveModal && (
+        <ReviveModal
+          isOpen={showReviveModal}
+          onClose={handleReviveComplete}
+          onRevive={handleRevivePurchase}
+          onCancel={handleReviveCancel}
+          revivePrice={revivePrice}
+        />
+      )}
     </div>
   );
 }
