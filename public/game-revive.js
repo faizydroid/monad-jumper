@@ -1,6 +1,9 @@
 // Add code to detect player falling and send message to parent before game over
 (function() {
-  console.log("🎮 Loading game revive fixes");
+  console.log("🎮 Loading game revive fixes - Version 2.0");
+  
+  // More aggressive debug mode
+  const DEBUG = true;
   
   // Store original functions to call them later
   const originalFunctions = {
@@ -15,9 +18,9 @@
   let currentScore = 0;
   let currentJumpCount = 0;
   let gameSessionId = Date.now().toString();
-
-  // Debug mode
-  const DEBUG = true;
+  let lastYPosition = 0;
+  let fallDetectionInterval = null;
+  let fallDetectionAttempted = false;
   
   function debugLog(...args) {
     if (DEBUG) {
@@ -48,6 +51,80 @@
     currentJumpCount = 0;
     gameSessionId = Date.now().toString();
     window._reviveSessionId = gameSessionId;
+    lastYPosition = 0;
+    fallDetectionAttempted = false;
+    
+    // Clear fall detection interval if it exists
+    if (fallDetectionInterval) {
+      clearInterval(fallDetectionInterval);
+      fallDetectionInterval = null;
+    }
+  }
+  
+  // Start direct DOM-based fall detection
+  function startDirectFallDetection() {
+    if (fallDetectionInterval) return; // Already running
+    
+    debugLog("Starting direct fall detection");
+    fallDetectionInterval = setInterval(() => {
+      try {
+        // Only check if we haven't already detected a fall and haven't used a revive
+        if (!playerFell && !reviveUsed && window.game && window.game.player) {
+          const player = window.game.player;
+          const canvas = window.game.canvas;
+          
+          // Get current score and jump count
+          currentScore = Math.floor(window.game.score || 0);
+          currentJumpCount = window.__jumpCount || 0;
+          
+          // Check if player is falling off screen
+          if (player.y > canvas.height && !window.game.isGameOver) {
+            debugLog(`Direct fall detection triggered! Player Y: ${player.y}, Canvas height: ${canvas.height}`);
+            debugLog(`Score: ${currentScore}, Jumps: ${currentJumpCount}`);
+            
+            // Prevent multiple detections
+            playerFell = true;
+            fallDetectionAttempted = true;
+            
+            // Send message to parent 
+            sendToParent('PLAYER_FALLING', {
+              score: currentScore,
+              jumpCount: currentJumpCount,
+              sessionId: gameSessionId,
+              directDetection: true
+            });
+            
+            // Try to stop game (multiple methods)
+            try {
+              // Try to freeze the game loop
+              window._gamePaused = true;
+              
+              if (window.game) {
+                window.game.paused = true;
+              }
+              
+              if (typeof window.pauseGame === 'function') {
+                window.pauseGame();
+              }
+              
+              // Prevent player from moving further
+              if (player) {
+                player._oldSpeedY = player.speedY;
+                player.speedY = 0;
+                player._oldY = player.y;
+              }
+            } catch (e) {
+              debugLog("Error pausing game:", e);
+            }
+          } else {
+            // Track player Y position changes
+            lastYPosition = player.y;
+          }
+        }
+      } catch (e) {
+        debugLog("Error in direct fall detection:", e);
+      }
+    }, 50); // Check more frequently (20 times per second)
   }
   
   // Listen for messages from parent
@@ -61,6 +138,9 @@
         
         // Reset revive state for new session
         resetReviveState();
+        
+        // Restart fall detection after reset
+        startDirectFallDetection();
       }
       // Handle pause and resume for revive
       else if (event.data.type === 'PAUSE_GAME') {
@@ -108,6 +188,13 @@
       else if (event.data.type === 'CANCEL_REVIVE') {
         debugLog("Revive cancelled, proceeding with game over");
         
+        // Unpause the game
+        window._gamePaused = false;
+        
+        if (window.game) {
+          window.game.paused = false;
+        }
+        
         // Proceed with game over
         if (originalFunctions.gameOver) {
           originalFunctions.gameOver(currentScore);
@@ -116,6 +203,9 @@
       else if (event.data.type === 'PLAY_AGAIN') {
         debugLog("Play again requested - resetting revive state");
         resetReviveState();
+        
+        // Restart fall detection
+        startDirectFallDetection();
       }
     }
   });
@@ -143,6 +233,11 @@
     originalFunctions.checkGameOver = window.checkGameOver;
     
     window.checkGameOver = function() {
+      // If already paused for revive, skip original function
+      if (playerFell && !reviveUsed) {
+        return false;
+      }
+      
       // Call original function to get its results
       const result = originalFunctions.checkGameOver.apply(this, arguments);
       
@@ -157,11 +252,12 @@
         currentScore = Math.floor(window.game.score || 0);
         currentJumpCount = window.__jumpCount || 0;
         
-        debugLog(`Player falling detected! Score: ${currentScore}, Jumps: ${currentJumpCount}`);
+        debugLog(`Player falling detected in checkGameOver! Score: ${currentScore}, Jumps: ${currentJumpCount}`);
         
         // Only send the falling event if we haven't already used a revive
         if (!reviveUsed) {
           playerFell = true;
+          fallDetectionAttempted = true;
           
           // Send message to parent for revive opportunity
           sendToParent('PLAYER_FALLING', {
@@ -219,9 +315,13 @@
       currentScore,
       currentJumpCount,
       gameSessionId,
-      gameActive
+      gameActive,
+      fallDetectionAttempted
     };
   };
   
-  debugLog("Game revive fixes loaded successfully");
+  // Start direct fall detection immediately
+  setTimeout(startDirectFallDetection, 1000);  
+  
+  debugLog("Game revive fixes loaded successfully - Ready to detect falls");
 })(); 

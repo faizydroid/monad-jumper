@@ -1753,6 +1753,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       const data = event.data;
       
       if (data && typeof data === 'object') {
+        console.log('Received message from game:', data.type, data);
+        
         // Handle game restart notifications from the iframe
         if (data.type === 'GAME_RESTART') {
           console.log('Game restart detected within iframe!');
@@ -1763,44 +1765,31 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         
         // Add this code to detect falls before game over
         if (data.type === 'PLAYER_FALLING') {
-          console.log('Player falling detected!', data);
+          console.log('🚨 Player falling detected!', data);
           
           // Store current score for the revive
           setCurrentGameScore(data.score || 0);
           
-          // Only show revive modal if we haven't used our revive yet
-          if (!hasUsedRevive && !fallDetected) {
-            // Pause the game by sending a message
-            console.log('Showing revive modal and pausing game');
+          // Pause the game by sending a message immediately
+          try {
+            console.log('Pausing game for revive decision');
+            iframeRef.current.contentWindow.postMessage({
+              type: 'PAUSE_GAME'
+            }, '*');
+          } catch (err) {
+            console.error('Error sending pause message:', err);
+          }
+          
+          // Set flags to prevent multiple prompts
+          setFallDetected(true);
             
-            try {
-              iframeRef.current.contentWindow.postMessage({
-                type: 'PAUSE_GAME'
-              }, '*');
-            } catch (err) {
-              console.error('Error sending pause message:', err);
-            }
-            
-            // Set flags to prevent multiple prompts
-            setFallDetected(true);
-            
-            // Show the revive modal with a short delay to ensure game is paused
-            setTimeout(() => {
-              setShowReviveModal(true);
-            }, 100);
-          } else {
-            console.log('Revive already used or fall already detected:', 
-              { hasUsedRevive, fallDetected });
-              
-            // Let the game proceed with game over
-            try {
-              iframeRef.current.contentWindow.postMessage({
-                type: 'CANCEL_REVIVE',
-                proceed: true
-              }, '*');
-            } catch (err) {
-              console.error('Error sending cancel revive:', err);
-            }
+          // Force show the revive modal 
+          console.log('Showing revive modal...', { hasUsedRevive, fallDetected });
+          setShowReviveModal(true);
+          
+          // Double-check if we've already used revive to show appropriate message
+          if (hasUsedRevive) {
+            console.log('Revive already used, showing out-of-revives message');
           }
         }
         // For actual game over events
