@@ -1,16 +1,14 @@
 // Add code to detect player falling and send message to parent before game over
 (function() {
-  console.log("🎮 Loading game revive fixes - Version 3.0 (AGGRESSIVE)");
+  console.log("🎮 Loading game revive fixes - Version 3.0");
   
-  // Force debug mode on
+  // More aggressive debug mode
   const DEBUG = true;
   
   // Store original functions to call them later
   const originalFunctions = {
     checkGameOver: null,
-    gameOver: null,
-    update: null,
-    animate: null
+    gameOver: null
   };
   
   // Track game state
@@ -23,52 +21,28 @@
   let lastYPosition = 0;
   let fallDetectionInterval = null;
   let fallDetectionAttempted = false;
-  let revivePending = false;
-  let reviveHandled = false;
-  let gameInstance = null;
-  
-  // Display visual debug indicator
-  const debugIndicator = document.createElement('div');
-  debugIndicator.style.position = 'fixed';
-  debugIndicator.style.top = '10px';
-  debugIndicator.style.left = '10px';
-  debugIndicator.style.background = 'rgba(255,0,0,0.7)';
-  debugIndicator.style.color = 'white';
-  debugIndicator.style.padding = '10px';
-  debugIndicator.style.borderRadius = '5px';
-  debugIndicator.style.zIndex = '999999';
-  debugIndicator.style.fontFamily = 'monospace';
-  debugIndicator.style.fontSize = '14px';
-  debugIndicator.textContent = 'REVIVE MONITOR: ACTIVE';
-  
-  if (DEBUG) {
-    document.body.appendChild(debugIndicator);
-  }
-  
-  function updateDebugIndicator(text, color = 'rgba(255,0,0,0.7)') {
-    if (!DEBUG || !debugIndicator) return;
-    debugIndicator.textContent = 'REVIVE: ' + text;
-    debugIndicator.style.background = color;
-  }
   
   function debugLog(...args) {
     if (DEBUG) {
       console.log("[REVIVE]", ...args);
     }
   }
+
+  // Force display in console that revive system is loading
+  console.warn("🔄 REVIVE SYSTEM INITIALIZING - VERSION 3.0");
+  console.warn("Game revive functionality is being set up...");
   
   // Helper function to send messages to parent
   function sendToParent(type, data) {
     try {
       debugLog(`Sending message to parent: ${type}`, data);
+      console.warn(`📤 REVIVE: Sending ${type} message to parent`, data);
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type, data }, '*');
-        updateDebugIndicator(`SENT ${type}`);
         return true;
       }
     } catch (e) {
       console.error("Error sending message to parent:", e);
-      updateDebugIndicator(`ERROR: ${e.message}`, 'rgba(255,0,0,0.9)');
     }
     return false;
   }
@@ -76,10 +50,9 @@
   // Reset the game state completely
   function resetReviveState() {
     debugLog("Resetting revive state completely");
+    console.warn("🔄 REVIVE: Resetting state");
     playerFell = false;
     reviveUsed = false;
-    revivePending = false;
-    reviveHandled = false;
     currentScore = 0;
     currentJumpCount = 0;
     gameSessionId = Date.now().toString();
@@ -93,27 +66,8 @@
       fallDetectionInterval = null;
     }
     
-    updateDebugIndicator('RESET COMPLETE', 'rgba(0,255,0,0.7)');
-    
-    // Restart fall detection
-    startAllFallDetectionMethods();
-  }
-  
-  function getGameInstance() {
-    // Try multiple ways to get the game instance
-    if (window.game) return window.game;
-    if (window.gameInstance) return window.gameInstance;
-    
-    // Look for objects with game-like properties
-    for (const prop in window) {
-      const obj = window[prop];
-      if (obj && typeof obj === 'object' && obj.player && obj.canvas) {
-        debugLog("Found potential game instance:", prop);
-        return obj;
-      }
-    }
-    
-    return null;
+    // Start detection immediately after reset
+    startDirectFallDetection();
   }
   
   // Start direct DOM-based fall detection
@@ -122,248 +76,116 @@
       clearInterval(fallDetectionInterval);
     }
     
-    debugLog("Starting aggressive fall detection");
-    updateDebugIndicator('DETECTION ACTIVE', 'rgba(0,128,0,0.7)');
-    
+    console.warn("🔍 REVIVE: Starting direct fall detection");
     fallDetectionInterval = setInterval(() => {
       try {
-        // Update game instance reference
-        gameInstance = getGameInstance();
+        // Get game and player instances - try multiple ways
+        const game = window.game || window.gameInstance || window.doodleJump;
+        const player = game?.player;
+        const canvas = game?.canvas || document.getElementById('canvas1');
         
-        if (!gameInstance) {
-          debugLog("No game instance found yet");
-          return;
-        }
-        
-        // If already handling a fall, don't check again
-        if (revivePending || reviveHandled) {
+        if (!game || !player) {
+          console.warn("⚠️ REVIVE: Game or player not found, retrying...");
           return;
         }
         
         // Only check if we haven't already detected a fall and haven't used a revive
-        if (!playerFell && !reviveUsed && gameInstance && gameInstance.player) {
-          const player = gameInstance.player;
-          const canvas = gameInstance.canvas;
-          
+        if (!playerFell && !reviveUsed) {
           // Get current score and jump count
-          currentScore = Math.floor(gameInstance.score || 0);
+          currentScore = Math.floor(game.score || 0);
           currentJumpCount = window.__jumpCount || 0;
           
-          // Check if player is falling off screen
-          const isFalling = player.speedY > 0; // Positive Y speed means falling
-          const isOffScreen = player.y > canvas.height - (player.height || 0);
-          const isGameActive = !gameInstance.gameOver && !gameInstance.isGameOver;
+          // Enhanced fall detection - multiple methods
+          const isFalling = player.speedY > 0; // Player is moving downward
+          const isOffScreen = player.y > (canvas?.height || window.innerHeight);
+          const isPlayerDead = game.isGameOver;
           
-          // Add debug info to indicator
-          updateDebugIndicator(`Y: ${Math.floor(player.y)}, Fall: ${isFalling}, Score: ${currentScore}`);
+          console.log(`REVIVE DEBUG: Player Y: ${player.y}, Canvas Height: ${canvas?.height}, Falling: ${isFalling}, SpeedY: ${player.speedY}`);
           
-          // Check for falling condition - player is below screen and moving down
-          if (isOffScreen && isFalling && isGameActive) {
-            debugLog(`FALL DETECTED! Player Y: ${player.y}, Speed: ${player.speedY}, Canvas height: ${canvas.height}`);
-            debugLog(`Score: ${currentScore}, Jumps: ${currentJumpCount}`);
-            
-            // Prevent multiple detections
-            playerFell = true;
-            fallDetectionAttempted = true;
-            revivePending = true;
-            
-            // Add visible notification
-            showFallNotification();
-            
-            // Send message to parent 
-            sendToParent('PLAYER_FALLING', {
-              score: currentScore,
-              jumpCount: currentJumpCount,
-              sessionId: gameSessionId,
-              directDetection: true
-            });
-            
-            // Try multiple methods to pause the game
-            pauseGame();
-          } else {
-            // Track player Y position changes
-            lastYPosition = player.y;
+          // Method 1: Player is off screen
+          if (isOffScreen && !isPlayerDead) {
+            console.warn("💥 REVIVE: Player fallen off screen! Sending PLAYER_FALLING message");
+            triggerPlayerFalling(game, player, "offscreen");
           }
+          // Method 2: Player is falling rapidly
+          else if (isFalling && player.speedY > 25 && !isPlayerDead) {
+            console.warn("💥 REVIVE: Player falling too fast! Sending PLAYER_FALLING message");
+            triggerPlayerFalling(game, player, "highspeed");
+          }
+          // Method 3: Player is far below all platforms
+          else if (isFalling && player.y > window.innerHeight * 0.8 && !isNearPlatform(game, player) && !isPlayerDead) {
+            console.warn("💥 REVIVE: Player falling with no platforms below! Sending PLAYER_FALLING message");
+            triggerPlayerFalling(game, player, "noplatforms");
+          }
+          
+          // Track Y position for fall detection
+          lastYPosition = player.y;
         }
       } catch (e) {
-        debugLog("Error in direct fall detection:", e);
-        updateDebugIndicator(`ERROR: ${e.message}`, 'rgba(255,0,0,0.9)');
+        console.error("Error in direct fall detection:", e);
       }
-    }, 50); // Check very frequently (20 times per second)
+    }, 50); // Check more frequently (20 times per second)
   }
   
-  // Show a visible notification when a fall is detected
-  function showFallNotification() {
-    const notification = document.createElement('div');
-    notification.style.position = 'fixed';
-    notification.style.top = '50%';
-    notification.style.left = '50%';
-    notification.style.transform = 'translate(-50%, -50%)';
-    notification.style.background = 'rgba(255,255,255,0.9)';
-    notification.style.color = 'black';
-    notification.style.padding = '20px';
-    notification.style.borderRadius = '10px';
-    notification.style.zIndex = '9999999';
-    notification.style.fontFamily = 'Arial, sans-serif';
-    notification.style.fontSize = '24px';
-    notification.style.textAlign = 'center';
-    notification.style.boxShadow = '0 0 20px rgba(0,0,0,0.5)';
-    notification.innerHTML = '<h2>Fall Detected!</h2><p>Sending to parent...</p>';
+  // Check if player is near any platforms
+  function isNearPlatform(game, player) {
+    if (!game.platforms || !game.platforms.length) return false;
     
-    document.body.appendChild(notification);
+    // Consider platforms only below the player
+    const relevantPlatforms = game.platforms.filter(p => 
+      p.y > player.y && // Platform is below player
+      p.y < player.y + 300 && // Platform is within reasonable distance
+      Math.abs(p.x - player.x) < 100 // Platform is horizontally aligned
+    );
     
-    // Remove after 3 seconds
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 3000);
+    return relevantPlatforms.length > 0;
   }
   
-  // Try multiple methods to pause the game
-  function pauseGame() {
+  // Trigger player falling event
+  function triggerPlayerFalling(game, player, reason) {
+    if (playerFell || reviveUsed) return;
+    
+    playerFell = true;
+    fallDetectionAttempted = true;
+    
+    // Send message to parent 
+    sendToParent('PLAYER_FALLING', {
+      score: currentScore,
+      jumpCount: currentJumpCount,
+      sessionId: gameSessionId,
+      directDetection: true,
+      reason: reason
+    });
+    
+    // Try to stop game (multiple methods)
     try {
       // Try to freeze the game loop
       window._gamePaused = true;
       
-      if (gameInstance) {
-        gameInstance.paused = true;
-        
-        // Store player's state to restore it later
-        if (gameInstance.player) {
-          gameInstance.player._oldSpeedY = gameInstance.player.speedY;
-          gameInstance.player.speedY = 0;
-          gameInstance.player._oldY = gameInstance.player.y;
-          
-          // Move player back up slightly so they're visible
-          gameInstance.player.y = gameInstance.canvas.height - 100;
-        }
-        
-        // Try to stop animation frame
-        if (gameInstance.animationId) {
-          cancelAnimationFrame(gameInstance.animationId);
-        }
+      if (game) {
+        game.paused = true;
       }
       
       if (typeof window.pauseGame === 'function') {
         window.pauseGame();
       }
       
-      // Update debug status
-      updateDebugIndicator('GAME PAUSED - WAITING FOR REVIVE', 'rgba(255,165,0,0.8)');
-      
+      // Prevent player from moving further
+      if (player) {
+        player._oldSpeedY = player.speedY;
+        player.speedY = 0;
+        player._oldY = player.y;
+      }
     } catch (e) {
       debugLog("Error pausing game:", e);
-      updateDebugIndicator(`ERROR PAUSING: ${e.message}`, 'rgba(255,0,0,0.9)');
     }
-  }
-  
-  // Hijack the game.update method to detect falls
-  function hijackGameUpdate() {
-    // Try to find the game instance
-    const game = getGameInstance();
-    if (!game || !game.update || game._reviveUpdateHijacked) return;
-    
-    debugLog("Hijacking game.update method");
-    
-    // Store original update method
-    originalFunctions.update = game.update;
-    game._reviveUpdateHijacked = true;
-    
-    // Replace with our version
-    game.update = function(deltaTime) {
-      // If waiting for revive decision, don't update
-      if (revivePending) {
-        return;
-      }
-      
-      // Call original update
-      const result = originalFunctions.update.apply(this, arguments);
-      
-      // Post-update checks for fall detection
-      if (this.player && !playerFell && !reviveUsed) {
-        const isOffScreen = this.player.y > this.canvas.height;
-        const isFalling = this.player.speedY > 0;
-        
-        if (isOffScreen && isFalling && !this.gameOver && !this.isGameOver) {
-          debugLog("Fall detected in hijacked update method!");
-          
-          // Get current stats
-          currentScore = Math.floor(this.score || 0);
-          currentJumpCount = window.__jumpCount || 0;
-          
-          // Trigger revive process
-          playerFell = true;
-          fallDetectionAttempted = true;
-          revivePending = true;
-          
-          // Show a notification
-          showFallNotification();
-          
-          // Send message to parent
-          sendToParent('PLAYER_FALLING', {
-            score: currentScore,
-            jumpCount: currentJumpCount,
-            sessionId: gameSessionId,
-            updateHijack: true
-          });
-          
-          // Pause the game
-          pauseGame();
-        }
-      }
-      
-      return result;
-    };
-  }
-  
-  // Hijack the animation loop
-  function hijackAnimationLoop() {
-    // Wait until game is initialized
-    const checkForAnimateLoop = setInterval(() => {
-      const game = getGameInstance();
-      if (!game || game._reviveAnimateHijacked) return;
-      
-      // Check for animate or gameLoop method
-      if (typeof game.animate === 'function') {
-        debugLog("Hijacking game.animate method");
-        
-        // Store original
-        originalFunctions.animate = game.animate;
-        game._reviveAnimateHijacked = true;
-        
-        // Replace with our version
-        game.animate = function(timestamp) {
-          // If waiting for revive, pause animation
-          if (revivePending) {
-            return;
-          }
-          
-          // Otherwise proceed with original animation loop
-          return originalFunctions.animate.apply(this, arguments);
-        };
-        
-        clearInterval(checkForAnimateLoop);
-      }
-    }, 500);
-  }
-  
-  // Combine all fall detection methods
-  function startAllFallDetectionMethods() {
-    // Start interval-based detection
-    startDirectFallDetection();
-    
-    // Hijack game update method
-    setTimeout(hijackGameUpdate, 500);
-    
-    // Hijack animation loop
-    setTimeout(hijackAnimationLoop, 500);
   }
   
   // Listen for messages from parent
   window.addEventListener('message', function(event) {
     if (event.data && typeof event.data === 'object') {
-      debugLog("Received message from parent:", event.data.type);
+      // Log all incoming messages
+      console.log("📩 REVIVE: Received message from parent:", event.data.type);
       
       // Handle game session ID updates (from parent when game is restarted)
       if (event.data.type === 'GAME_SESSION_ID') {
@@ -374,227 +196,184 @@
         // Reset revive state for new session
         resetReviveState();
       }
+      // Handle game restart
+      else if (event.data.type === 'GAME_RESTART') {
+        console.warn("🔄 REVIVE: Game restart detected");
+        resetReviveState();
+      }
       // Handle pause and resume for revive
       else if (event.data.type === 'PAUSE_GAME') {
         debugLog("Game paused for revive decision");
-        updateDebugIndicator('PAUSED FOR REVIVE', 'rgba(255,165,0,0.8)');
         
-        // Ensure game is paused
-        pauseGame();
+        // Pause game by freezing animation frame
+        window._gamePaused = true;
+        
+        if (typeof window.pauseGame === 'function') {
+          window.pauseGame();
+        } else {
+          debugLog("No pauseGame function found, using alternative method");
+          // Alternative pause method
+          if (window.game && window.game.player) {
+            window.game._wasPaused = window.game.paused || false;
+            window.game.paused = true;
+          }
+        }
       }
       else if (event.data.type === 'RESUME_GAME' && event.data.revived) {
         debugLog("Game resumed after revive");
-        updateDebugIndicator('REVIVED!', 'rgba(0,255,0,0.8)');
-        
+        console.warn("🎮 REVIVE: Game resumed after successful revive!");
         window._gamePaused = false;
         playerFell = false;
         reviveUsed = true;
-        revivePending = false;
-        reviveHandled = true;
         
-        // Get current game instance
-        const game = getGameInstance();
+        // Resume game state
+        if (typeof window.resumeGame === 'function') {
+          window.resumeGame();
+        } else {
+          debugLog("No resumeGame function found, using alternative method");
+          // Alternative resume method
+          if (window.game) {
+            window.game.paused = window.game._wasPaused || false;
+          }
+        }
         
-        if (game) {
-          game.paused = false;
-          
-          // Resume game state
-          if (typeof game.resumeGame === 'function') {
-            game.resumeGame();
-          }
-          
-          // Add safety position adjustment to prevent immediate death
-          if (game.player) {
-            debugLog("Adjusting player position after revive");
-            // Move player up to a safe position
-            game.player.y = game.canvas.height / 2;
-            game.player.speedY = -15; // Give a small upward boost
-          }
-          
-          // Restart animation if needed
-          if (typeof game.animate === 'function' && !game.animationId) {
-            game.animate(performance.now());
-          }
+        // Add safety position adjustment to prevent immediate death
+        if (window.game && window.game.player) {
+          debugLog("Adjusting player position after revive");
+          // Move player up slightly to prevent immediate death
+          window.game.player.y -= 200;
+          window.game.player.speedY = -15; // Give a small upward boost
         }
       }
       else if (event.data.type === 'CANCEL_REVIVE') {
         debugLog("Revive cancelled, proceeding with game over");
-        updateDebugIndicator('REVIVE CANCELLED', 'rgba(255,0,0,0.8)');
-        
-        // Mark as handled
-        revivePending = false;
-        reviveHandled = true;
+        console.warn("❌ REVIVE: Revive cancelled, proceeding to game over");
         
         // Unpause the game
         window._gamePaused = false;
         
-        const game = getGameInstance();
-        if (game) {
-          game.paused = false;
+        if (window.game) {
+          window.game.paused = false;
         }
         
         // Proceed with game over
         if (originalFunctions.gameOver) {
           originalFunctions.gameOver(currentScore);
+        } else {
+          // Try to find and call the game over function
+          if (window.game && typeof window.game.gameOver === 'function') {
+            window.game.gameOver();
+          }
         }
-      }
-      else if (event.data.type === 'PLAY_AGAIN') {
-        debugLog("Play again requested - resetting revive state");
-        resetReviveState();
       }
     }
   });
   
-  // Listen for reload/play again button clicks
-  document.addEventListener('click', function(e) {
-    if (e.target && 
-        (e.target.id === 'restart-button' || 
-         e.target.id === 'playButton' ||
-         e.target.className === 'restart-button' || 
-         e.target.innerText === 'Play Again' ||
-         e.target.innerText === 'Try Again')) {
-      debugLog("Restart/Play Again button clicked");
-      resetReviveState();
-      
-      // Notify parent about the restart
-      sendToParent('GAME_RESTART', {
-        timestamp: Date.now()
-      });
-    }
-  }, true);
-  
-  // Intercept the checkGameOver function to detect falling
-  if (typeof window.checkGameOver === 'function') {
-    originalFunctions.checkGameOver = window.checkGameOver;
+  // Initialize the system when the page loads
+  function initializeReviveSystem() {
+    console.warn("✅ REVIVE: Initializing system");
     
-    window.checkGameOver = function() {
-      // If already paused for revive, skip original function
-      if (revivePending || (playerFell && !reviveUsed)) {
-        return false;
+    // Try to find the original game over functions
+    if (window.game) {
+      if (typeof window.game.gameOver === 'function') {
+        originalFunctions.gameOver = window.game.gameOver;
+        
+        // Override game over function
+        window.game.gameOver = function(score) {
+          console.warn("🎮 REVIVE: Game over function called", score);
+          
+          // Only show revive if it hasn't been used and player fell
+          if (!reviveUsed && playerFell) {
+            console.warn("🎮 REVIVE: Player eligible for revive!");
+            return; // Already handled by fall detection
+          }
+          
+          // Otherwise proceed with normal game over
+          console.warn("🎮 REVIVE: No revive available, proceeding with game over");
+          originalFunctions.gameOver.call(window.game, score);
+        };
+        
+        console.warn("✅ REVIVE: Successfully overrode game over function");
       }
       
-      // Call original function to get its results
-      const result = originalFunctions.checkGameOver.apply(this, arguments);
-      
-      // Check for falling condition after original function
-      const game = getGameInstance();
-      if (game && 
-          game.player && 
-          game.player.y > game.canvas.height && 
-          !game.isGameOver && 
-          !playerFell && 
-          !reviveUsed) {
+      // Try to find and override checkGameOver function if it exists
+      if (typeof window.game.checkGameOver === 'function') {
+        originalFunctions.checkGameOver = window.game.checkGameOver;
         
-        // Get current score
-        currentScore = Math.floor(game.score || 0);
-        currentJumpCount = window.__jumpCount || 0;
+        // Override checkGameOver
+        window.game.checkGameOver = function() {
+          // If player fell and we haven't used a revive yet
+          if (playerFell && !reviveUsed) {
+            console.warn("🎮 REVIVE: Preventing game over check while waiting for revive decision");
+            return false;
+          }
+          
+          // Otherwise proceed with normal check
+          return originalFunctions.checkGameOver.apply(window.game, arguments);
+        };
         
-        debugLog(`Fall detected in checkGameOver! Score: ${currentScore}, Jumps: ${currentJumpCount}`);
-        updateDebugIndicator('FALL DETECTED!', 'rgba(255,0,0,0.8)');
-        
-        // Only send the falling event if we haven't already used a revive
-        if (!reviveUsed) {
-          playerFell = true;
-          fallDetectionAttempted = true;
-          revivePending = true;
-          
-          // Show notification
-          showFallNotification();
-          
-          // Send message to parent for revive opportunity
-          sendToParent('PLAYER_FALLING', {
-            score: currentScore,
-            jumpCount: currentJumpCount,
-            sessionId: gameSessionId,
-            checkGameOver: true
-          });
-          
-          // Pause the game
-          pauseGame();
-          
-          // Prevent immediate game over by returning early
-          return false;
-        } else {
-          debugLog("Revive already used in this session, proceeding with game over");
+        console.warn("✅ REVIVE: Successfully overrode checkGameOver function");
+      }
+    }
+    
+    // Start direct fall detection
+    startDirectFallDetection();
+    
+    // Send ready message to parent
+    sendToParent('REVIVE_SYSTEM_READY', { 
+      sessionId: gameSessionId,
+      timestamp: Date.now()
+    });
+  }
+  
+  // Handle game restart (create a MutationObserver to detect DOM changes that might indicate a restart)
+  const observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      if (mutation.type === 'childList' && mutation.addedNodes.length) {
+        // Check if any added nodes are game-related elements
+        for (let i = 0; i < mutation.addedNodes.length; i++) {
+          const node = mutation.addedNodes[i];
+          if (node.id === 'canvas1' || node.id === 'game-container') {
+            console.warn("🔄 REVIVE: Game UI reset detected, resetting revive state");
+            resetReviveState();
+            break;
+          }
         }
       }
-      
-      return result;
-    };
-  }
+    });
+  });
   
-  // Override the game over function
-  if (typeof window.gameOver === 'function') {
-    originalFunctions.gameOver = window.gameOver;
+  // Start observing the document with the configured parameters
+  observer.observe(document.body, { childList: true, subtree: true });
+  
+  // Wait for document and game to load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      // Try immediately
+      initializeReviveSystem();
+      
+      // And try again after a short delay to catch late initialization
+      setTimeout(initializeReviveSystem, 500);
+    });
+  } else {
+    // Document already loaded, initialize now
+    initializeReviveSystem();
     
-    window.gameOver = function(finalScore) {
-      // If the player fell and we're waiting for revive decision, don't proceed
-      if (revivePending || (playerFell && !reviveUsed)) {
-        debugLog("Game over prevented while waiting for revive decision");
-        return;
-      }
-      
-      debugLog("Game over with score:", finalScore, "jumps:", currentJumpCount);
-      gameActive = false;
-      
-      // Send final data to parent
-      sendToParent('GAME_OVER', {
-        finalScore: finalScore,
-        jumpCount: currentJumpCount,
-        sessionId: gameSessionId,
-        reviveUsed: reviveUsed
-      });
-      
-      // Call original gameOver if available
-      if (originalFunctions.gameOver) {
-        return originalFunctions.gameOver.apply(this, arguments);
-      }
-    };
+    // And try again after a short delay
+    setTimeout(initializeReviveSystem, 500);
   }
   
-  // Initialize session ID, expose for diagnostics
-  window._reviveSessionId = gameSessionId;
-  window._reviveState = function() {
-    return {
-      playerFell,
-      reviveUsed,
-      revivePending,
-      reviveHandled,
-      currentScore,
-      currentJumpCount,
-      gameSessionId,
-      gameActive,
-      fallDetectionAttempted
-    };
-  };
+  // Also try when window is fully loaded
+  window.addEventListener('load', function() {
+    initializeReviveSystem();
+  });
   
-  // Start all fall detection methods
-  setTimeout(startAllFallDetectionMethods, 1000);
+  // Additional safety - try initialization after 1 second
+  setTimeout(initializeReviveSystem, 1000);
   
-  debugLog("Enhanced game revive system loaded successfully");
+  // Additional safety - try initialization after 2 seconds
+  setTimeout(initializeReviveSystem, 2000);
   
-  // Display startup notification
-  const startupNotification = document.createElement('div');
-  startupNotification.style.position = 'fixed';
-  startupNotification.style.top = '50%';
-  startupNotification.style.left = '50%';
-  startupNotification.style.transform = 'translate(-50%, -50%)';
-  startupNotification.style.background = 'rgba(0,0,0,0.8)';
-  startupNotification.style.color = 'white';
-  startupNotification.style.padding = '20px';
-  startupNotification.style.borderRadius = '10px';
-  startupNotification.style.zIndex = '9999999';
-  startupNotification.style.fontFamily = 'Arial, sans-serif';
-  startupNotification.style.fontSize = '20px';
-  startupNotification.style.textAlign = 'center';
-  startupNotification.innerHTML = '<h2>Revive System v3.0</h2><p>Aggressive fall detection enabled!</p>';
-  
-  document.body.appendChild(startupNotification);
-  
-  // Remove after 3 seconds
-  setTimeout(() => {
-    if (startupNotification.parentNode) {
-      startupNotification.parentNode.removeChild(startupNotification);
-    }
-  }, 3000);
+  // Log that we've loaded
+  console.warn("🎮 REVIVE SYSTEM LOADED! - VERSION 3.0");
 })(); 
