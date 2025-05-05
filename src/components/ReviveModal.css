@@ -1,0 +1,105 @@
+.revive-modal-content {
+  text-align: center;
+}
+
+.revive-icon {
+  font-size: 64px;
+  margin: 20px 0;
+  animation: pulse 2s infinite;
+}
+
+.revive-icon.out-of-revives {
+  animation: shake 0.5s ease-in-out;
+}
+
+.revive-cost {
+  margin: 20px 0;
+  font-size: 18px;
+}
+
+.revive-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.buy-revive-btn {
+  background: linear-gradient(90deg, #4CAF50 0%, #45A049 100%);
+  border: none;
+  padding: 12px 20px;
+  border-radius: 50px;
+  color: white;
+  flex: 1;
+  cursor: pointer;
+  position: relative;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.buy-revive-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.buy-revive-btn:disabled {
+  background: #888;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.cancel-btn {
+  padding: 12px 20px;
+  background: transparent;
+  border: 1px solid #ccc;
+  border-radius: 50px;
+  color: white;
+  cursor: pointer;
+}
+
+.play-again-btn {
+  background: linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%);
+  border: none;
+  padding: 12px 20px;
+  border-radius: 50px;
+  color: white;
+  flex: 1;
+  cursor: pointer;
+  position: relative;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.play-again-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 82, 82, 0.4);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  position: absolute;
+  right: 15px;
+  top: calc(50% - 10px);
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-10px); }
+  40%, 80% { transform: translateX(10px); }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+} 

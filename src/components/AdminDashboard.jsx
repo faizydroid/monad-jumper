@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWeb3 } from '../contexts/Web3Context';
 import './AdminDashboard.css';
 import AdminLinkGenerator from './AdminLinkGenerator';
@@ -7,9 +7,7 @@ import { usePublicClient, useWalletClient } from 'wagmi';
 import { parseEther } from 'viem';
 import { supabase } from '../lib/supabaseClient';
 import { EncryptedStorageService } from '../services/EncryptedStorageService';
-import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 // Log the available tables to help debug
 async function logTableInfo() {
@@ -26,251 +24,6 @@ async function logTableInfo() {
   }
 }
 
-// Component for Overview Tab
-const StatsPanel = () => {
-  // Implement your stats panel here
-  return (
-    <div className="admin-panel">
-      <h2>Game Statistics</h2>
-      <p>Overview of game statistics will be shown here.</p>
-    </div>
-  );
-};
-
-// Component for NFT Contract Tab
-const NFTContractPanel = () => {
-  // Implement your NFT contract panel here
-  return (
-    <div className="admin-panel">
-      <h2>NFT Contract Management</h2>
-      <p>NFT contract management functions will be shown here.</p>
-    </div>
-  );
-};
-
-// Component for Game Contract Tab
-const GameContractPanel = () => {
-  // Implement your game contract panel here
-  return (
-    <div className="admin-panel">
-      <h2>Game Contract Management</h2>
-      <p>Game contract management functions will be shown here.</p>
-    </div>
-  );
-};
-
-// Component for Storage Tab
-const StoragePanel = () => {
-  // Implement your storage panel here
-  return (
-    <div className="admin-panel">
-      <h2>Storage Management</h2>
-      <p>Storage management functions will be shown here.</p>
-    </div>
-  );
-};
-
-// Add this ReviveContractPanel component after other panels
-const ReviveContractPanel = () => {
-  const [contractData, setContractData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
-  const [withdrawError, setWithdrawError] = useState(null);
-  
-  const { address } = useAccount();
-  const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
-  
-  const reviveContractAddress = "0xf8e81D47203A594245E36C48e151709F0C19fBe8";
-  
-  // Fetch contract data from Supabase
-  useEffect(() => {
-    const fetchContractData = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const { data, error } = await supabase
-          .from('revive_contract_view')
-          .select('*')
-          .single();
-        
-        if (error) {
-          throw error;
-        }
-        
-        // Also fetch contract balance from blockchain
-        if (publicClient) {
-          try {
-            const balance = await publicClient.getBalance({
-              address: reviveContractAddress
-            });
-            
-            data.onchain_balance = balance;
-          } catch (err) {
-            console.error("Error fetching onchain balance:", err);
-          }
-        }
-        
-        setContractData(data);
-      } catch (error) {
-        console.error("Error fetching revive contract data:", error);
-        setError("Failed to load revive contract data");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchContractData();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchContractData, 30000);
-    return () => clearInterval(interval);
-  }, [publicClient]);
-  
-  // Handle withdraw function
-  const handleWithdraw = async () => {
-    if (!address || !walletClient) {
-      setWithdrawError("Wallet not connected");
-      return;
-    }
-    
-    setIsWithdrawing(true);
-    setWithdrawError(null);
-    setWithdrawSuccess(false);
-    
-    try {
-      // Call the withdraw function on the contract
-      const hash = await walletClient.writeContract({
-        address: reviveContractAddress,
-        abi: [
-          {
-            name: "withdraw",
-            type: "function",
-            stateMutability: "nonpayable",
-            inputs: [],
-            outputs: []
-          }
-        ],
-        functionName: "withdraw"
-      });
-      
-      console.log("Withdraw transaction sent:", hash);
-      
-      // Wait for transaction confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log("Withdraw transaction confirmed:", receipt);
-      
-      // Record the withdrawal in the database
-      const balance = contractData?.onchain_balance ? ethers.utils.formatEther(contractData.onchain_balance) : "0";
-      
-      await supabase.rpc('record_contract_withdraw', {
-        contract_addr: reviveContractAddress,
-        admin_addr: address,
-        amount: parseFloat(balance),
-        tx_hash: hash
-      });
-      
-      setWithdrawSuccess(true);
-      
-      // Refresh contract data after successful withdrawal
-      const { data } = await supabase
-        .from('revive_contract_view')
-        .select('*')
-        .single();
-      
-      setContractData(data);
-    } catch (err) {
-      console.error("Error withdrawing funds:", err);
-      setWithdrawError(err.message || "Failed to withdraw funds");
-    } finally {
-      setIsWithdrawing(false);
-    }
-  };
-  
-  if (isLoading) {
-    return (
-      <div className="admin-panel">
-        <h2>Revive Contract</h2>
-        <p>Loading contract data...</p>
-      </div>
-    );
-  }
-  
-  if (error) {
-    return (
-      <div className="admin-panel">
-        <h2>Revive Contract</h2>
-        <p className="error-message">{error}</p>
-      </div>
-    );
-  }
-  
-  const formatBalance = (balance) => {
-    if (!balance) return "0 MON";
-    if (typeof balance === 'bigint') {
-      return `${parseFloat(ethers.utils.formatEther(balance)).toFixed(4)} MON`;
-    }
-    return `${parseFloat(balance).toFixed(4)} MON`;
-  };
-  
-  return (
-    <div className="admin-panel">
-      <h2>Revive Contract</h2>
-      
-      <div className="stats-grid">
-        <div className="stat-box">
-          <h3>Contract Balance</h3>
-          <p>{contractData?.onchain_balance ? formatBalance(contractData.onchain_balance) : "0 MON"}</p>
-        </div>
-        
-        <div className="stat-box">
-          <h3>Revive Price</h3>
-          <p>{contractData?.revive_price ? `${contractData.revive_price} MON` : "0.5 MON"}</p>
-        </div>
-        
-        <div className="stat-box">
-          <h3>Total Revives</h3>
-          <p>{contractData?.total_revives || 0}</p>
-        </div>
-        
-        <div className="stat-box">
-          <h3>Unique Users</h3>
-          <p>{contractData?.unique_users || 0}</p>
-        </div>
-        
-        <div className="stat-box">
-          <h3>Total Revenue</h3>
-          <p>{contractData?.total_revenue ? `${contractData.total_revenue} MON` : "0 MON"}</p>
-        </div>
-      </div>
-      
-      <div className="action-panel">
-        <h3>Contract Actions</h3>
-        
-        {withdrawSuccess && (
-          <div className="success-message">Funds withdrawn successfully!</div>
-        )}
-        
-        {withdrawError && (
-          <div className="error-message">{withdrawError}</div>
-        )}
-        
-        <button 
-          className="withdraw-button"
-          onClick={handleWithdraw}
-          disabled={isWithdrawing || !contractData?.onchain_balance || contractData.onchain_balance === 0n}
-        >
-          {isWithdrawing ? "Withdrawing..." : "Withdraw All Funds"}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Main AdminDashboard component
 export default function AdminDashboard() {
   const { account } = useWeb3();
   const [players, setPlayers] = useState([]);
@@ -284,6 +37,20 @@ export default function AdminDashboard() {
   const [searchUsername, setSearchUsername] = useState('');
   const [userSearchResults, setUserSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  
+  // Add revive contract state
+  const [reviveContractData, setReviveContractData] = useState({
+    balance: 0,
+    revivePrice: 0.5,
+    totalRevives: 0,
+    uniqueUsers: 0,
+    totalRevenue: 0,
+    lastUpdated: null
+  });
+  const [reviveWithdrawing, setReviveWithdrawing] = useState(false);
+  const [reviveWithdrawSuccess, setReviveWithdrawSuccess] = useState(null);
+  const [reviveWithdrawError, setReviveWithdrawError] = useState(null);
+  const [revivePriceInput, setRevivePriceInput] = useState(0.5);
   
   const [gameStats, setGameStats] = useState({
     totalUsers: 0,
@@ -315,45 +82,10 @@ export default function AdminDashboard() {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   
-  const [isAdmin, setIsAdmin] = useState(false);
-  const { address, isConnected } = useAccount();
-  
   // Log tables on load to help debug
   useEffect(() => {
     logTableInfo();
   }, []);
-  
-  // Check if current user is admin
-  useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (!address) {
-        setIsAdmin(false);
-        setIsLoading(false);
-        return;
-      }
-      
-      try {
-        // Simple admin check - in reality, you would check against a database of admin addresses
-        // or use a smart contract role check
-        const { data, error } = await supabase
-          .from('admin_addresses')
-          .select('*')
-          .eq('address', address.toLowerCase())
-          .maybeSingle();
-        
-        if (error) throw error;
-        
-        setIsAdmin(!!data);
-      } catch (error) {
-        console.error("Error checking admin status:", error);
-        setIsAdmin(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    checkAdminStatus();
-  }, [address]);
   
   // Update the fetchGameStats function to fetch jumps from the jumps table
   useEffect(() => {
@@ -1129,146 +861,575 @@ export default function AdminDashboard() {
     }
   };
   
+  // Add function to fetch revive contract data
+  const fetchReviveContractData = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('revive_contract_view')
+        .select('*')
+        .single();
+        
+      if (error) {
+        console.error('Error fetching revive contract data:', error);
+        return;
+      }
+      
+      if (data) {
+        setReviveContractData({
+          balance: parseFloat(data.balance || 0),
+          revivePrice: parseFloat(data.revive_price || 0.5),
+          totalRevives: parseInt(data.total_revives || 0),
+          uniqueUsers: parseInt(data.unique_users || 0),
+          totalRevenue: parseFloat(data.total_revenue || 0),
+          lastUpdated: data.last_updated
+        });
+      }
+    } catch (error) {
+      console.error('Error in fetchReviveContractData:', error);
+    }
+  }, [supabase]);
+  
+  // Add function to handle revive contract withdrawal
+  const handleReviveWithdraw = async () => {
+    if (!walletClient || !publicClient || !account) {
+      setReviveWithdrawError('Wallet not connected');
+      return;
+    }
+    
+    try {
+      setReviveWithdrawing(true);
+      setReviveWithdrawError(null);
+      setReviveWithdrawSuccess(null);
+      
+      const reviveContractAddress = '0xf8e81D47203A594245E36C48e151709F0C19fBe8';
+      
+      // Prepare the contract call
+      const hash = await walletClient.writeContract({
+        address: reviveContractAddress,
+        abi: [
+          {
+            name: "withdraw",
+            type: "function",
+            stateMutability: "nonpayable",
+            inputs: [],
+            outputs: [],
+          }
+        ],
+        functionName: "withdraw",
+        account: account
+      });
+      
+      console.log("Revive contract withdraw transaction sent:", hash);
+      
+      // Wait for the transaction to be mined
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      
+      // Record the withdrawal in the database
+      const { error } = await supabase.rpc('record_contract_withdraw', {
+        contract_addr: reviveContractAddress,
+        admin_addr: account.toLowerCase(),
+        amount: reviveContractData.balance,
+        tx_hash: hash
+      });
+      
+      if (error) {
+        console.error('Error recording withdrawal:', error);
+      }
+      
+      setReviveWithdrawSuccess('Withdrawal successful!');
+      
+      // Refetch contract data to update UI
+      fetchReviveContractData();
+      
+    } catch (error) {
+      console.error('Error withdrawing from revive contract:', error);
+      setReviveWithdrawError(error.message || 'Failed to withdraw funds');
+    } finally {
+      setReviveWithdrawing(false);
+    }
+  };
+  
+  // Add function to update revive price
+  const handleUpdateRevivePrice = async () => {
+    if (!walletClient || !publicClient || !account) {
+      setReviveWithdrawError('Wallet not connected');
+      return;
+    }
+    
+    try {
+      setReviveWithdrawing(true);
+      setReviveWithdrawError(null);
+      setReviveWithdrawSuccess(null);
+      
+      const reviveContractAddress = '0xf8e81D47203A594245E36C48e151709F0C19fBe8';
+      const newPriceWei = ethers.utils.parseEther(revivePriceInput.toString());
+      
+      // Prepare the contract call
+      const hash = await walletClient.writeContract({
+        address: reviveContractAddress,
+        abi: [
+          {
+            name: "setRevivePrice",
+            type: "function",
+            stateMutability: "nonpayable",
+            inputs: [{ type: "uint256", name: "newPrice" }],
+            outputs: [],
+          }
+        ],
+        functionName: "setRevivePrice",
+        args: [newPriceWei],
+        account: account
+      });
+      
+      console.log("Update revive price transaction sent:", hash);
+      
+      // Wait for the transaction to be mined
+      await publicClient.waitForTransactionReceipt({ hash });
+      
+      // Update the price in the database
+      const { error } = await supabase.rpc('update_revive_price', {
+        contract_addr: reviveContractAddress,
+        new_price: parseFloat(revivePriceInput)
+      });
+      
+      if (error) {
+        console.error('Error updating revive price in database:', error);
+      }
+      
+      setReviveWithdrawSuccess('Price updated successfully!');
+      
+      // Refetch contract data to update UI
+      fetchReviveContractData();
+      
+    } catch (error) {
+      console.error('Error updating revive price:', error);
+      setReviveWithdrawError(error.message || 'Failed to update price');
+    } finally {
+      setReviveWithdrawing(false);
+    }
+  };
+  
+  // Add revive contract data fetch to the initial load
+  useEffect(() => {
+    if (supabase) {
+      fetchReviveContractData();
+    }
+  }, [fetchReviveContractData, supabase]);
+  
   if (!account) {
     return (
-      <div className="admin-container">
-        <h1>Admin Dashboard</h1>
-        
-        {/* Check if connected and admin access */}
-        {!isConnected ? (
-          <div className="auth-message">
-            <p>Please connect your wallet to access admin features</p>
-            <ConnectButton />
-          </div>
-        ) : isLoading ? (
-          <p>Checking admin access...</p>
-        ) : !isAdmin ? (
-          <div className="auth-message">
-            <p>This wallet does not have admin privileges</p>
-            <p>Connected address: {address}</p>
-          </div>
-        ) : (
-          <>
-            {/* Tab navigation */}
-            <div className="admin-tabs">
-              <button 
-                className={activeTab === 'overview' ? 'active' : ''} 
-                onClick={() => setActiveTab('overview')}
-              >
-                Overview
-              </button>
-              <button 
-                className={activeTab === 'nft' ? 'active' : ''} 
-                onClick={() => setActiveTab('nft')}
-              >
-                NFT Contract
-              </button>
-              <button 
-                className={activeTab === 'game' ? 'active' : ''} 
-                onClick={() => setActiveTab('game')}
-              >
-                Game Contract
-              </button>
-              <button 
-                className={activeTab === 'storage' ? 'active' : ''} 
-                onClick={() => setActiveTab('storage')}
-              >
-                Storage
-              </button>
-              <button 
-                className={activeTab === 'revive' ? 'active' : ''} 
-                onClick={() => setActiveTab('revive')}
-              >
-                Revive
-              </button>
-            </div>
-            
-            {/* Tab content */}
-            <div className="tab-content">
-              {activeTab === 'overview' && <StatsPanel />}
-              {activeTab === 'nft' && <NFTContractPanel />}
-              {activeTab === 'game' && <GameContractPanel />}
-              {activeTab === 'storage' && <StoragePanel />}
-              {activeTab === 'revive' && <ReviveContractPanel />}
-            </div>
-          </>
-        )}
+      <div className="admin-dashboard">
+        <h2>Admin Dashboard</h2>
+        <p>Please connect your wallet to access the admin dashboard.</p>
       </div>
     );
   }
   
   if (loading) {
     return (
-      <div className="admin-container">
-        <h1>Admin Dashboard</h1>
+      <div className="admin-dashboard">
+        <h2>Admin Dashboard</h2>
         <div className="admin-loading">Loading statistics...</div>
       </div>
     );
   }
   
   return (
-    <div className="admin-container">
-      <h1>Admin Dashboard</h1>
+    <div className="admin-dashboard">
+      <h2>Admin Dashboard</h2>
       
-      {/* Check if connected and admin access */}
-      {!isConnected ? (
-        <div className="auth-message">
-          <p>Please connect your wallet to access admin features</p>
-          <ConnectButton />
+      <AdminLinkGenerator />
+      
+      {error && (
+        <div className="admin-error">
+          <p>{error}</p>
+          <p>Please check your Supabase database setup.</p>
         </div>
-      ) : isLoading ? (
-        <p>Checking admin access...</p>
-      ) : !isAdmin ? (
-        <div className="auth-message">
-          <p>This wallet does not have admin privileges</p>
-          <p>Connected address: {address}</p>
+      )}
+      
+      <div className="admin-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          Overview
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'stats' ? 'active' : ''}`}
+          onClick={() => setActiveTab('stats')}
+        >
+          Detailed Stats
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'user' ? 'active' : ''}`}
+          onClick={() => setActiveTab('user')}
+        >
+          User Search
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'contract' ? 'active' : ''}`}
+          onClick={() => setActiveTab('contract')}
+        >
+          Contract Info
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'revive' ? 'active' : ''}`}
+          onClick={() => setActiveTab('revive')}
+        >
+          Revive Management
+        </button>
+      </div>
+      
+      {activeTab === 'overview' && (
+        <div className="admin-stats-container">
+          <h2>Game Overview</h2>
+        
+          <div className="stat-card">
+            <h3>Total Registered Users</h3>
+              <div className="stat-value">{formatNumber(gameStats.totalUsers)}</div>
+          </div>
+          
+          <div className="stat-card">
+            <h3>Total Jumps (All Users)</h3>
+              <div className="stat-value">{formatNumber(gameStats.totalJumps)}</div>
+          </div>
+          
+          <div className="stat-card">
+            <h3>Total NFTs Minted</h3>
+              <div className="stat-value">{formatNumber(gameStats.totalMints)}</div>
+          </div>
+          
+          <div className="stat-card">
+            <h3>Total Revenue (MON)</h3>
+              <div className="stat-value">{formatNumber(gameStats.totalRevenue)}</div>
+          </div>
         </div>
-      ) : (
-        <>
-          {/* Tab navigation */}
-          <div className="admin-tabs">
+      )}
+      
+      {activeTab === 'stats' && (
+        <div className="admin-stats-container">
+          <div className="stats-section">
+            <h3>Registered Players</h3>
+            <div className="stats-grid">
+              <div className="stat-card sm">
+                <div className="stat-label">Last Hour</div>
+                <div className="stat-value">{formatNumber(timeStats.users.hourly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 24 Hours</div>
+                <div className="stat-value">{formatNumber(timeStats.users.daily)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 7 Days</div>
+                <div className="stat-value">{formatNumber(timeStats.users.weekly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 30 Days</div>
+                <div className="stat-value">{formatNumber(timeStats.users.monthly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">All Time</div>
+                <div className="stat-value">{formatNumber(timeStats.users.allTime)}</div>
+              </div>
+            </div>
+          </div>
+       
+          <div className="stats-section">
+            <h3>Total Jumps</h3>
+            <div className="stats-grid">
+              <div className="stat-card sm">
+                <div className="stat-label">Last Hour</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.hourly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 24 Hours</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.daily)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 7 Days</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.weekly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 30 Days</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.monthly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">All Time</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.allTime)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {activeTab === 'user' && (
+        <div className="admin-user-search">
+          <h3>Search User</h3>
+          <div className="search-container">
+            <input 
+              type="text" 
+              placeholder="Enter username or wallet address" 
+              value={searchUsername}
+              onChange={(e) => setSearchUsername(e.target.value)}
+              onKeyUp={(e) => e.key === 'Enter' && handleUserSearch()}
+            />
             <button 
-              className={activeTab === 'overview' ? 'active' : ''} 
-              onClick={() => setActiveTab('overview')}
+              onClick={handleUserSearch}
+              disabled={searchLoading || !searchUsername}
             >
-              Overview
-            </button>
-            <button 
-              className={activeTab === 'nft' ? 'active' : ''} 
-              onClick={() => setActiveTab('nft')}
-            >
-              NFT Contract
-            </button>
-            <button 
-              className={activeTab === 'game' ? 'active' : ''} 
-              onClick={() => setActiveTab('game')}
-            >
-              Game Contract
-            </button>
-            <button 
-              className={activeTab === 'storage' ? 'active' : ''} 
-              onClick={() => setActiveTab('storage')}
-            >
-              Storage
-            </button>
-            <button 
-              className={activeTab === 'revive' ? 'active' : ''} 
-              onClick={() => setActiveTab('revive')}
-            >
-              Revive
+              {searchLoading ? 'Searching...' : 'Search'}
             </button>
           </div>
           
-          {/* Tab content */}
-          <div className="tab-content">
-            {activeTab === 'overview' && <StatsPanel />}
-            {activeTab === 'nft' && <NFTContractPanel />}
-            {activeTab === 'game' && <GameContractPanel />}
-            {activeTab === 'storage' && <StoragePanel />}
-            {activeTab === 'revive' && <ReviveContractPanel />}
-          </div>
-        </>
+          {userSearchResults && !userSearchResults.notFound && !userSearchResults.error && (
+            <div className="user-results">
+              <h3>User Details</h3>
+              
+              <div className="user-info-grid">
+                <div className="user-info-item">
+                  <span className="label">Username:</span>
+                  <span className="value">{userSearchResults.username || 'N/A'}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">Wallet Address:</span>
+                  <span className="value">{userSearchResults.wallet_address || userSearchResults.address || 'N/A'}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">Joined Date:</span>
+                  <span className="value">{formatDate(userSearchResults.created_at || userSearchResults.join_date || userSearchResults.joined_at)}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">Total Jumps:</span>
+                  <span className="value">{formatNumber(userSearchResults.totalJumps)}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">Games Played:</span>
+                  <span className="value">{formatNumber(userSearchResults.games_played || userSearchResults.totalGames || 0)}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">High Score:</span>
+                  <span className="value">{formatNumber(userSearchResults.high_score || userSearchResults.score || 0)}</span>
+                </div>
+              </div>
+              
+              {userSearchResults.gameHistory && userSearchResults.gameHistory.length > 0 && (
+                <div className="user-history">
+                  <h4>Game History</h4>
+                  <div className="history-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Score</th>
+                          <th>Jumps</th>
+                          <th>Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {userSearchResults.gameHistory.map((game, index) => (
+                          <tr key={index}>
+                            <td>{formatDate(game.played_at || game.created_at)}</td>
+                            <td>{formatNumber(game.score)}</td>
+                            <td>{formatNumber(game.jumps)}</td>
+                            <td>{game.duration ? `${game.duration}s` : 'N/A'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              
+              {userSearchResults.jumpHistory && userSearchResults.jumpHistory.length > 0 && (
+                <div className="user-history">
+                  <h4>Jump History</h4>
+                  <div className="history-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Jumps</th>
+                          <th>Game Session</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {userSearchResults.jumpHistory.map((jump, index) => (
+                          <tr key={index}>
+                            <td>{formatDate(jump.created_at || jump.timestamp)}</td>
+                            <td>{formatNumber(jump.count)}</td>
+                            <td>{jump.game_session_id || 'N/A'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {userSearchResults && userSearchResults.notFound && (
+            <div className="user-not-found">
+              <p>No user found with this username or wallet address.</p>
+            </div>
+          )}
+          
+          {userSearchResults && userSearchResults.error && (
+            <div className="user-search-error">
+              <p>Error searching for user: {userSearchResults.error}</p>
+            </div>
+          )}
+        </div>
       )}
+      
+      {activeTab === 'contract' && (
+        <div className="admin-section contract-info">
+          <h3>Contract Information</h3>
+          
+          <div className="contract-stats-grid">
+            <div className="stat-card">
+              <h4>Contract Address</h4>
+              <div className="contract-address">{import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS || 'Not configured'}</div>
+            </div>
+            
+            <div className="stat-card">
+              <h4>Total NFTs Minted</h4>
+              <div className="stat-value">{formatNumber(gameStats.totalMints)}</div>
+            </div>
+            
+            <div className="stat-card">
+              <h4>Total Transactions</h4>
+              <div className="stat-value">{formatNumber(totalTransactions)}</div>
+            </div>
+            
+            <div className="stat-card">
+              <h4>Contract Balance</h4>
+              <div className="stat-value">{contractBalance.toFixed(4)} MON</div>
+            </div>
+        </div>
+        
+          <div className="withdraw-section">
+            <h4>Contract Management</h4>
+          <button 
+            className="admin-button withdraw-button"
+            onClick={handleWithdrawFunds}
+            disabled={withdrawing || contractBalance <= 0}
+          >
+            {withdrawing ? 'Withdrawing...' : 'Withdraw Funds to Owner'}
+          </button>
+          
+          {withdrawSuccess && (
+            <div className="withdraw-success">
+              {withdrawSuccess}
+            </div>
+          )}
+          
+          {withdrawError && (
+            <div className="withdraw-error">
+              {withdrawError}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {activeTab === 'revive' && (
+        <div className="admin-stats-container">
+          <h2>Revive Contract Management</h2>
+          
+          <div className="revive-contract-overview">
+            <div className="stats-section">
+              <h3>Revive Contract Statistics</h3>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-label">Contract Balance</div>
+                  <div className="stat-value">{reviveContractData.balance.toFixed(4)} MON</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Current Revive Price</div>
+                  <div className="stat-value">{reviveContractData.revivePrice.toFixed(2)} MON</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Total Revives Used</div>
+                  <div className="stat-value">{reviveContractData.totalRevives}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Unique Users</div>
+                  <div className="stat-value">{reviveContractData.uniqueUsers}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Total Revenue</div>
+                  <div className="stat-value">{reviveContractData.totalRevenue.toFixed(2)} MON</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Last Updated</div>
+                  <div className="stat-value">{reviveContractData.lastUpdated ? new Date(reviveContractData.lastUpdated).toLocaleString() : 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="admin-action-cards">
+              <div className="admin-action-card">
+                <h3>Withdraw Contract Balance</h3>
+                <p>Current balance: <strong>{reviveContractData.balance.toFixed(4)} MON</strong></p>
+                <p>This will withdraw all funds from the revive contract to the owner's wallet.</p>
+                
+                <button 
+                  className="admin-button withdraw-button"
+                  onClick={handleReviveWithdraw}
+                  disabled={reviveWithdrawing || reviveContractData.balance <= 0}
+                >
+                  {reviveWithdrawing ? 'Processing...' : `Withdraw ${reviveContractData.balance.toFixed(4)} MON`}
+                </button>
+                
+                {reviveWithdrawSuccess && (
+                  <div className="success-message">{reviveWithdrawSuccess}</div>
+                )}
+                
+                {reviveWithdrawError && (
+                  <div className="error-message">{reviveWithdrawError}</div>
+                )}
+              </div>
+              
+              <div className="admin-action-card">
+                <h3>Update Revive Price</h3>
+                <p>Current price: <strong>{reviveContractData.revivePrice.toFixed(2)} MON</strong></p>
+                
+                <div className="input-group">
+                  <label>New Price (MON):</label>
+                  <input 
+                    type="number" 
+                    min="0.1" 
+                    step="0.1" 
+                    value={revivePriceInput}
+                    onChange={(e) => setRevivePriceInput(parseFloat(e.target.value))}
+                  />
+                </div>
+                
+                <button 
+                  className="admin-button"
+                  onClick={handleUpdateRevivePrice}
+                  disabled={reviveWithdrawing}
+                >
+                  {reviveWithdrawing ? 'Processing...' : 'Update Price'}
+                </button>
+              </div>
+            </div>
+            
+            <div className="admin-note">
+              <p><strong>Note:</strong> Changes to the contract will be reflected after the transaction is confirmed on the blockchain.</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="admin-actions">
+        <button 
+          className="admin-button"
+          onClick={() => window.location.href = '/'}
+        >
+          Return to Game
+        </button>
+      </div>
     </div>
   );
 } 
