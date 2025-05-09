@@ -37,8 +37,7 @@ document.addEventListener('keydown', function(e) {
     if ((e.key === ' ' || e.key === 'ArrowUp')) {
         // Increment jump counter
         window.totalJumps = (window.totalJumps || 0) + 1;
-        // Log to verify it's being tracked
-        console.log(`Main.js: Jump #${window.totalJumps} tracked`);
+        // Remove logging for performance
     }
 });
 
@@ -138,6 +137,7 @@ window.addEventListener('load', () => {
             this.platform_max_gap = 175
             this.blue_white_platform_chance = 0
             this.blue_white_platform_max_chance = 85
+            this.gameId = Date.now().toString(); // Add unique game ID for tracking revive state
             this.gameOverButtons = {
                 tryAgain: {
                     x: canvas.width / 2 - 60, // Center the larger image
@@ -147,6 +147,11 @@ window.addEventListener('load', () => {
                     text: 'Try Again'
                 }
             };
+            this.hasUsedRevive = false; // Flag to track if player has used a revive in the current game
+            this.showingReviveMenu = false; // Flag to track if revive menu is being shown
+            this.reviveTransactionPending = false; // Flag to track if revive transaction is in progress
+            this.reviveCountdown = 0; // Countdown timer for revive
+            this.reviveContractAddress = "0xe56a5d27bd9d27fcdf6beaab97a5faa8fcb53cf9"; // Revive contract address
 
             // Initialize click handler in constructor
             canvas.addEventListener('click', (event) => this.handleGameOverClick(event));
@@ -203,6 +208,80 @@ window.addEventListener('load', () => {
             
             // Add off-screen culling boundaries
             this.cullMargin = 100; // Objects 100px off screen will be ignored for rendering
+
+            // Add property to store player wallet address
+            this.playerWalletAddress = '';  // Will be populated from parent window
+            
+            // Listen for wallet address update
+            window.addEventListener('message', (event) => {
+                if (event.data?.type === 'WALLET_ADDRESS') {
+                    this.playerWalletAddress = event.data.address;
+                    
+                    // When we get a wallet address and a game is already in progress, 
+                    // request revive reset to ensure player can use revive in this game
+                    if (this.gameStart && !this.gameOver) {
+                        this.requestAutomaticReviveReset();
+                    }
+                }
+                
+                // Listen for revive reset confirmation
+                if (event.data?.type === 'REVIVE_RESET_RESULT') {
+                    if (event.data.success) {
+                        // Revive was reset successfully
+                        this.hasUsedRevive = false;
+                        
+                        // Update reset status display if showing
+                        if (this.resetAttempted) {
+                            this.resetSuccess = true;
+                            
+                            // Redraw the screen if we're showing the error screen
+                            if (this.showingReviveErrorScreen) {
+                                const ctx = this.canvas.getContext('2d');
+                                this.drawReviveErrorScreen(ctx);
+                            }
+                        }
+                        
+                        // If we were showing an error about needing admin reset, close it
+                        if (this.showingReviveErrorScreen && this.needsAdminReset) {
+                            this.showingReviveErrorScreen = false;
+                            this.needsAdminReset = false;
+                            
+                            // Check if we were in game over state
+                            if (this.isGameOver) {
+                                // Show revive menu again since status has been reset
+                                this.showingReviveMenu = true;
+                                this.gameOver = false;
+                            }
+                        }
+                    }
+                }
+                
+                // Handle revive status check response
+                if (event.data?.type === 'REVIVE_STATUS_RESULT') {
+                    // If showing the error screen, update our UI
+                    if (this.showingReviveErrorScreen && this.resetAttempted) {
+                        this.resetSuccess = !event.data.hasUsedRevive;
+                        
+                        // If reset was successful, enable the revive option again
+                        if (this.resetSuccess && this.isGameOver) {
+                            setTimeout(() => {
+                                this.showingReviveErrorScreen = false;
+                                this.needsAdminReset = false;
+                                this.showingReviveMenu = true;
+                                this.gameOver = false;
+                                
+                                // Redraw the game
+                                const ctx = this.canvas.getContext('2d');
+                                this.draw(ctx);
+                            }, 2000); // Give player time to see success message
+                        } else {
+                            // Just update the UI with the result
+                            const ctx = this.canvas.getContext('2d');
+                            this.drawReviveErrorScreen(ctx);
+                        }
+                    }
+                }
+            });
         }
     
         initializeGame() {
@@ -232,7 +311,7 @@ window.addEventListener('load', () => {
             // Update background with deltaTime
             this.background.update(deltaTime);
             
-            // Update platforms with deltaTime
+            // Update platforms with deltaTime - optimize loop
             const platformCount = this.platforms.length;
             for (let i = 0; i < platformCount; i++) {
                 this.platforms[i].update(deltaTime);
@@ -245,13 +324,13 @@ window.addEventListener('load', () => {
                 this.player.update(this.inputHandler, deltaTime);
             }
             
-            // Update enemies with deltaTime
+            // Update enemies with deltaTime - optimize loop
             const enemyCount = this.enemies.length;
             for (let i = 0; i < enemyCount; i++) {
                 this.enemies[i].update(deltaTime);
             }
 
-            // Remove deleted objects
+            // Remove deleted objects - this is required for game logic
             this.platforms = this.platforms.filter(platform => !platform.markedForDeletion);
             this.enemies = this.enemies.filter(enemy => {
                 if (enemy.markedForDeletion) {
@@ -267,9 +346,12 @@ window.addEventListener('load', () => {
             // Check game over condition
             this.checkGameOver();
             
-            // Memory management - ensure we don't leak memory
-            if (this.platforms.length > 100) {
-                // Too many platforms, trim the oldest ones
+            // Memory management - offload to less frequent intervals
+            if (this._frameCount === undefined) this._frameCount = 0;
+            this._frameCount++;
+            
+            // Only check platform count every 30 frames
+            if (this._frameCount % 30 === 0 && this.platforms.length > 100) {
                 this.platforms.splice(0, this.platforms.length - 100);
             }
         }
@@ -289,26 +371,25 @@ window.addEventListener('load', () => {
                 return;
             }
 
-            // Optimize platform drawing with culling and direct indexing
+            // Only draw visible platforms with culling
+            const viewport = {top: -this.cullMargin, bottom: this.height + this.cullMargin};
             const platformCount = this.platforms.length;
             for (let i = 0; i < platformCount; i++) {
                 const platform = this.platforms[i];
                 // Only draw platforms that are on or near the screen
-                if (platform.y < this.height + this.cullMargin && 
-                    platform.y + platform.height > -this.cullMargin) {
+                if (platform.y < viewport.bottom && platform.y + platform.height > viewport.top) {
                     platform.draw(context);
                 }
             }
             
             this.player.draw(context);
             
-            // Optimize enemy drawing with culling and direct indexing
+            // Only draw visible enemies with culling
             const enemyCount = this.enemies.length;
             for (let i = 0; i < enemyCount; i++) {
                 const enemy = this.enemies[i];
                 // Only draw enemies that are on or near the screen
-                if (enemy.y < this.height + this.cullMargin && 
-                    enemy.y + enemy.height > -this.cullMargin) {
+                if (enemy.y < viewport.bottom && enemy.y + enemy.height > viewport.top) {
                     enemy.draw(context);
                 }
             }
@@ -339,8 +420,22 @@ window.addEventListener('load', () => {
                 this.debugPanel.draw(context);
             }
 
+            // Check if a direct purchase is in progress
+            if (this.directPurchaseInProgress) {
+                this.drawDirectPurchaseLoading(context);
+                return;
+            }
+
+            // Draw revive error screen if needed
+            if (this.showingReviveErrorScreen) {
+                this.drawReviveErrorScreen(context);
+            }
+            // Draw revive menu if needed
+            else if (this.showingReviveMenu) {
+                this.drawReviveMenu(context);
+            }
             // Draw game over screen if needed
-            if (this.gameOver) {
+            else if (this.gameOver) {
                 this.drawGameOverScreen(context);
             }
         }
@@ -434,33 +529,33 @@ window.addEventListener('load', () => {
         }
 
         gameOver() {
-            console.log('Setting game over state');
-            this.gameOver = true;
-
-            const finalScore = Math.floor(this.score);
-            console.log(`Game Over - Sending final score: ${finalScore} with ${window.totalJumps} jumps`);
+            // Make sure we only process this once
+            if (this.isGameOver) return;
             
-            // Post message to parent window
-            if (window.parent) {
-                try {
-                    window.parent.postMessage({
-                        type: 'gameOver',
-                        score: finalScore,
-                        jumps: window.totalJumps
-                    }, '*');
-                    
-                    // Also send as gameScore for backward compatibility
-                    window.parent.postMessage({
-                        type: 'gameScore',
-                        score: finalScore,
-                        jumps: window.totalJumps
-                    }, '*');
-                    
-                    console.log('Game over messages sent to parent');
-                } catch (err) {
-                    console.error('Failed to post game over message:', err);
-                }
+            this.gameOver = true;
+            this.isGameOver = true;
+            
+            // Get the final jump count from either the window counter or local counter
+            this.finalJumpCount = window.__jumpCount || window.totalJumps || 0;
+            
+            console.log(`Game over with ${this.finalJumpCount} jumps and score: ${this.score}`);
+            
+            // Track the death reason if not already set (default to fall)
+            if (!this.deathReason) {
+                this.deathReason = "fall";
             }
+            
+            // Send a message to the parent window with the final score and jump count
+            sendMessageToParent({
+                type: 'gameOver',
+                score: this.score,
+                jumps: this.finalJumpCount,
+                gameId: this.gameId,
+                deathReason: this.deathReason,
+                reviveCancelled: !!this.reviveCancelled,
+                hasUsedRevive: !!this.hasUsedRevive,
+                timestamp: Date.now()
+            });
         }
 
         drawButton(button) {
@@ -480,7 +575,7 @@ window.addEventListener('load', () => {
         }
 
         handleGameOverClick(event) {
-            if (!this.gameOver) return;
+            if (!this.gameOver && !this.showingReviveMenu && !this.showingReviveErrorScreen) return;
 
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -488,11 +583,96 @@ window.addEventListener('load', () => {
             const x = (event.clientX - rect.left) * scaleX;
             const y = (event.clientY - rect.top) * scaleY;
 
-            // Check only the Try Again button
+            // Handle revive error screen buttons
+            if (this.showingReviveErrorScreen) {
+                // Handle admin reset button click
+                if (this.needsAdminReset && this.adminResetButton &&
+                    x >= this.adminResetButton.x && x <= this.adminResetButton.x + this.adminResetButton.width &&
+                    y >= this.adminResetButton.y && y <= this.adminResetButton.y + this.adminResetButton.height) {
+                    
+                    if (!this.adminResetRequested) {
+                        this.requestAdminReset();
+                        return;
+                    }
+                }
+                
+                // Handle manual reset button click
+                if (this.needsAdminReset && this.manualResetButton &&
+                    x >= this.manualResetButton.x && x <= this.manualResetButton.x + this.manualResetButton.width &&
+                    y >= this.manualResetButton.y && y <= this.manualResetButton.y + this.manualResetButton.height) {
+                    
+                    this.tryManualReset();
+                    return;
+                }
+                
+                // Handle continue button click
+                if (this.continueButton &&
+                    x >= this.continueButton.x && x <= this.continueButton.x + this.continueButton.width &&
+                    y >= this.continueButton.y && y <= this.continueButton.y + this.continueButton.height) {
+                    
+                    // Close the error screen and show game over
+                    this.showingReviveErrorScreen = false;
+                    this.gameOver = true;
+                    return;
+                }
+                
+                return;
+            }
+
+            if (this.showingReviveMenu) {
+                // Handle revive menu buttons
+                const buyRevive = this.reviveButtons.buyRevive;
+                const cancel = this.reviveButtons.cancel;
+                
+                if (x >= buyRevive.x && x <= buyRevive.x + buyRevive.width &&
+                    y >= buyRevive.y && y <= buyRevive.y + buyRevive.height) {
+                    this.purchaseRevive();
+                    return;
+                }
+                
+                if (x >= cancel.x && x <= cancel.x + cancel.width &&
+                    y >= cancel.y && y <= cancel.y + cancel.height) {
+                    // First, mark that we're cancelling to prevent any transactions
+                    this.reviveCancelled = true;
+                    this.showingReviveMenu = false;
+                    this.gameOver = true; // Proceed to game over
+                    
+                    // Calculate the final jump count
+                    const finalJumpCount = window.__jumpCount || 0;
+                    
+                    // Send a message to parent window about revive being cancelled
+                    // Include the jump count to ensure it gets recorded
+                    sendMessageToParent({
+                        type: 'REVIVE_CANCELLED',
+                        gameId: this.gameId,
+                        timestamp: Date.now(),
+                        jumps: finalJumpCount,
+                        score: this.score,
+                        shouldRecordJumps: true
+                    });
+                    
+                    // Send the gameOver message to ensure jump transactions are processed
+                    sendMessageToParent({
+                        type: 'gameOver',
+                        score: this.score,
+                        jumps: finalJumpCount,
+                        gameId: this.gameId,
+                        deathReason: this.deathReason || "fall",
+                        reviveCancelled: true,
+                        hasUsedRevive: false,
+                        timestamp: Date.now()
+                    });
+                    
+                    return;
+                }
+                
+                return;
+            }
+
+            // Handle game over buttons if not showing revive menu
             const tryAgain = this.gameOverButtons.tryAgain;
             if (x >= tryAgain.x && x <= tryAgain.x + tryAgain.width &&
                 y >= tryAgain.y && y <= tryAgain.y + tryAgain.height) {
-                console.log("RELOAD BUTTON CLICKED!");
                 
                 // Send special message to parent window
                 sendMessageToParent({
@@ -506,7 +686,8 @@ window.addEventListener('load', () => {
         }
 
         reset() {
-            console.log("🔄 FULL GAME RESET");
+            // Generate a new game ID for this session
+            this.gameId = Date.now().toString();
             
             // Reset game state without stopping animation
             this.gameOver = false;
@@ -518,13 +699,17 @@ window.addEventListener('load', () => {
             this.platform_gap = 100;
             this.blue_white_platform_chance = 0;
             this.deathReason = null; // Reset death reason
+            this.hasUsedRevive = false; // Reset revive flag
+            this.showingReviveMenu = false; // Reset revive menu flag
+            this.showingReviveErrorScreen = false; // Reset error screen flag
+            this.needsAdminReset = false; // Reset admin reset flag
+            this.adminResetRequested = false; // Reset admin reset request flag
             
             // IMPORTANT: Reset ALL jump counters
             window.__jumpCount = 0;
             window.totalJumps = 0;
             this.finalJumpCount = 0;
             this.isGameOver = false;
-            console.log("🔄 All jump counters reset to 0");
             
             // Clear existing entities
             this.platforms = [];
@@ -540,7 +725,6 @@ window.addEventListener('load', () => {
             // Reset the player's jumped platforms set
             if (this.player.jumpedPlatforms) {
                 this.player.jumpedPlatforms.clear();
-                console.log("🔄 Cleared player's jumped platforms tracking");
             }
             
             // Add initial platforms
@@ -552,10 +736,22 @@ window.addEventListener('load', () => {
             // Reset transaction tracking
             this.pendingJumps = [];
             this.jumpTimestamps = [];
-            console.log("🔄 Game reset - All jump transactions cleared");
 
             // Reset the jump count sent flag
             this.jumpCountSent = false;
+            
+            // Notify parent that a new game has started (for UI updates only)
+            sendMessageToParent({
+                type: 'NEW_GAME_STARTED',
+                gameId: this.gameId
+            });
+        }
+
+        // Add a new method to automatically request revive reset
+        requestAutomaticReviveReset() {
+            // Just track this locally, don't send blockchain messages
+            this.hasUsedRevive = false;
+            console.log("Automatic reset of revive status requested (local only)");
         }
 
         animate() {
@@ -564,15 +760,21 @@ window.addEventListener('load', () => {
             
             const gameLoop = (timestamp) => {
                 // Calculate the delta time in seconds
-                const deltaTime = (timestamp - lastTime) / 1000;
+                const deltaTime = Math.min((timestamp - lastTime) / 1000, 0.05); // Cap at 50ms (20fps)
                 lastTime = timestamp;
+                
+                // Skip frame if delta is too small (improves performance on high refresh displays)
+                if (deltaTime < 0.004) { // Skip frames faster than ~250fps
+                    requestAnimationFrame(gameLoop);
+                    return;
+                }
                 
                 // Only update if game is active
                 if (this.gameStart && !this.gameOver) {
                     try {
                         this.update(deltaTime);
                     } catch (e) {
-                        console.error("Error in game update:", e);
+                        // Silent catch without logging to avoid perf issues
                     }
                 }
                 
@@ -940,7 +1142,7 @@ window.addEventListener('load', () => {
                             window.audioManager.play('collision', 0.7);
                         }
                     } catch(e) {
-                        console.warn('Error playing collision sound:', e);
+                        // Silent fail
                     }
                 } else if (this.player.y > this.canvas.height) {
                     this.deathReason = "fall";
@@ -949,11 +1151,9 @@ window.addEventListener('load', () => {
                     try {
                         if (window.audioManager && typeof window.audioManager.play === 'function') {
                             window.audioManager.play('fall', 0.7);
-                        } else if (typeof this.playFallSound === 'function') {
-                            this.playFallSound();
                         }
                     } catch(e) {
-                        console.warn('Error playing fall sound:', e);
+                        // Silent fail
                     }
                 } else {
                     this.deathReason = "unknown";
@@ -963,11 +1163,27 @@ window.addEventListener('load', () => {
                 const finalScore = Math.floor(this.score);
                 const jumpCount = window.__jumpCount || 0;
                 
-                console.log('🎮 GAME OVER');
-                console.log(`📊 Final Score: ${finalScore}, Total Jumps: ${jumpCount}`);
-                
                 // Set game over state first
                 this.isGameOver = true;
+                
+                // Check if player can use a revive (only available once per game)
+                // First use our internal check to avoid blockchain calls if we know it's been used
+                if (!this.checkReviveUsage()) {
+                    this.showingReviveMenu = true;
+                    
+                    // Play revive offer sound if available
+                    try {
+                        if (window.audioManager && typeof window.audioManager.play === 'function') {
+                            window.audioManager.play('powerUp', 0.5);
+                        }
+                    } catch(e) {
+                        // Silent fail
+                    }
+                    
+                    return true;
+                }
+                
+                // If player has already used a revive or doesn't want to use one, proceed to game over
                 this.gameOver = true;
                 
                 // Store the fact that we sent the game over message
@@ -979,22 +1195,19 @@ window.addEventListener('load', () => {
                         window.audioManager.play('gameOver', 0.7);
                     }
                 } catch(e) {
-                    console.warn('Error playing game over sound:', e);
+                    // Silent fail
                 }
                 
-                // Use safe message sending function - SEND ONLY ONE MESSAGE WITH ALL DATA
+                // Send game over message
                 try {
                     // Use a unique ID to prevent duplicate transactions
                     const gameOverId = Date.now().toString();
-                        
-                    // Send a single comprehensive message with all required data
-                    console.log(`📤 Sending single game over notification with ID: ${gameOverId}`);
                     
                     // Send a single message with a transaction flag
                     sendMessageToParent({
                         type: 'GAME_OVER',
-                        transactionRequired: true,  // Flag indicating this should trigger a transaction
-                        gameOverId: gameOverId,     // Unique ID to prevent duplicates
+                        transactionRequired: true,
+                        gameOverId: gameOverId,
                             data: {
                                 score: finalScore,
                                 jumpCount: jumpCount,
@@ -1005,10 +1218,8 @@ window.addEventListener('load', () => {
                             saveId: gameOverId
                             }
                     });
-                        
-                    console.log(`📤 Game over notification sent to parent window`);
                     } catch (error) {
-                    console.error('❌ Error notifying parent window:', error);
+                    // Silent fail
                 }
                 
                 return true;
@@ -1018,12 +1229,24 @@ window.addEventListener('load', () => {
 
         startGame() {
             if (!this.gameStart) {
-                console.log('Starting game');
+                // Generate a new game ID for this session
+                this.gameId = Date.now().toString();
+                
                 window.totalJumps = 0; // Reset jump counter using window variable
                 this.gameStart = true;
                 this.gameOver = false;
                 this.isGameOver = false;
                 this.score = 0;
+                this.hasUsedRevive = false; // Ensure revive is reset
+                this.showingReviveErrorScreen = false; // Reset error screen
+                this.needsAdminReset = false; // Reset admin reset flag
+                this.adminResetRequested = false; // Reset admin reset request flag
+                
+                // Notify parent that a new game has started (for UI updates only, not blockchain)
+                sendMessageToParent({
+                    type: 'NEW_GAME_STARTED',
+                    gameId: this.gameId
+                });
                 
                 // Play background music when game starts
                 if (window.audioManager) {
@@ -1033,7 +1256,7 @@ window.addEventListener('load', () => {
                     const bgMusic = document.getElementById('bg-music');
                     if (bgMusic) {
                         bgMusic.play().catch(err => {
-                            console.warn('Could not autoplay background music:', err);
+                            // Silent fail
                         });
                     }
                 }
@@ -1334,9 +1557,11 @@ window.addEventListener('load', () => {
             this.pendingJumps.push(jumpData);
             this.jumpTimestamps.push(jumpData.timestamp);
             
-            console.log(`🎮 Jump #${jumpData.jumpNumber} recorded for bundling`);
+            // Avoid excessive logging during gameplay
             
             // Notify parent of the jump for UI updates using safe function
+            // Optimization: Only send message every 5 jumps to reduce overhead
+            if (window.__jumpCount % 5 === 0 || window.__jumpCount <= 3) {
             sendMessageToParent({
                 type: 'JUMP_PERFORMED',
                 data: {
@@ -1344,6 +1569,7 @@ window.addEventListener('load', () => {
                     timestamp: jumpData.timestamp
                 }
             });
+            }
         }
 
         jump() {
@@ -1596,6 +1822,525 @@ window.addEventListener('load', () => {
             this.ctx.textAlign = 'center';
             this.ctx.fillText(`Score: ${Math.floor(this.score)}`, this.width / 2, 30);
         }
+
+        // Add the method to draw the revive menu
+        drawReviveMenu(context) {
+            // Draw a semi-transparent background
+            context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            context.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Draw the header - changed to be more attention-grabbing
+            context.fillStyle = 'white';
+            context.font = '50px Bangers, cursive';
+            context.textAlign = 'center';
+            context.fillText('REVIVE', this.canvas.width / 2, this.canvas.height / 2 - 100);
+
+            // If revive transaction is pending, show countdown
+            if (this.reviveTransactionPending) {
+                context.fillStyle = '#FFA500';
+                context.font = '40px Bangers, cursive';
+                
+                if (this.reviveCountdown > 0) {
+                    context.fillText(`REVIVING IN ${this.reviveCountdown} SECONDS...`, this.canvas.width / 2, this.canvas.height / 2);
+                } else {
+                    context.fillText(`TRANSACTION PENDING...`, this.canvas.width / 2, this.canvas.height / 2);
+                }
+                return;
+            }
+            
+            // Draw explanation - updated to the requested text
+            context.fillStyle = '#FFA500';
+            context.font = '28px Bangers, cursive';
+            context.fillText('WANT A SECOND CHANCE? REVIVE NOW!', this.canvas.width / 2, this.canvas.height / 2 - 30);
+            
+            // Draw buttons - updated layout for side-by-side buttons
+            // Buy Revive button - moved to left side
+            const reviveButton = {
+                x: this.canvas.width / 2 - 160,
+                y: this.canvas.height / 2 + 20,
+                width: 150,
+                height: 60,
+                text: 'REVIVE NOW'
+            };
+            
+            // Cancel button - moved to right side
+            const cancelButton = {
+                x: this.canvas.width / 2 + 10,
+                y: this.canvas.height / 2 + 20,
+                width: 150,
+                height: 60,
+                text: 'CANCEL'
+            };
+            
+            // Draw Buy Revive button
+            context.fillStyle = '#4CAF50'; // Green
+            context.beginPath();
+            context.roundRect(reviveButton.x, reviveButton.y, reviveButton.width, reviveButton.height, 10);
+            context.fill();
+            
+            // Draw main text
+            context.fillStyle = 'white';
+            context.font = '24px Bangers, cursive';
+            context.fillText(reviveButton.text, reviveButton.x + reviveButton.width/2, reviveButton.y + 25);
+            
+            // Draw the price in smaller text below
+            context.font = '16px Bangers, cursive';
+            context.fillText('0.5 MON', reviveButton.x + reviveButton.width/2, reviveButton.y + 45);
+            
+            // Draw Cancel button
+            context.fillStyle = '#f44336'; // Red
+            context.beginPath();
+            context.roundRect(cancelButton.x, cancelButton.y, cancelButton.width, cancelButton.height, 10);
+            context.fill();
+            
+            context.fillStyle = 'white';
+            context.font = '22px Bangers, cursive';
+            context.fillText(cancelButton.text, cancelButton.x + cancelButton.width/2, cancelButton.y + 35);
+            
+            // Store buttons for click handling
+            this.reviveButtons = {
+                buyRevive: reviveButton,
+                cancel: cancelButton
+            };
+        }
+
+        // Method to handle purchasing revives through blockchain
+        purchaseRevive() {
+            // Set flag to indicate we're waiting for the transaction
+            this.reviveTransactionPending = true;
+            
+            // Try to use blockchain methods from parent window if available
+            if (typeof window.purchaseRevive === 'function') {
+                try {
+                    console.log("Using direct window.purchaseRevive function");
+                    window.purchaseRevive(this.gameId);
+                    return;
+                } catch (error) {
+                    console.error("Direct revive purchase failed:", error);
+                    this.reviveTransactionPending = false;
+                }
+            }
+            
+            // Otherwise, try to call through parent window message passing
+            if (window !== window.parent) {
+                console.log("Falling back to parent window message approach");
+                
+                // Send a single message with all needed info - no separate registration message
+            sendMessageToParent({
+                type: 'PURCHASE_REVIVE',
+                contractAddress: this.reviveContractAddress,
+                    price: "0.5",
+                    gameId: this.gameId,
+                    timestamp: Date.now()
+            });
+            
+            // Listen for response from parent window
+            const handleReviveResponse = (event) => {
+                if (event.data?.type === 'REVIVE_TRANSACTION_RESULT') {
+                    if (event.data.success) {
+                        // Start countdown for revive
+                        this.startReviveCountdown();
+                    } else {
+                            // Show contract error message
+                        this.reviveTransactionPending = false;
+                            
+                            // Store the error message if provided
+                            this.reviveError = event.data.error || "Transaction failed";
+                            
+                            // Add debugging output for the error
+                            sendMessageToParent({
+                                type: 'DEBUG_LOG',
+                                message: `Revive failed: ${this.reviveError}`,
+                                data: {
+                                    gameId: this.gameId,
+                                    contractAddress: this.reviveContractAddress
+                                }
+                            });
+                            
+                            // Check if this is the "already used revive" error
+                            if (this.reviveError.includes("already used") || 
+                                this.reviveError.includes("Already used revive in this game")) {
+                                // Set a flag to show the admin reset message
+                                this.needsAdminReset = true;
+                            }
+                            
+                            // Show the revive error screen instead of immediately going to game over
+                            this.showingReviveErrorScreen = true;
+                    }
+                    
+                    // Remove event listener after handling response
+                    window.removeEventListener('message', handleReviveResponse);
+                }
+            };
+            
+            window.addEventListener('message', handleReviveResponse);
+            }
+        }
+
+        // Method to start the revive countdown
+        startReviveCountdown() {
+            this.reviveCountdown = 3;
+            
+            const countdownInterval = setInterval(() => {
+                this.reviveCountdown--;
+                
+                if (this.reviveCountdown <= 0) {
+                    clearInterval(countdownInterval);
+                    this.completeRevive();
+                }
+            }, 1000);
+        }
+
+        // Method to complete the revive process
+        completeRevive() {
+            // Mark that the player has used their revive
+            this.hasUsedRevive = true;
+            this.reviveTransactionPending = false;
+            this.showingReviveMenu = false;
+            
+            // Store revive usage in localStorage as an additional tracking method
+            try {
+                const gameRevives = JSON.parse(localStorage.getItem('gameRevives') || '{}');
+                gameRevives[this.gameId] = true;
+                localStorage.setItem('gameRevives', JSON.stringify(gameRevives));
+            } catch (e) {
+                // Silently fail if localStorage is not available
+            }
+            
+            // Inform parent window that revive was used for this game session
+            sendMessageToParent({
+                type: 'REVIVE_USED',
+                gameId: this.gameId,
+                timestamp: Date.now(),
+                finalJumpCount: window.__jumpCount || 0
+            });
+            
+            // Reset game state to continue
+            this.gameOver = false;
+            this.isGameOver = false;
+            
+            // Make sure there are enough platforms to jump on
+            const visiblePlatformsCount = this.platforms.filter(p => 
+                p.y > 0 && p.y < this.height).length;
+                
+            // If we don't have enough platforms, add more
+            if (visiblePlatformsCount < 5) {
+                this.add_platforms(this.height/2, this.height-15);
+                this.add_platforms(0, this.height/2);
+            }
+            
+            // Set player position to just before death
+            if (this.deathReason === "fall") {
+                // Find a suitable platform to place the player on
+                const platform = this.findSuitablePlatform();
+                if (platform) {
+                    // Place player on top of the platform
+                    this.player.x = platform.x + (platform.width / 2) - (this.player.width / 2);
+                    this.player.y = platform.y - this.player.height - 5;
+                } else {
+                    // Fallback if no platform found
+                this.player.y = this.height - this.player.height - 100;
+                }
+                // Give normal upward boost
+                this.player.vy = this.player.min_vy;
+            } else if (this.deathReason === "collision") {
+                // For collisions, move them to a safe position
+                const platform = this.findSuitablePlatform();
+                if (platform) {
+                    // Place player on top of the platform
+                    this.player.x = platform.x + (platform.width / 2) - (this.player.width / 2);
+                    this.player.y = platform.y - this.player.height - 5;
+                } else {
+                    // Fallback if no platform found
+                this.player.y = this.height - this.player.height - 100;
+                }
+                this.player.vy = this.player.min_vy;
+                // Remove enemies
+                this.enemies = [];
+            }
+            
+            // Play revival sound if available
+            if (window.audioManager && typeof window.audioManager.play === 'function') {
+                window.audioManager.play('powerUp', 0.7);
+            }
+        }
+        
+        // Helper method to find a suitable platform for the player after revival
+        findSuitablePlatform() {
+            // Get all visible platforms in the lower half of the screen
+            const visiblePlatforms = this.platforms.filter(p => 
+                p.y > this.height * 0.5 && 
+                p.y < this.height * 0.9 && 
+                p.type !== 'brown'); // Avoid broken platforms
+                
+            if (visiblePlatforms.length > 0) {
+                // Find a good platform - take the middle one for stability
+                const index = Math.floor(visiblePlatforms.length / 2);
+                return visiblePlatforms[index];
+            }
+            
+            // If no suitable platform, return null (will use fallback position)
+            return null;
+        }
+
+        // Add a method to manually check if revive was used in the current game
+        checkReviveUsage() {
+            // First, check our internal tracker
+            if (this.hasUsedRevive) {
+                return true;
+            }
+            
+            // Then check localStorage as backup
+            try {
+                const gameRevives = JSON.parse(localStorage.getItem('gameRevives') || '{}');
+                if (gameRevives[this.gameId]) {
+                    this.hasUsedRevive = true;
+                    return true;
+                }
+            } catch (e) {
+                // Silently fail if localStorage is not available
+            }
+            
+            return false;
+        }
+
+        // Add a method to draw the revive error screen
+        drawReviveErrorScreen(context) {
+            // Draw a semi-transparent background
+            context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            context.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Draw the header
+            context.fillStyle = 'white';
+            context.font = '45px Bangers, cursive';
+            context.textAlign = 'center';
+            context.fillText('REVIVE FAILED', this.canvas.width / 2, this.canvas.height / 2 - 100);
+            
+            // Draw explanation based on error type
+            if (this.needsAdminReset) {
+                // This is an "already used revive" error - explain the contract limitation
+                context.fillStyle = '#FFA500';
+                context.font = '22px Bangers, cursive';
+                context.fillText('YOU\'VE ALREADY USED A REVIVE', this.canvas.width / 2, this.canvas.height / 2 - 50);
+                
+                context.fillStyle = 'white';
+                context.font = '16px Arial, sans-serif';
+                context.fillText('The contract only allows one revive per wallet.', this.canvas.width / 2, this.canvas.height / 2 - 10);
+                context.fillText('Try the options below to reset your revive status.', this.canvas.width / 2, this.canvas.height / 2 + 15);
+                
+                // Add button to request admin reset
+                this.adminResetButton = {
+                    x: this.canvas.width / 2 - 120,
+                    y: this.canvas.height / 2 + 40,
+                    width: 240,
+                    height: 50,
+                    text: 'REQUEST ADMIN RESET'
+                };
+                
+                // Draw admin reset button
+                context.fillStyle = '#4CAF50'; // Green
+                context.beginPath();
+                context.roundRect(this.adminResetButton.x, this.adminResetButton.y, this.adminResetButton.width, this.adminResetButton.height, 10);
+                context.fill();
+                
+                context.fillStyle = 'white';
+                context.font = '20px Bangers, cursive';
+                context.fillText(this.adminResetButton.text, this.canvas.width / 2, this.adminResetButton.y + 33);
+                
+                // Add new button to try manual reset
+                this.manualResetButton = {
+                    x: this.canvas.width / 2 - 120,
+                    y: this.canvas.height / 2 + 100,
+                    width: 240,
+                    height: 50,
+                    text: 'TRY MANUAL RESET'
+                };
+                
+                // Draw manual reset button
+                context.fillStyle = '#2196F3'; // Blue
+                context.beginPath();
+                context.roundRect(this.manualResetButton.x, this.manualResetButton.y, this.manualResetButton.width, this.manualResetButton.height, 10);
+                context.fill();
+                
+                context.fillStyle = 'white';
+                context.font = '20px Bangers, cursive';
+                context.fillText(this.manualResetButton.text, this.canvas.width / 2, this.manualResetButton.y + 33);
+                
+                // Show message if a reset has been attempted
+                if (this.resetAttempted) {
+                    context.fillStyle = this.resetSuccess ? '#4CAF50' : '#FF5252';
+                    context.font = '16px Arial, sans-serif';
+                    context.fillText(
+                        this.resetSuccess ? 'Reset successful! Try reviving now.' : 'Reset attempt failed. Try again later.',
+                        this.canvas.width / 2, 
+                        this.canvas.height / 2 + 160
+                    );
+                }
+                
+                // Add continue button at the bottom
+                this.continueButton = {
+                    x: this.canvas.width / 2 - 120,
+                    y: this.canvas.height / 2 + 180,
+                    width: 240,
+                    height: 50,
+                    text: 'CONTINUE TO GAME OVER'
+                };
+            } else {
+                // Generic error
+                context.fillStyle = '#FFA500';
+                context.font = '24px Bangers, cursive';
+                context.fillText('TRANSACTION FAILED', this.canvas.width / 2, this.canvas.height / 2 - 50);
+                
+                // Show specific error if available
+                if (this.reviveError) {
+                    // Format the error message to fit on multiple lines if needed
+                    const maxWidth = this.canvas.width - 80;
+                    const errorLines = this.wrapText(context, this.reviveError, maxWidth, 18);
+                    
+                    context.fillStyle = 'white';
+                    context.font = '16px Arial, sans-serif';
+                    
+                    let yPosition = this.canvas.height / 2 - 10;
+                    errorLines.forEach(line => {
+                        context.fillText(line, this.canvas.width / 2, yPosition);
+                        yPosition += 25;
+                    });
+                }
+                
+                // Add continue button
+                this.continueButton = {
+                    x: this.canvas.width / 2 - 120,
+                    y: this.canvas.height / 2 + 100,
+                    width: 240,
+                    height: 50,
+                    text: 'CONTINUE TO GAME OVER'
+                };
+            }
+            
+            // Draw continue button
+            context.fillStyle = '#f44336'; // Red
+            context.beginPath();
+            context.roundRect(this.continueButton.x, this.continueButton.y, this.continueButton.width, this.continueButton.height, 10);
+            context.fill();
+            
+            context.fillStyle = 'white';
+            context.font = '20px Bangers, cursive';
+            context.fillText(this.continueButton.text, this.canvas.width / 2, this.continueButton.y + 33);
+        }
+
+        // Add a helper method to wrap text
+        wrapText(context, text, maxWidth, fontSize) {
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = words[0];
+            
+            context.font = `${fontSize}px Arial, sans-serif`;
+            
+            for (let i = 1; i < words.length; i++) {
+                const word = words[i];
+                const width = context.measureText(currentLine + ' ' + word).width;
+                if (width < maxWidth) {
+                    currentLine += ' ' + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            
+            lines.push(currentLine);
+            return lines;
+        }
+
+        // Add a method to request admin reset
+        requestAdminReset() {
+            // Send a message to the parent window requesting admin reset
+            sendMessageToParent({
+                type: 'REQUEST_ADMIN_REVIVE_RESET',
+                walletAddress: this.playerWalletAddress || '',
+                gameId: this.gameId,
+                timestamp: Date.now()
+            });
+            
+            // Show a confirmation message
+            this.adminResetRequested = true;
+            
+            // Redraw the screen
+            const ctx = this.canvas.getContext('2d');
+            this.drawReviveErrorScreen(ctx);
+        }
+
+        // Add a method to manually try reset
+        tryManualReset() {
+            // Show loading feedback
+            this.resetAttempted = true;
+            this.resetSuccess = false;
+            
+            // Send direct reset request with urgent flag
+            sendMessageToParent({
+                type: 'MANUAL_REVIVE_RESET',
+                walletAddress: this.playerWalletAddress,
+                contractAddress: this.reviveContractAddress,
+                gameId: this.gameId,
+                urgent: true, // Flag this as urgent/manual request
+                timestamp: Date.now()
+            });
+            
+            // Set a timeout to check if the reset was successful
+            setTimeout(() => {
+                // Send a message to check the revive status
+                sendMessageToParent({
+                    type: 'CHECK_REVIVE_STATUS',
+                    walletAddress: this.playerWalletAddress,
+                    contractAddress: this.reviveContractAddress
+                });
+            }, 5000); // Check after 5 seconds
+            
+            // Redraw the screen to show loading state
+            const ctx = this.canvas.getContext('2d');
+            this.drawReviveErrorScreen(ctx);
+        }
+
+        // Add a method to draw loading during direct purchase
+        drawDirectPurchaseLoading(context) {
+            // Only draw if direct purchase is in progress
+            if (!this.directPurchaseInProgress) return;
+            
+            // Draw a semi-transparent background
+            context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            context.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Draw the header
+            context.fillStyle = 'white';
+            context.font = '40px Bangers, cursive';
+            context.textAlign = 'center';
+            context.fillText('PROCESSING REVIVE', this.canvas.width / 2, this.canvas.height / 2 - 50);
+            
+            // Draw loading message
+            context.fillStyle = '#FFA500';
+            context.font = '20px Bangers, cursive';
+            context.fillText('PLEASE CONFIRM IN YOUR WALLET', this.canvas.width / 2, this.canvas.height / 2);
+            
+            // Draw spinner animation
+            const time = Date.now() / 1000;
+            const x = this.canvas.width / 2;
+            const y = this.canvas.height / 2 + 50;
+            const radius = 20;
+            
+            for (let i = 0; i < 8; i++) {
+                const angle = time * 2 + i * Math.PI / 4;
+                const dotX = x + Math.cos(angle) * radius;
+                const dotY = y + Math.sin(angle) * radius;
+                const alpha = 0.3 + 0.7 * Math.sin(time * 3 + i);
+                
+                context.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                context.beginPath();
+                context.arc(dotX, dotY, 5, 0, Math.PI * 2);
+                context.fill();
+            }
+            
+            // Request animation frame to continue animation
+            requestAnimationFrame(() => this.drawDirectPurchaseLoading(context));
+        }
     }
     
     const game = new Game(canvas.width,canvas.height)
@@ -1606,22 +2351,31 @@ window.addEventListener('load', () => {
     
     function animate(currentTime) {
         // Calculate delta time in seconds for consistent movement
-        const deltaTime = (currentTime - lastTime) / 1000; 
+        const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.05); // Cap at 50ms (20fps)
         lastTime = currentTime;
         
-        // Clear canvas
+        // Skip frame if delta is too small (improves performance on high refresh displays)
+        if (deltaTime < 0.004) { // Skip frames faster than ~250fps
+            requestAnimationFrame(animate);
+            return;
+        }
+        
+        // Clear canvas - only once per frame
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Update game if active
+        // Update game if active - avoid unnecessary condition checks
         if (game.gameStart && !game.gameOver) {
-            // Pass deltaTime but preserve original jump physics
+            try {
             game.update(deltaTime);
+            } catch (e) {
+                // Silent catch without logging to avoid perf issues
+            }
         }
         
         // Draw game
         game.draw(ctx);
         
-        // Continue the loop
+        // Continue the loop - use direct binding to avoid function creation on each frame
         requestAnimationFrame(animate);
     }
     
@@ -1644,7 +2398,7 @@ window.addEventListener('load', () => {
             } else {
                 window.totalJumps++;
             }
-            console.log(`Jump #${window.totalJumps} detected (will be bundled at game over)`);
+            // Remove console logging during gameplay
         }
     });
 
@@ -1888,6 +2642,8 @@ try {
     const game = getGame();
     if (!game) return;
     
+    // Only run checks if we're in a state where it matters
+    if (!jumpState.gameOverDetected && !jumpState.saveMessageSent) {
     // Check if game is over and jumps haven't been saved yet
     if (game.gameOver && !jumpState.gameOverDetected) {
       // Mark game over as detected to prevent multiple triggers
@@ -1898,23 +2654,19 @@ try {
       
       // Skip if the main game over message already sent a transaction
       if (game.gameOverMessageSent) {
-        console.log('🛑 Game already sent game over message - skipping duplicate transaction');
         return;
       }
       
       // Only send if the main game over didn't already send it
       if (jumps > 0 && !jumpState.saveMessageSent) {
-        console.log(`🎮 Game over detected with ${jumps} jumps - preparing to save...`);
-        
         // Add slight delay to ensure we only save once
         setTimeout(() => {
           // Double-check that the main game didn't send a transaction during our timeout
           if (!jumpState.saveMessageSent && !game.gameOverMessageSent) {
             sendJumpSaveMessage(jumps);
-          } else {
-            console.log('🛑 Jump save message already sent - preventing duplicate');
           }
         }, 1000);
+            }
       }
     }
     
@@ -1925,7 +2677,7 @@ try {
   }
   
   // Create a single interval for the monitor function
-  const monitorInterval = setInterval(monitorGameAndSaveJumps, 2000);
+  const monitorInterval = setInterval(monitorGameAndSaveJumps, 3000); // Changed from 2000ms to 3000ms
   
   // Store the interval ID globally so it won't be cleared accidentally
   window.JUMP_MONITOR_INTERVAL = monitorInterval;
@@ -2000,7 +2752,6 @@ class AudioManager {
             gameOver: 'sound effects/fall.mp3',
             powerUp: 'sound effects/spring.mp3',
             spring: 'sound effects/spring.mp3',
-            bgMusic: 'sound effects/bgmusic.mp3',
             virus: 'sound effects/virus.mp3',
             fall: 'sound effects/fall.mp3',
             bullet: 'sound effects/bullet.mp3',
@@ -2344,3 +3095,366 @@ function sendMessageToParent(messageData) {
         return false;
     }
 }
+
+// Add a utility function to directly call the revive contract from the window object
+window.directRevivePurchase = async function(contractAddress, gameId, price) {
+    try {
+        if (window.ethereum) {
+            // Get the current account
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            const account = accounts[0];
+            
+            // Get the web3 provider
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            const signer = provider.getSigner();
+            
+            // Create contract interface
+            const contractABI = [
+                {
+                    "inputs": [{"type": "string", "name": "gameId"}],
+                    "name": "purchaseRevive",
+                    "outputs": [],
+                    "stateMutability": "payable",
+                    "type": "function"
+                }
+            ];
+            
+            const contract = new ethers.Contract(contractAddress, contractABI, signer);
+            
+            // Calculate value in wei
+            const priceInWei = ethers.utils.parseEther(price.toString());
+            
+            // Call the contract directly
+            const tx = await contract.purchaseRevive(gameId, { value: priceInWei });
+            
+            // Wait for transaction to be mined
+            const receipt = await tx.wait();
+            
+            // Return success status
+            return {
+                success: true,
+                transactionHash: receipt.transactionHash
+            };
+        } else {
+            throw new Error("Ethereum provider not found");
+        }
+    } catch (error) {
+        console.error("Direct purchase error:", error);
+        return {
+            success: false,
+            error: error.message || "Transaction failed"
+        };
+    }
+};
+
+// Add ethers.js library loading at the end of the file
+(() => {
+    // Inject ethers.js library if it doesn't exist
+    if (!window.ethers) {
+        console.log("Adding ethers.js library for direct contract interaction");
+        const ethersScript = document.createElement('script');
+        ethersScript.src = 'https://cdn.ethers.io/lib/ethers-5.2.umd.min.js';
+        ethersScript.type = 'text/javascript';
+        document.head.appendChild(ethersScript);
+    }
+})();
+
+// Add a direct contract test overlay
+function addContractTestUI() {
+    // Create a container for the test interface
+    const testContainer = document.createElement('div');
+    testContainer.id = 'contract-test';
+    testContainer.style.position = 'fixed';
+    testContainer.style.top = '10px';
+    testContainer.style.right = '10px';
+    testContainer.style.padding = '10px';
+    testContainer.style.background = 'rgba(0,0,0,0.8)';
+    testContainer.style.borderRadius = '5px';
+    testContainer.style.color = 'white';
+    testContainer.style.fontFamily = 'Arial, sans-serif';
+    testContainer.style.fontSize = '12px';
+    testContainer.style.zIndex = '9999';
+    testContainer.style.maxWidth = '300px';
+    
+    // Add a title
+    const title = document.createElement('h3');
+    title.textContent = 'Contract Test Panel';
+    title.style.margin = '0 0 10px 0';
+    title.style.fontSize = '14px';
+    testContainer.appendChild(title);
+    
+    // Add contract address display
+    const addressDiv = document.createElement('div');
+    addressDiv.innerHTML = `<strong>Contract:</strong> <span id="contract-address">Loading...</span>`;
+    addressDiv.style.marginBottom = '5px';
+    testContainer.appendChild(addressDiv);
+    
+    // Add wallet address display
+    const walletDiv = document.createElement('div');
+    walletDiv.innerHTML = `<strong>Wallet:</strong> <span id="wallet-address">Loading...</span>`;
+    walletDiv.style.marginBottom = '5px';
+    testContainer.appendChild(walletDiv);
+    
+    // Add game ID display
+    const gameIdDiv = document.createElement('div');
+    gameIdDiv.innerHTML = `<strong>Game ID:</strong> <span id="game-id">Loading...</span>`;
+    gameIdDiv.style.marginBottom = '10px';
+    testContainer.appendChild(gameIdDiv);
+    
+    // Add test functions
+    const testFunctions = document.createElement('div');
+    testFunctions.style.display = 'flex';
+    testFunctions.style.flexDirection = 'column';
+    testFunctions.style.gap = '5px';
+    
+    // Start New Game button
+    const startGameBtn = document.createElement('button');
+    startGameBtn.textContent = 'Call startNewGame()';
+    startGameBtn.style.padding = '5px';
+    startGameBtn.style.cursor = 'pointer';
+    startGameBtn.onclick = testStartNewGame;
+    testFunctions.appendChild(startGameBtn);
+    
+    // Purchase Revive button
+    const reviveBtn = document.createElement('button');
+    reviveBtn.textContent = 'Call purchaseRevive() [0.5 MON]';
+    reviveBtn.style.padding = '5px';
+    reviveBtn.style.cursor = 'pointer';
+    reviveBtn.onclick = testPurchaseRevive;
+    testFunctions.appendChild(reviveBtn);
+    
+    // Check Status button
+    const checkBtn = document.createElement('button');
+    checkBtn.textContent = 'Call checkReviveStatus()';
+    checkBtn.style.padding = '5px';
+    checkBtn.style.cursor = 'pointer';
+    checkBtn.onclick = testCheckStatus;
+    testFunctions.appendChild(checkBtn);
+    
+    // Admin Reset button
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = 'Call resetReviveStatus() [Owner Only]';
+    resetBtn.style.padding = '5px';
+    resetBtn.style.cursor = 'pointer';
+    resetBtn.onclick = testResetStatus;
+    testFunctions.appendChild(resetBtn);
+    
+    testContainer.appendChild(testFunctions);
+    
+    // Add status display area
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'test-status';
+    statusDiv.style.marginTop = '10px';
+    statusDiv.style.padding = '5px';
+    statusDiv.style.background = 'rgba(0,0,0,0.5)';
+    statusDiv.style.borderRadius = '3px';
+    statusDiv.style.maxHeight = '100px';
+    statusDiv.style.overflowY = 'auto';
+    statusDiv.textContent = 'Ready';
+    testContainer.appendChild(statusDiv);
+    
+    // Add to document
+    document.body.appendChild(testContainer);
+    
+    // Update contract and wallet addresses
+    if (window.gameInstance) {
+        document.getElementById('contract-address').textContent = 
+            window.gameInstance.reviveContractAddress?.substring(0, 10) + '...';
+        document.getElementById('game-id').textContent = window.gameInstance.gameId || 'Unknown';
+    }
+    
+    // Wait for ethers to load and then set up Web3 connection
+    const ethersWaitInterval = setInterval(() => {
+        if (window.ethers) {
+            clearInterval(ethersWaitInterval);
+            setupWeb3();
+        }
+    }, 100);
+}
+
+// Set up Web3 connection for testing
+async function setupWeb3() {
+    try {
+        if (window.ethereum) {
+            // Connect to provider
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            window.testProvider = provider;
+            
+            // Request accounts
+            await ethereum.request({ method: 'eth_requestAccounts' });
+            const signer = provider.getSigner();
+            window.testSigner = signer;
+            
+            // Get and display address
+            const address = await signer.getAddress();
+            document.getElementById('wallet-address').textContent = address.substring(0, 10) + '...';
+            
+            // Create contract instance
+            if (window.gameInstance?.reviveContractAddress) {
+                const contractABI = [
+                    {
+                        "inputs": [{"type": "string", "name": "gameId"}],
+                        "name": "startNewGame",
+                        "outputs": [],
+                        "stateMutability": "nonpayable",
+                        "type": "function"
+                    },
+                    {
+                        "inputs": [{"type": "string", "name": "gameId"}],
+                        "name": "purchaseRevive",
+                        "outputs": [],
+                        "stateMutability": "payable",
+                        "type": "function"
+                    },
+                    {
+                        "inputs": [{"type": "address", "name": "player"}, {"type": "string", "name": "gameId"}],
+                        "name": "checkReviveStatus",
+                        "outputs": [{"type": "bool", "name": ""}],
+                        "stateMutability": "view",
+                        "type": "function"
+                    },
+                    {
+                        "inputs": [{"type": "address", "name": "player"}, {"type": "string", "name": "gameId"}],
+                        "name": "resetReviveStatus",
+                        "outputs": [],
+                        "stateMutability": "nonpayable",
+                        "type": "function"
+                    }
+                ];
+                
+                window.testContract = new ethers.Contract(
+                    window.gameInstance.reviveContractAddress,
+                    contractABI,
+                    signer
+                );
+                
+                updateTestStatus('Connected to contract');
+            }
+        } else {
+            updateTestStatus('No Ethereum provider found');
+        }
+    } catch (error) {
+        updateTestStatus('Error: ' + error.message);
+    }
+}
+
+// Test function: Start New Game
+async function testStartNewGame() {
+    try {
+        updateTestStatus('Starting new game...');
+        const gameId = window.gameInstance?.gameId || Date.now().toString();
+        document.getElementById('game-id').textContent = gameId;
+        
+        if (!window.testContract) throw new Error('Contract not initialized');
+        
+        // Call the startNewGame function
+        const tx = await window.testContract.startNewGame(gameId);
+        updateTestStatus('Transaction sent: ' + tx.hash);
+        
+        // Wait for confirmation
+        const receipt = await tx.wait();
+        updateTestStatus('New game started successfully! TX: ' + receipt.transactionHash);
+    } catch (error) {
+        console.error('Start new game error:', error);
+        updateTestStatus('Error: ' + error.message);
+    }
+}
+
+// Test function: Purchase Revive
+async function testPurchaseRevive() {
+    try {
+        updateTestStatus('Purchasing revive...');
+        const gameId = window.gameInstance?.gameId || document.getElementById('game-id').textContent;
+        
+        if (!window.testContract) throw new Error('Contract not initialized');
+        
+        // Call the purchaseRevive function
+        const priceInWei = ethers.utils.parseEther("0.5");
+        const tx = await window.testContract.purchaseRevive(gameId, {
+            value: priceInWei
+        });
+        updateTestStatus('Transaction sent: ' + tx.hash);
+        
+        // Wait for confirmation
+        const receipt = await tx.wait();
+        updateTestStatus('Revive purchased successfully! TX: ' + receipt.transactionHash);
+    } catch (error) {
+        console.error('Purchase revive error:', error);
+        updateTestStatus('Error: ' + error.message);
+    }
+}
+
+// Test function: Check Status
+async function testCheckStatus() {
+    try {
+        updateTestStatus('Checking revive status...');
+        const gameId = window.gameInstance?.gameId || document.getElementById('game-id').textContent;
+        
+        if (!window.testContract) throw new Error('Contract not initialized');
+        
+        // Get current wallet address
+        const address = await window.testSigner.getAddress();
+        
+        // Call the checkReviveStatus function
+        const hasUsed = await window.testContract.checkReviveStatus(address, gameId);
+        updateTestStatus(`Revive status for current game: ${hasUsed ? 'USED' : 'AVAILABLE'}`);
+    } catch (error) {
+        console.error('Check status error:', error);
+        updateTestStatus('Error: ' + error.message);
+    }
+}
+
+// Test function: Reset Status (admin only)
+async function testResetStatus() {
+    try {
+        updateTestStatus('Resetting revive status...');
+        const gameId = window.gameInstance?.gameId || document.getElementById('game-id').textContent;
+        
+        if (!window.testContract) throw new Error('Contract not initialized');
+        
+        // Get current wallet address
+        const address = await window.testSigner.getAddress();
+        
+        // Call the resetReviveStatus function
+        const tx = await window.testContract.resetReviveStatus(address, gameId);
+        updateTestStatus('Transaction sent: ' + tx.hash);
+        
+        // Wait for confirmation
+        const receipt = await tx.wait();
+        updateTestStatus('Revive status reset successfully! TX: ' + receipt.transactionHash);
+    } catch (error) {
+        console.error('Reset status error:', error);
+        updateTestStatus('Error: ' + error.message);
+    }
+}
+
+// Update status in the test UI
+function updateTestStatus(message) {
+    const statusDiv = document.getElementById('test-status');
+    if (statusDiv) {
+        statusDiv.textContent = message;
+    }
+    console.log('[Contract Test]', message);
+}
+
+// Initialize ethers.js and the test UI
+(() => {
+    // Load ethers.js if not already loaded
+    if (!window.ethers) {
+        console.log("Loading ethers.js for contract testing");
+        const ethersScript = document.createElement('script');
+        ethersScript.src = 'https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js';
+        ethersScript.type = 'text/javascript';
+        
+        // Wait for ethers to load before adding the test UI
+        ethersScript.onload = () => {
+            console.log("Ethers.js loaded successfully");
+            setTimeout(addContractTestUI, 500);
+        };
+        
+        document.head.appendChild(ethersScript);
+    } else {
+        // If ethers is already loaded, add the test UI directly
+        setTimeout(addContractTestUI, 500);
+    }
+})();
