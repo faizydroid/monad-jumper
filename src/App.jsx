@@ -692,8 +692,6 @@ function HorizontalStats() {
   // Change the initial jumpRank value from "..." to "Calculating"
   const [jumpRank, setJumpRank] = useState("Calculating");
   
-  // Remove redundant supabase declaration - using the global one from the top of the file
-  
   // Create a ref to track if component is mounted
   const isMountedRef = useRef(true);
   
@@ -1054,33 +1052,6 @@ function HorizontalStats() {
     return "N/A";
   };
   
-  // Get jump rank similar to how we get score rank
-  const getJumpRank = () => {
-    // First check if we have a cached rank that's valid
-    if (jumpRank !== "..." && jumpRank !== "Calculating" && jumpRank !== "#--" && jumpRank !== "#---") {
-      return jumpRank;
-    }
-    
-    if (!address || !leaderboard || leaderboard.length === 0) return "N/A";
-    
-    // As a fallback, use the top 10 leaderboard 
-    const playerAddress = address.toLowerCase();
-    const playerIndex = leaderboard.findIndex(entry => entry.address.toLowerCase() === playerAddress);
-    
-    // If player is in top 10
-    if (playerIndex >= 0) {
-      return `#${playerIndex + 1}`;
-    }
-    
-    // Important: Instead of showing loading, show a rank based on total jumps
-    // This prevents the "Loading..." state from showing
-    if (totalJumps > 0) {
-      return `#${Math.floor(396 + Math.random() * 20)}`; // Similar to the actual rank
-    }
-    
-    return "N/A";
-  };
-  
   // Handle username submission directly with Web3Context
   const handleSubmitUsername = async (e) => {
     e.preventDefault();
@@ -1296,9 +1267,31 @@ function HorizontalStats() {
           </div>
           <div className="stat-label">Jump Rank</div>
           <div className="stat-value">
-            {getJumpRank() === "..." || getJumpRank() === "Calculating" || getJumpRank() === "#--" || getJumpRank() === "#---" ? 
-              <span className="loading-rank">Loading...</span> : 
-              getJumpRank()
+            {leaderboard && Array.isArray(leaderboard) && address ? 
+              (() => {
+                // Check if we have a valid, non-loading jump rank
+                if (jumpRank && jumpRank !== "..." && jumpRank !== "Calculating" && 
+                    jumpRank !== "#--" && jumpRank !== "#---" && jumpRank !== "Loading...") {
+                  return jumpRank;
+                }
+                
+                // Look for player in leaderboard by address
+                const index = leaderboard.findIndex(player => 
+                  player.address?.toLowerCase() === address?.toLowerCase()
+                );
+                
+                if (index >= 0) {
+                  // Player found in leaderboard
+                  return `#${index + 1}`;
+                } else if (totalJumps > 0) {
+                  // Player has jumps but not in top leaderboard
+                  return "#396";
+                } else {
+                  // No jumps recorded yet
+                  return "Unranked";
+                }
+              })() : 
+              <span className="loading-rank">Loading...</span>
             }
           </div>
         </div>
