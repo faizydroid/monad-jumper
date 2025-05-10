@@ -4,7 +4,7 @@
   background: rgba(255, 255, 255, 0.25);
   backdrop-filter: blur(10px);
   border-radius: var(--card-radius);
-  padding: 15px;
+  padding: 5px 15px 15px 15px;
   box-shadow: var(--card-shadow);
   border: 3px solid rgba(255, 255, 255, 0.5);
   display: flex;
@@ -21,7 +21,7 @@
 
 .leaderboard-title {
   text-align: center;
-  margin: 0 0 15px;
+  margin: 0 0 10px;
   font-family: 'Bubblegum Sans', cursive;
   color: var(--dark);
   font-size: 1.5rem;
@@ -207,7 +207,7 @@
 /* Add styles for leaderboard tabs */
 .leaderboard-tabs {
   display: flex;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   gap: 8px;
   justify-content: center;
 }

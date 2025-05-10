@@ -53,7 +53,15 @@
 
 /* Make sure no container is hiding the background */
 .container, .mobile-container, .game-container {
-  background: transparent !important;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  position: relative;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 body {
@@ -248,12 +256,15 @@ body {
 /* New layout structure */
 .game-content {
   display: flex;
-  min-height: calc(100vh - 150px);
-  height: auto;
-  gap: 20px;
+  height: 100vh;
   width: 100%;
-  max-width: 1200px;
+  position: relative;
   margin: 0 auto;
+  overflow: hidden;
+  justify-content: space-between;
+  gap: 20px;
+  max-width: 1800px;
+  padding: 0 15px;
 }
 
 /* Center the main content */
@@ -273,12 +284,96 @@ body {
   width: 400px !important;
   min-width: 350px !important;
   height: 100%;
-  margin-top: -50px;
+  margin-top: 0px;
   padding: 20px;
   position: absolute !important; /* Position absolutely */
   right: 10px !important; /* Fixed right position */
-  top: 50px !important; /* From top */
+  top: 0px !important; /* From top */
   flex: none !important; /* Remove flex influence */
+  z-index: 5; /* Ensure proper stacking */
+}
+
+/* Responsive leaderboard sizing */
+@media (max-width: 1400px) {
+  .leaderboard-column {
+    width: 350px !important;
+    min-width: 320px !important;
+    right: 15px !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .leaderboard-column {
+    width: 300px !important;
+    min-width: 280px !important;
+    padding: 15px;
+  }
+  
+  .game-main {
+    max-width: calc(100% - 320px);
+  }
+  
+  /* Fix content alignment to prevent overlap */
+  .title, .subtitle, .character-container {
+    transform: translateX(-20px);
+  }
+}
+
+@media (max-width: 991px) {
+  .leaderboard-column {
+    width: 280px !important;
+    min-width: 260px !important;
+    right: 5px !important;
+    padding: 10px;
+  }
+  
+  .game-main {
+    max-width: calc(100% - 300px);
+  }
+}
+
+@media (max-width: 880px) {
+  /* Switch to vertical layout earlier to prevent overlap */
+  .game-content {
+    flex-direction: column;
+    height: auto;
+    min-height: auto;
+    padding: 0 10px;
+    gap: 25px; /* Increased gap between main content and leaderboard */
+  }
+  
+  .game-main {
+    width: 100%;
+    max-width: 600px;
+    margin-right: 0;
+    padding: 0;
+    /* Removed margin-bottom to use gap instead */
+  }
+  
+  .leaderboard-column {
+    position: relative !important;
+    width: 100% !important;
+    min-width: auto !important;
+    max-width: 600px !important;
+    margin: 0 auto 50px;
+  }
+  
+  /* Set explicit distance between components */
+  .stats-row {
+    margin-bottom: 30px;
+  }
+}
+
+@media (max-width: 768px) {
+  .leaderboard-column {
+    max-width: 450px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .leaderboard-column {
+    max-width: 320px !important;
+  }
 }
 
 /* Overriding the conflicting rule */
@@ -294,6 +389,50 @@ body {
   gap: 15px;
   margin: 20px auto 0;
   justify-content: center;
+  position: relative;
+}
+
+@media (max-width: 1400px) {
+  .stats-row {
+    max-width: 700px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .stats-row {
+    max-width: 650px;
+  }
+}
+
+@media (max-width: 991px) {
+  .stats-row {
+    max-width: 90%;
+    width: 90%;
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-row {
+    max-width: 450px;
+    width: 95%;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-row {
+    max-width: 320px;
+    width: 95%;
+  }
+  
+  /* Make stat items more compact */
+  .stat-item-horizontal {
+    padding: 5px;
+  }
+  
+  .stat-icon img {
+    width: 22px;
+    height: 22px;
+  }
 }
 
 /* Stats card in row format */
@@ -309,6 +448,8 @@ body {
   overflow: hidden;
   position: relative;
   left: calc(-175px / 2); /* Half of the previous offset */
+  width: 100%;
+  max-width: 800px;
 }
 
 .card-badge {
@@ -381,15 +522,74 @@ body {
   letter-spacing: 1px;
 }
 
+@media (max-width: 1400px) {
+  .stats-card-horizontal {
+    max-width: 700px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .stats-card-horizontal {
+    max-width: 650px;
+    padding: 20px 15px 15px;
+  }
+  
+  .stats-grid-horizontal {
+    gap: 12px;
+  }
+  
+  .stat-value {
+    font-size: 1.3rem;
+  }
+}
+
+@media (max-width: 991px) {
+  .stats-card-horizontal {
+    max-width: 100%;
+    width: 90%;
+    padding: 18px 12px 12px;
+  }
+  
+  .stats-grid-horizontal {
+    gap: 10px;
+  }
+  
+  .stat-value {
+    font-size: 1.2rem;
+  }
+  
+  .stat-label {
+    font-size: 0.75rem;
+  }
+}
+
 @media (max-width: 768px) {
+  .stats-card-horizontal {
+    width: 95%;
+    max-width: 450px;
+    padding: 15px 10px 10px;
+  }
+  
   .stats-grid-horizontal {
     grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  
+  .card-badge {
+    font-size: 1rem;
+    padding: 4px 12px;
   }
 }
 
 @media (max-width: 480px) {
+  .stats-card-horizontal {
+    width: 95%;
+    max-width: 320px;
+  }
+  
   .stats-grid-horizontal {
     grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
   }
 }
 
@@ -622,6 +822,13 @@ body {
   font-size: 28px !important;
 }
 
+.play-button .play-text {
+  font-family: 'Bangers', cursive !important;
+  font-weight: bold !important;
+  letter-spacing: 1px !important;
+  font-size: 32px !important;
+}
+
 /* Enhanced Mint Button */
 .mint-to-play-button {
   height: 60px !important;
@@ -804,31 +1011,53 @@ body {
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
+  .container, .mobile-container, .game-container {
+    padding: 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  
   .game-content {
     flex-direction: column;
     height: auto;
-    gap: 15px;
+    min-height: auto;
+    padding: 0 10px;
+    gap: 25px; /* Increased gap between main content and leaderboard */
+  }
+  
+  .game-main {
+    width: 100%;
+    max-width: 600px;
+    margin-right: 0;
+    padding: 0;
+    /* Removed margin-bottom to use gap instead */
   }
   
   .leaderboard-column {
-    width: 100%;
-    height: auto;
-    max-height: 35vh;
+    position: relative !important;
+    width: 100% !important;
+    min-width: auto !important;
+    max-width: 600px !important;
+    margin: 0 auto 50px;
   }
   
   .stats-card-horizontal {
+    position: relative;
+    left: 0;
     flex-direction: column;
     padding: 15px 10px;
+    width: 100%;
+    max-width: 100%;
   }
   
   .stats-grid-horizontal {
+    grid-template-columns: repeat(3, 1fr);
     flex-wrap: wrap;
     gap: 10px;
     margin-top: 10px;
   }
   
   .stat-item-horizontal {
-    min-width: calc(50% - 5px);
     padding: 8px;
   }
   
@@ -839,15 +1068,32 @@ body {
   
   .title {
     font-size: 2.5rem;
+    transform: none;
+    left: 0;
   }
   
   .subtitle {
     font-size: 1rem;
+    left: 0;
   }
   
   .play-button, .mint-to-play-button {
+    position: static !important;
+    transform: none !important;
+    animation: none !important;
     padding: 15px 40px;
     font-size: 1.3rem;
+    margin: 15px auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid-horizontal {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .game-main {
+    margin-bottom: 500px; /* More space for leaderboard on very small screens */
   }
 }
 
@@ -2168,6 +2414,7 @@ iframe.game-frame {
 /* Connect container */
 .connect-container {
   margin: 2rem 0;
+   font-family: 'Bangers', cursive;
   padding: 1.5rem;
   background-color: rgba(69, 39, 160, 0.4);
   border-radius: 16px;
@@ -2718,22 +2965,18 @@ button[contains="MINT TO PLAY"],
 .play-button {
   position: relative;
   margin: 15px auto;
-  left: 0;
+  z-index: 10;
+  transform: translateX(-90px);
   animation: button-move 3s ease-in-out infinite;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 /* Also center mint button if needed */
 .mint-to-play-button {
   position: relative;
   margin: 15px auto;
-  left: 0;
+  z-index: 10;
+  transform: translateX(-90px);
   animation: button-move 3s ease-in-out infinite;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 /* Add this animation for the play button */
@@ -2788,4 +3031,286 @@ button[contains="MINT TO PLAY"],
 .home-button, #home-button, button[class*="home"] {
   position: relative;
   z-index: 20 !important;
+}
+
+@media (max-width: 1200px) {
+  .game-main {
+    left: 0;
+    padding: 0 10px;
+  }
+  
+  .title {
+    left: 0;
+    font-size: 4rem;
+  }
+  
+  .subtitle {
+    left: 0;
+    font-size: 1.2rem;
+  }
+  
+  .character-container {
+    left: 0;
+  }
+  
+  .stats-card-horizontal {
+    left: 0;
+  }
+  
+  .play-button {
+    animation: none !important;
+    transform: none !important;
+  }
+  
+  .mint-to-play-button {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 991px) {
+  .leaderboard-column {
+    width: 320px !important;
+    min-width: 320px !important;
+    right: 5px !important;
+    padding: 15px;
+  }
+  
+  /* Adjust main content to make room for leaderboard */
+  .game-main {
+    max-width: calc(100% - 340px);
+    margin-right: auto;
+    margin-left: 10px;
+  }
+  
+  /* Ensure play button is centered in the available space */
+  .play-button, .mint-to-play-button {
+    margin-left: auto;
+    margin-right: auto;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+  }
+  
+  /* Fix main game elements centering */
+  .title, .subtitle, .character-container {
+    width: 100%;
+    text-align: center;
+    left: 0;
+  }
+  
+  /* Adjust stats card to fit in available space */
+  .stats-card-horizontal {
+    width: 100%;
+    left: 0;
+  }
+  
+  /* Reduce size of stats items slightly */
+  .stat-item-horizontal {
+    padding: 8px 5px;
+  }
+  
+  .stat-value {
+    font-size: 1.3rem;
+  }
+}
+
+@media (max-width: 900px) {
+  /* Further adjust for medium-small screens */
+  .game-main {
+    max-width: calc(100% - 330px);
+  }
+  
+  .leaderboard-column {
+    width: 300px !important;
+    min-width: 300px !important;
+  }
+  
+  /* Make stats more compact */
+  .stats-grid-horizontal {
+    gap: 10px;
+  }
+  
+  /* Adjust character size */
+  .character {
+    width: 100px;
+    height: 140px;
+  }
+}
+
+/* Additional styles for the left navigation */
+@media (max-width: 768px) {
+  /* Adjust left nav buttons */
+  [class*="nav-button"], 
+  .home-button, 
+  button[class*="nav"], 
+  button[class*="home"],
+  a[class*="nav-item"] {
+    padding: 10px 15px !important;
+    font-size: 0.9rem !important;
+    margin: 5px 0 !important;
+  }
+  
+  /* Fix player score display */
+  .player-score, 
+  .score-display,
+  .wallet-status,
+  .top-status {
+    font-size: 0.85rem !important;
+    padding: 8px 12px !important;
+  }
+  
+  /* Make sure side menu doesn't overflow */
+  .side-menu, 
+  .left-nav,
+  .side-navigation {
+    width: auto !important;
+    min-width: auto !important;
+    max-width: 80px !important;
+  }
+  
+  /* Adjust game-content to account for side nav */
+  .game-content {
+    padding-left: 85px;
+    box-sizing: border-box;
+  }
+}
+
+/* Fix potential z-index issues causing elements to be hidden */
+.play-button, .mint-to-play-button {
+  z-index: 10 !important;
+}
+
+.character-container {
+  z-index: 9 !important;
+}
+
+.leaderboard-column {
+  z-index: 8 !important;
+}
+
+.stats-card-horizontal {
+  z-index: 7 !important;
+}
+
+/* Ensure the body allows scrolling on mobile */
+@media (max-width: 480px) {
+  html, body, #root, .app {
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh !important;
+  }
+  
+  .container {
+    min-height: 100vh !important;
+    height: auto !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Ensure stats don't get too small */
+  .stat-label {
+    font-size: 0.7rem !important;
+  }
+  
+  .stat-value {
+    font-size: 1.1rem !important;
+  }
+  
+  /* Address any overlap issues with wallet display */
+  .wallet-status,
+  .wallet-connect,
+  .wallet-address {
+    right: 5px !important;
+    top: 5px !important;
+    font-size: 0.75rem !important;
+    padding: 5px 8px !important;
+  }
+  
+  /* Make sure everything centers properly */
+  .title, .subtitle, .character-container, .stats-row {
+    left: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Add these styles after the existing stat-item styles */
+
+/* Additional responsive styles for stat items */
+@media (max-width: 1200px) {
+  .stat-item-horizontal {
+    padding: 8px;
+  }
+  
+  .stat-icon {
+    margin-bottom: 3px;
+  }
+  
+  .stat-label {
+    margin-bottom: 3px;
+  }
+}
+
+@media (max-width: 991px) {
+  .stat-item-horizontal {
+    padding: 6px;
+  }
+  
+  .stat-icon img {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .stat-value {
+    font-size: 1.2rem;
+    letter-spacing: 0.5px;
+  }
+}
+
+@media (max-width: 768px) {
+  .stat-item-horizontal {
+    padding: 5px;
+    min-height: 75px;
+    justify-content: center;
+  }
+  
+  .stat-icon {
+    margin-bottom: 2px;
+  }
+  
+  .stat-icon img {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .stat-label {
+    font-size: 0.7rem;
+    margin-bottom: 2px;
+  }
+  
+  .stat-value {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-item-horizontal {
+    padding: 4px;
+    min-height: 70px;
+  }
+  
+  .stat-icon img {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .stat-label {
+    font-size: 0.65rem;
+    margin-bottom: 1px;
+  }
+  
+  .stat-value {
+    font-size: 1rem;
+  }
 }
