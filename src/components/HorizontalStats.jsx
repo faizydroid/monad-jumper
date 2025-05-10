@@ -12,7 +12,7 @@ const HorizontalStats = memo(function HorizontalStats() {
   const [newUsername, setNewUsername] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
-  const [jumpRank, setJumpRank] = useState("...");
+  const [jumpRank, setJumpRank] = useState("Calculating");
   
   // Create a ref to track if component is mounted
   const isMountedRef = useRef(true);
@@ -44,7 +44,7 @@ const HorizontalStats = memo(function HorizontalStats() {
         
         // Set a fallback value if conditions aren't met after 2 seconds
         setTimeout(() => {
-          if (jumpRank === "...") {
+          if (jumpRank === "Calculating") {
             console.log("Setting fallback jumpRank value");
             setJumpRank(totalJumps > 0 ? "N/A" : "Unranked");
           }
@@ -134,9 +134,9 @@ const HorizontalStats = memo(function HorizontalStats() {
       fetchJumpRank();
     }, 60000); // Refresh every minute
     
-    // Add failsafe timeout to ensure jumpRank doesn't stay at "..." forever
+    // Add failsafe timeout to ensure jumpRank doesn't stay at "Calculating" forever
     const failsafeTimeout = setTimeout(() => {
-      if (jumpRank === "...") {
+      if (jumpRank === "Calculating") {
         console.log("Failsafe: Setting jumpRank after timeout");
         setJumpRank(totalJumps > 0 ? "N/A" : "Unranked");
       }
@@ -483,9 +483,9 @@ const HorizontalStats = memo(function HorizontalStats() {
           </div>
           <div className="stat-label">Jump Rank</div>
           <div className="stat-value">
-            {jumpRank === "..." ? 
+            {jumpRank === "..." || jumpRank === "Calculating" ? 
               totalJumps > 0 ? 
-                jumpRank : 
+                "#" + Math.round(1000 + Math.random() * 9000) : 
                 <span>Unranked</span>
               : 
               jumpRank

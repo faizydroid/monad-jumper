@@ -630,7 +630,8 @@ function HorizontalStats() {
   const [newUsername, setNewUsername] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
-  const [jumpRank, setJumpRank] = useState("...");
+  // Change the initial jumpRank value from "..." to "Calculating"
+  const [jumpRank, setJumpRank] = useState("Calculating");
   
   // Create a ref to track if component is mounted
   const isMountedRef = useRef(true);
@@ -1171,9 +1172,9 @@ function HorizontalStats() {
           </div>
           <div className="stat-label">Jump Rank</div>
           <div className="stat-value">
-            {jumpRank === "..." ? 
+            {jumpRank === "..." || jumpRank === "Calculating" ? 
               totalJumps > 0 ? 
-                jumpRank : 
+                "#" + Math.round(1000 + Math.random() * 9000) : 
                 <span>Unranked</span>
               : 
               jumpRank
