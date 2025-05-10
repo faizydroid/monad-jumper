@@ -1340,10 +1340,21 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           // Create a unique transaction key
           const txKey = `game_over_${this.gameId}_${address}_${this.finalScore}_${this.jumps}`;
           
-          if (!window.__GLOBAL_TX_SYSTEM.canSendTransaction(txKey)) {
-            console.log(`🔒 Game over transaction blocked: ${txKey}`);
-            this.isProcessing = false;
-            return false;
+          // IMPORTANT CHANGE: Force allow transaction after revive
+          if (window.__GLOBAL_TX_SYSTEM) {
+            // Force reset the lock to ensure we can send a transaction
+            window.__GLOBAL_TX_SYSTEM.pendingLock = false;
+            
+            // Also clear any active transactions for this game ID
+            const gameIdPrefix = `game_over_${this.gameId}`;
+            window.__GLOBAL_TX_SYSTEM.activeTransactions.forEach(key => {
+              if (key.startsWith(gameIdPrefix)) {
+                console.log(`🔓 Clearing active transaction lock for ${key}`);
+                window.__GLOBAL_TX_SYSTEM.activeTransactions.delete(key);
+              }
+            });
+            
+            console.log(`🔓 Transaction locks cleared for post-revive processing`);
           }
           
           // Process the blockchain transaction
@@ -2651,6 +2662,21 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 // Store the current game ID globally to prevent separate score transaction
                 window.__currentGameId = gameSessionId;
                 
+                // IMPORTANT: Force remove any transaction locks
+                if (window.__GLOBAL_TX_SYSTEM) {
+                  window.__GLOBAL_TX_SYSTEM.pendingLock = false;
+                  
+                  // Clear any active transactions for this game ID
+                  const gameIdPrefix = `jumps_${gameSessionId}`;
+                  window.__GLOBAL_TX_SYSTEM.activeTransactions.forEach(key => {
+                    if (key.startsWith(gameIdPrefix)) {
+                      window.__GLOBAL_TX_SYSTEM.activeTransactions.delete(key);
+                    }
+                  });
+                  
+                  console.log(`🔓 Forced transaction locks cleared for revive cancellation flow`);
+                }
+                
                 // BUNDLE SCORE AND JUMPS IN ONE TRANSACTION
                 const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547'; // Use your actual contract address
                 const jumpAbi = [
@@ -2758,26 +2784,68 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                             !window.__GLOBAL_TX_SYSTEM.txHistory.has(txKey) &&
                             !window.__GLOBAL_TX_SYSTEM.pendingLock;
           
-          console.log(`🔍 GAME_OVER - Check if can record jumps: ${canProceed ? 'YES' : 'NO'} (txKey: ${txKey})`);
+          // IMPORTANT FIX: Force clear transaction locks for game over
+          if (window.__GLOBAL_TX_SYSTEM) {
+            window.__GLOBAL_TX_SYSTEM.pendingLock = false;
+            console.log("🔓 Forced transaction lock cleared for game over");
+          }
+          
+          console.log(`🔍 GAME_OVER - Will record jumps (Force enabled) (txKey: ${txKey})`);
           
           // Use the centralized function to record jumps - will handle deduplication
           if (jumpCount > 0 && canProceed) {
             try {
-              // Use global system to process transaction - this will prevent duplicates
-              await recordPlayerJumps(jumpCount, gameSessionId, 'GAME_OVER');
+              // Use our queue system instead of direct transaction
+              if (window.__GAME_TX_QUEUE) {
+                // Reset the queue to ensure we're starting fresh
+                window.__GAME_TX_QUEUE.reset();
+                
+                // Queue up the jumps and score
+                window.__GAME_TX_QUEUE.queueJumps(jumpCount, gameSessionId);
+                window.__GAME_TX_QUEUE.queueScore(finalScore, gameSessionId);
+                
+                console.log(`📊 Queued ${jumpCount} jumps and score ${finalScore} for processing`);
+                
+                // Process the queue right away
+                const success = await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
+                
+                if (success) {
+                  console.log(`✅ Successfully processed game over transaction via queue`);
+                } else {
+                  // Fall back to direct method if queue fails
+                  console.log(`⚠️ Queue processing failed, trying direct transaction...`);
+                  await recordPlayerJumps(jumpCount, gameSessionId, 'GAME_OVER');
+                }
+              } else {
+                // Use global system as fallback
+                await recordPlayerJumps(jumpCount, gameSessionId, 'GAME_OVER');
+              }
             } catch (error) {
               console.error('Error recording jumps at game over:', error);
+            } finally {
+              // Always show play again button regardless of transaction status
+              setShowPlayAgain(true);
+              
+              // Call onGameOver even if transaction fails
+              if (onGameOver && typeof onGameOver === 'function') {
+                try {
+                  onGameOver(finalScore);
+                } catch (err) {
+                  console.error('Error in onGameOver handler:', err);
+                }
+              }
             }
           } else {
-            console.log(`⏭️ Skipping jump recording - System check failed or pending transaction exists`);
-          }
-          
-          // Call the handler from props or context
-          if (onGameOver && typeof onGameOver === 'function') {
-            try {
-              onGameOver(finalScore);
-            } catch (err) {
-              console.error('Error in onGameOver handler:', err);
+            console.log(`⏭️ No jumps to record`);
+            setShowPlayAgain(true);
+            
+            // Call onGameOver if no jumps to record
+            if (onGameOver && typeof onGameOver === 'function') {
+              try {
+                onGameOver(finalScore);
+              } catch (err) {
+                console.error('Error in onGameOver handler:', err);
+              }
             }
           }
         } else if (data.type === 'GAME_RELOAD_CLICKED') {
