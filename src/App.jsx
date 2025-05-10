@@ -1556,9 +1556,69 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
   }
   
+  // Add this to the global transaction tracking system at the top of the file
+  if (typeof window !== 'undefined') {
+    // Add global jump accumulator
+    window.__GLOBAL_JUMP_ACCUMULATOR = {
+      totalJumps: 0,
+      pendingJumps: 0,
+      sessionJumps: {},
+      
+      // Add jumps to the accumulator
+      addJumps: function(count, sessionId) {
+        if (!count || count <= 0) return;
+        
+        // Track total jumps
+        this.totalJumps += count;
+        this.pendingJumps += count;
+        
+        // Track per-session jumps
+        if (sessionId) {
+          if (!this.sessionJumps[sessionId]) {
+            this.sessionJumps[sessionId] = 0;
+          }
+          this.sessionJumps[sessionId] += count;
+        }
+        
+        console.log(`📊 Added ${count} jumps to accumulator (total: ${this.totalJumps}, pending: ${this.pendingJumps})`);
+      },
+      
+      // Get all pending jumps and mark them as processed
+      getPendingJumps: function() {
+        const pending = this.pendingJumps;
+        this.pendingJumps = 0;
+        return pending;
+      },
+      
+      // Get jumps for a specific session
+      getSessionJumps: function(sessionId) {
+        return sessionId ? (this.sessionJumps[sessionId] || 0) : 0;
+      },
+      
+      // Clear session jumps after processing
+      clearSessionJumps: function(sessionId) {
+        if (sessionId && this.sessionJumps[sessionId]) {
+          delete this.sessionJumps[sessionId];
+        }
+      },
+      
+      // Reset the accumulator
+      reset: function() {
+        this.totalJumps = 0;
+        this.pendingJumps = 0;
+        this.sessionJumps = {};
+      }
+    };
+  }
+  
   // Now modify the recordPlayerJumps function to queue jumps instead of sending immediately
   const recordPlayerJumps = useCallback(async (jumpCount, jumpGameId, source = "unknown") => {
     if (!address || !jumpCount || jumpCount <= 0) return false;
+    
+    // CRITICAL FIX: Always add jumps to the global accumulator
+    if (window.__GLOBAL_JUMP_ACCUMULATOR) {
+      window.__GLOBAL_JUMP_ACCUMULATOR.addJumps(jumpCount, jumpGameId);
+    }
     
     // Create a unique transaction key for logging
     const sessionId = jumpGameId || gameId || window.__currentGameSessionId || Date.now().toString();
@@ -1752,11 +1812,33 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Add this function inside the GameComponent before the useEffect that contains setupGameCommands
   const recordScoreAndJumpsInOneTx = useCallback(async (finalScore, jumpCount, gameSessionId) => {
     if (!address || !walletClient || !publicClient) return false;
-    if (jumpCount <= 0) return false;
+    
+    // CRITICAL FIX: Get jump count from accumulator if available
+    let effectiveJumpCount = jumpCount;
+    if (window.__GLOBAL_JUMP_ACCUMULATOR) {
+      // Get session-specific jumps if available
+      const sessionJumps = window.__GLOBAL_JUMP_ACCUMULATOR.getSessionJumps(gameSessionId);
+      if (sessionJumps > 0) {
+        console.log(`📊 Using ${sessionJumps} jumps from accumulator for session ${gameSessionId} (instead of ${jumpCount})`);
+        effectiveJumpCount = sessionJumps;
+      } else {
+        // Otherwise use all pending jumps
+        const pendingJumps = window.__GLOBAL_JUMP_ACCUMULATOR.getPendingJumps();
+        if (pendingJumps > 0) {
+          console.log(`📊 Using ${pendingJumps} pending jumps from accumulator (instead of ${jumpCount})`);
+          effectiveJumpCount = pendingJumps;
+        }
+      }
+    }
+    
+    if (effectiveJumpCount <= 0) {
+      console.log(`⚠️ No jumps to record (original: ${jumpCount}, effective: ${effectiveJumpCount})`);
+      return false;
+    }
     
     // Create a unique transaction key for deduplication
     const sessionId = gameSessionId || gameId || Date.now().toString();
-    const txKey = `game_over_${sessionId}_${address}_${finalScore}_${jumpCount}`;
+    const txKey = `game_over_${sessionId}_${address}_${finalScore}_${effectiveJumpCount}`;
     
     // Always set the flag to prevent duplicate transactions
     window.__gameOverTransactionSent = true;
@@ -1778,13 +1860,13 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       console.log(`🔓 Transaction locks cleared for post-revive processing`);
     }
     
-    console.log(`🚀 Processing game over: Score=${finalScore}, Jumps=${jumpCount}`);
+    console.log(`🚀 Processing game over: Score=${finalScore}, Jumps=${effectiveJumpCount}`);
     
     try {
       setTransactionPending(true);
       
       // Process all queued jumps plus any new ones from this call
-      window.__GAME_TX_QUEUE.queueJumps(jumpCount, sessionId);
+      window.__GAME_TX_QUEUE.queueJumps(effectiveJumpCount, sessionId);
       window.__GAME_TX_QUEUE.queueScore(finalScore, sessionId);
       
       // Process the queue - THIS IS THE ONLY TRANSACTION WE'LL SEND
@@ -1792,6 +1874,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       
       if (success) {
         console.log('✅ Successfully processed all queued transactions in a single transaction');
+        
+        // Clear the processed jumps from the accumulator
+        if (window.__GLOBAL_JUMP_ACCUMULATOR) {
+          window.__GLOBAL_JUMP_ACCUMULATOR.clearSessionJumps(sessionId);
+        }
       } else {
         console.error('❌ Failed to process transaction queue - will NOT try again to avoid duplicate transactions');
       }
@@ -1953,15 +2040,20 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             },
             onJump: async (platformType) => {
               try {
-                  // Increment the local jump counter without blockchain transactions
+                // Increment the local jump counter without blockchain transactions
                 window.__jumpCount = (window.__jumpCount || 0) + 1;
-                  
-                  // Queue jump in transaction system but don't send during gameplay
-                  // This is where we ensure no transactions are sent during gameplay
-                  if (window.__GAME_TX_QUEUE) {
-                    // Uncomment to queue jumps in real-time - we're not doing this to avoid ANY blockchain calls during gameplay
-                    // window.__GAME_TX_QUEUE.queueJumps(1, gameId); 
-                  }
+                
+                // CRITICAL FIX: Always add jumps to the global accumulator
+                if (window.__GLOBAL_JUMP_ACCUMULATOR) {
+                  window.__GLOBAL_JUMP_ACCUMULATOR.addJumps(1, window.__currentGameSessionId || gameId);
+                }
+                
+                // Queue jump in transaction system but don't send during gameplay
+                // This is where we ensure no transactions are sent during gameplay
+                if (window.__GAME_TX_QUEUE) {
+                  // Uncomment to queue jumps in real-time - we're not doing this to avoid ANY blockchain calls during gameplay
+                  // window.__GAME_TX_QUEUE.queueJumps(1, gameId); 
+                }
                 
                 return true; // Always return true to keep the game going
               } catch (error) {
@@ -2976,7 +3068,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             },
             onJump: async (platformType) => {
               try {
-                  // Increment the local jump counter without blockchain transactions
+                // Increment the local jump counter without blockchain transactions
                 window.__jumpCount = (window.__jumpCount || 0) + 1;
                 
                 // Only queue jumps, don't send transactions during gameplay
