@@ -27,6 +27,7 @@ import { FaXTwitter, FaDiscord } from "react-icons/fa6";
 import { monadTestnet } from './config/chains';
 // Import the utility functions
 import { debounce, fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelpers.utils';
+import MobileGameView from './components/MobileGameView';
 
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
@@ -2339,17 +2340,25 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
 
   // Detect mobile view on component mount and window resize
   const detectMobile = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   };
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobileView(window.innerWidth <= 768 || detectMobile());
+      setIsMobileView(detectMobile());
     };
     
+    // Check immediately
     checkMobile();
+    
+    // Listen for resize and orientation changes 
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener('orientationchange', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', checkMobile);
+    };
   }, []);
 
   // Remove all duplicates and just keep this version
@@ -3764,115 +3773,135 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Game is showing
   return (
     <div className="app">
-      <div className="game-container" style={{ width: '100vw', maxWidth: '100%', margin: '0', padding: '0', overflow: 'hidden', position: 'absolute', left: '0', right: '0' }}>
-        {/* Wrapper div with background image */}
-        <div className="iframe-background" style={{ width: '100vw', position: 'relative' }}>
-          {/* Add a loading overlay that shows when iframe is loading */}
-          {isLoading && (
+      {isMobileView ? (
+        <MobileGameView 
+          gameId={gameId}
+          iframeRef={iframeRef}
+          onJump={(jumpCount) => {
+            if (window.__JUMP_TRACKER) {
+              window.__JUMP_TRACKER.recordJumps(jumpCount, gameId);
+            }
+          }}
+          onScore={(score) => {
+            setGameScore(score);
+          }}
+          onGameOver={(finalScore) => handleGameOver(finalScore)}
+          onBackToHome={() => {
+            setShowGame(false);
+            window.location.hash = '';
+          }}
+        />
+      ) : (
+        <div className="game-container" style={{ width: '100vw', maxWidth: '100%', margin: '0', padding: '0', overflow: 'hidden', position: 'absolute', left: '0', right: '0' }}>
+          {/* Desktop game view remains unchanged */}
+          <div className="iframe-background" style={{ width: '100vw', position: 'relative' }}>
+            {/* Add a loading overlay that shows when iframe is loading */}
+            {isLoading && (
+              <div 
+                className="game-loading-overlay"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(0,0,0,0.7)',
+                  zIndex: 10,
+                  padding: '20px',
+                  textAlign: 'center'
+                }}
+              >
+                <h2 style={{ color: 'white', marginBottom: '20px' }}>Loading Game...</h2>
+                <div 
+                  className="loading-spinner"
+                  style={{
+                    width: '50px',
+                    height: '50px',
+                    border: '5px solid rgba(255,255,255,0.2)',
+                    borderTop: '5px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }}
+                ></div>
+                <p style={{ color: 'white', marginTop: '20px' }}>
+                  {getRandomTip()}
+                </p>
+              </div>
+            )}
+            
+            {/* Error fallback if iframe fails to load */}
             <div 
-              className="game-loading-overlay"
+              id="iframe-error-fallback"
               style={{
+                display: 'none',
                 position: 'absolute',
                 top: 0,
                 left: 0,
                 width: '100%',
                 height: '100%',
-                display: 'flex',
+                background: 'rgba(0,0,0,0.8)',
+                zIndex: 5,
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'rgba(0,0,0,0.7)',
-                zIndex: 10,
                 padding: '20px',
                 textAlign: 'center'
               }}
             >
-              <h2 style={{ color: 'white', marginBottom: '20px' }}>Loading Game...</h2>
-              <div 
-                className="loading-spinner"
-                style={{
-                  width: '50px',
-                  height: '50px',
-                  border: '5px solid rgba(255,255,255,0.2)',
-                  borderTop: '5px solid white',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }}
-              ></div>
-              <p style={{ color: 'white', marginTop: '20px' }}>
-                {getRandomTip()}
+              <h2 style={{ color: 'white', marginBottom: '20px' }}>Game Failed to Load</h2>
+              <p style={{ color: 'white', marginBottom: '30px' }}>
+                There was an error loading the game. Please try again.
               </p>
-        </div>
-        )}
-        
-          {/* Error fallback if iframe fails to load */}
-          <div 
-            id="iframe-error-fallback"
-            style={{
-              display: 'none',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              background: 'rgba(0,0,0,0.8)',
-              zIndex: 5,
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px',
-              textAlign: 'center'
-            }}
-          >
-            <h2 style={{ color: 'white', marginBottom: '20px' }}>Game Failed to Load</h2>
-            <p style={{ color: 'white', marginBottom: '30px' }}>
-              There was an error loading the game. Please try again.
-            </p>
-            <button 
-              onClick={() => {
-                document.getElementById('iframe-error-fallback').style.display = 'none';
-                if (typeof handlePlayAgain === 'function') {
-                handlePlayAgain();
-                } else {
-                  console.error('handlePlayAgain function not available');
-                  // Fallback: Force reload the iframe
-                  const newGameId = Date.now().toString();
-                  forceReloadIframe(iframeRef, newGameId);
-                }
+              <button 
+                onClick={() => {
+                  document.getElementById('iframe-error-fallback').style.display = 'none';
+                  if (typeof handlePlayAgain === 'function') {
+                  handlePlayAgain();
+                  } else {
+                    console.error('handlePlayAgain function not available');
+                    // Fallback: Force reload the iframe
+                    const newGameId = Date.now().toString();
+                    forceReloadIframe(iframeRef, newGameId);
+                  }
+                }}
+                style={{
+                  padding: '12px 24px',
+                  background: '#ff5252',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '16px',
+                  cursor: 'pointer'
+                }}
+              >
+                Reload Game
+              </button>
+            </div>
+            
+            {/* Use the memoized game frame component */}
+            <MemoizedGameFrame 
+              iframeRef={iframeRef}
+              gameId={gameId}
+              isLoading={isLoading}
+              onError={() => {
+                console.error("Error loading iframe");
+                document.getElementById('iframe-error-fallback').style.display = 'flex';
               }}
-              style={{
-                padding: '12px 24px',
-                background: '#ff5252',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '16px',
-                cursor: 'pointer'
+              onLoad={() => {
+                console.log("Iframe loaded successfully");
+                // Delay hiding loading screen to ensure game assets are loaded
+                setTimeout(() => {
+                  setIsLoading(false);
+                }, 1000);
               }}
-            >
-              Reload Game
-            </button>
+            />
           </div>
-          
-          {/* Use the memoized game frame component */}
-          <MemoizedGameFrame 
-            iframeRef={iframeRef}
-            gameId={gameId}
-            isLoading={isLoading}
-            onError={() => {
-              console.error("Error loading iframe");
-              document.getElementById('iframe-error-fallback').style.display = 'flex';
-            }}
-            onLoad={() => {
-              console.log("Iframe loaded successfully");
-              // Delay hiding loading screen to ensure game assets are loaded
-              setTimeout(() => {
-                setIsLoading(false);
-              }, 1000);
-            }}
-          />
         </div>
-      </div>
+      )}
       
       {/* Simple transaction debug info */}
       <div style={{

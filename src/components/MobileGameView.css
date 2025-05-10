@@ -1,0 +1,188 @@
+/* Mobile Game View Container */
+.mobile-game-view {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #000;
+  z-index: 100;
+  overflow: hidden;
+}
+
+/* Game iframe takes full screen */
+.mobile-game-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+}
+
+/* Loading overlay */
+.mobile-game-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 30;
+  color: white;
+}
+
+.mobile-game-loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
+  margin-bottom: 20px;
+}
+
+/* Score display */
+.mobile-game-score {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 24px;
+  font-family: 'Bangers', cursive;
+  padding: 8px 16px;
+  border-radius: 20px;
+  z-index: 20;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* Back button */
+.mobile-game-back-button {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 24px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  z-index: 20;
+  cursor: pointer;
+}
+
+.mobile-game-back-button:active {
+  background-color: rgba(0, 0, 0, 0.8);
+  transform: scale(0.95);
+}
+
+/* Mobile control areas */
+.mobile-control-areas {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  display: flex;
+  z-index: 15;
+  pointer-events: none; /* Let clicks through to the iframe */
+}
+
+.mobile-control-left, 
+.mobile-control-right {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto; /* Re-enable pointer events for controls */
+}
+
+/* Control indicators */
+.mobile-control-indicator {
+  font-size: 32px;
+  opacity: 0.5;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.6));
+  animation: pulse 2s infinite ease-in-out;
+}
+
+/* Tips overlay */
+.mobile-game-tips {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 25;
+  animation: fade-out 2s 6s forwards;
+}
+
+.mobile-tip {
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 30px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+/* Animations */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Media queries for different screen sizes */
+@media (orientation: landscape) {
+  .mobile-control-areas {
+    height: 70%; /* Cover more area in landscape mode */
+  }
+  
+  .mobile-control-indicator {
+    font-size: 48px;
+  }
+}
+
+/* Prevent user selection on mobile */
+.mobile-game-view * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Prevent scrolling and bouncing on iOS */
+.mobile-game-view {
+  position: fixed;
+  touch-action: none;
+  -webkit-overflow-scrolling: none;
+  overflow: hidden;
+} 

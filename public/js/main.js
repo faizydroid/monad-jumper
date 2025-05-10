@@ -2442,6 +2442,42 @@ window.addEventListener('load', () => {
             console.error("Game instance not found on window!");
         }
     });
+
+    // Add mobile control handler
+    window.addEventListener('message', function(event) {
+        // Handle mobile control messages
+        if (event.data && event.data.type === 'MOBILE_CONTROL') {
+            const action = event.data.action;
+            
+            if (action === 'LEFT') {
+                // Simulate left key press
+                if (window.game && window.game.character) {
+                    window.game.character.movingLeft = true;
+                    window.game.character.movingRight = false;
+                    
+                    // Stop moving after a brief delay to allow tapping
+                    setTimeout(() => {
+                        if (window.game && window.game.character) {
+                            window.game.character.movingLeft = false;
+                        }
+                    }, 100);
+                }
+            } else if (action === 'RIGHT') {
+                // Simulate right key press
+                if (window.game && window.game.character) {
+                    window.game.character.movingRight = true;
+                    window.game.character.movingLeft = false;
+                    
+                    // Stop moving after a brief delay to allow tapping
+                    setTimeout(() => {
+                        if (window.game && window.game.character) {
+                            window.game.character.movingRight = false;
+                        }
+                    }, 100);
+                }
+            }
+        }
+    });
 })
 
 class DebugPanel {
