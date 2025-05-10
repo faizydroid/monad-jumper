@@ -1171,7 +1171,13 @@ function HorizontalStats() {
           </div>
           <div className="stat-label">Jump Rank</div>
           <div className="stat-value">
-            {jumpRank}
+            {jumpRank === "..." ? 
+              totalJumps > 0 ? 
+                <span className="loading-rank">Loading...</span> : 
+                <span>Unranked</span>
+              : 
+              jumpRank
+            }
           </div>
         </div>
         
