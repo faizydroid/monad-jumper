@@ -8,24 +8,29 @@ if (typeof window !== 'undefined' && !window.audioState) {
   window.audioState = {
     isPlaying: false,
     isMuted: false,
-    volume: 0.8,
+    volume: 0.5, // Lower default volume
     frequencyData: [],
     audioElement: null,
     audioContext: null,
     analyser: null,
-    source: null
+    source: null,
+    isLowPerformanceMode: false, // Add performance mode flag
+    lastVisualizationUpdate: 0
   };
 }
 
 const MusicPlayer = () => {
   // Use state that syncs with the global state
   const [isPlaying, setIsPlaying] = useState(() => window.audioState?.isPlaying || false);
-  const [volume, setVolume] = useState(() => window.audioState?.volume || 0.8);
+  const [volume, setVolume] = useState(() => window.audioState?.volume || 0.5);
   const [isMuted, setIsMuted] = useState(() => window.audioState?.isMuted || false);
   const [audioFrequencyData, setAudioFrequencyData] = useState([]);
   const [isMobile, setIsMobile] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const [isInGameScreen, setIsInGameScreen] = useState(false);
+  const [lowPerformanceMode, setLowPerformanceMode] = useState(
+    () => window.audioState?.isLowPerformanceMode || false
+  );
   const audioRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
@@ -42,6 +47,12 @@ const MusicPlayer = () => {
         document.getElementById('game-iframe') !== null;
       
       setIsInGameScreen(isGameScreen);
+      
+      // Automatically enable low performance mode in game screen
+      if (isGameScreen && !lowPerformanceMode) {
+        setLowPerformanceMode(true);
+        window.audioState.isLowPerformanceMode = true;
+      }
       
       // Add special class for game screen
       if (playerRef.current) {
@@ -63,7 +74,7 @@ const MusicPlayer = () => {
     return () => {
       window.removeEventListener('hashchange', checkIfGameScreen);
     };
-  }, []);
+  }, [lowPerformanceMode]);
 
   // Initialize everything on component mount
   useEffect(() => {
@@ -81,7 +92,10 @@ const MusicPlayer = () => {
       audioElement.id = 'anthem-audio';
       audioElement.loop = true;
       audioElement.volume = volume;
+      audioElement.preload = 'auto'; // Preload audio
       audioElement.setAttribute('playsinline', ''); // Add playsinline for mobile
+      
+      // Add audio element to DOM
       document.body.appendChild(audioElement);
       window.audioState.audioElement = audioElement;
       
@@ -106,13 +120,15 @@ const MusicPlayer = () => {
       window.audioState.isPlaying = true;
     }
     
-    // Set up Web Audio API if needed
-    if (!window.audioState.audioContext) {
+    // Set up Web Audio API if needed and not in low performance mode
+    if (!window.audioState.audioContext && !lowPerformanceMode) {
       try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioContext = new AudioContext();
         const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 128;
+        // Use smaller fftSize to reduce processing overhead
+        analyser.fftSize = 64; // Reduced from 128
+        analyser.smoothingTimeConstant = 0.5; // Less frequent updates
         
         const source = audioContext.createMediaElementSource(audioRef.current);
         source.connect(analyser);
@@ -129,20 +145,72 @@ const MusicPlayer = () => {
         sourceRef.current = source;
       } catch (error) {
         console.error('Audio setup error:', error);
+        // Fall back to low performance mode on error
+        setLowPerformanceMode(true);
+        window.audioState.isLowPerformanceMode = true;
       }
-    } else {
+    } else if (window.audioState.audioContext && !lowPerformanceMode) {
       // Reuse existing audio context and analyzer
       audioContextRef.current = window.audioState.audioContext;
       analyserRef.current = window.audioState.analyser;
       sourceRef.current = window.audioState.source;
     }
     
-    // Try to play on first load (will be blocked by most browsers)
-    tryToPlay();
+    // FPS monitoring to detect performance issues
+    let lastFrameTime = performance.now();
+    let frameTimes = [];
+    
+    const monitorFrameRate = () => {
+      const now = performance.now();
+      const frameTime = now - lastFrameTime;
+      lastFrameTime = now;
+      
+      // Keep last 60 frame times
+      frameTimes.push(frameTime);
+      if (frameTimes.length > 60) frameTimes.shift();
+      
+      // Calculate average FPS
+      if (frameTimes.length >= 30) {
+        const avgFrameTime = frameTimes.reduce((sum, time) => sum + time, 0) / frameTimes.length;
+        const fps = 1000 / avgFrameTime;
+        
+        // If FPS is consistently low, enable low performance mode
+        if (fps < 30 && !lowPerformanceMode) {
+          console.log('Low FPS detected, enabling low performance mode');
+          setLowPerformanceMode(true);
+          window.audioState.isLowPerformanceMode = true;
+          
+          // Disconnect audio processing if possible
+          if (audioContextRef.current && analyserRef.current && sourceRef.current) {
+            try {
+              // Reconnect audio without analyzer
+              sourceRef.current.disconnect();
+              sourceRef.current.connect(audioContextRef.current.destination);
+            } catch (e) {
+              console.warn('Failed to simplify audio chain:', e);
+            }
+          }
+        }
+      }
+      
+      requestAnimationFrame(monitorFrameRate);
+    };
+    
+    // Start monitoring after a delay to let the page settle
+    const monitorTimer = setTimeout(() => {
+      requestAnimationFrame(monitorFrameRate);
+    }, 3000);
     
     // Try to play on user interaction
     const playOnInteraction = () => {
-      tryToPlay();
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(err => console.warn('Context resume error:', err));
+      }
+      
+      if (audioRef.current && audioRef.current.paused) {
+        audioRef.current.play().catch(err => console.warn('Autoplay error:', err));
+      }
+      
       document.removeEventListener('click', playOnInteraction);
       document.removeEventListener('touchstart', playOnInteraction);
       document.removeEventListener('keydown', playOnInteraction);
@@ -166,31 +234,16 @@ const MusicPlayer = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
       
+      clearTimeout(monitorTimer);
+      
       // Remove resize listener
       window.removeEventListener('resize', checkMobile);
-      
-      // Keep audio element and context alive for continuous playback
     };
-  }, []);
+  }, [lowPerformanceMode, volume]);
   
-  // Try to play or resume audio
-  const tryToPlay = () => {
-    if (!audioRef.current) return;
-    
-    // Resume audio context if suspended
-    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume().catch(e => console.warn('Failed to resume context:', e));
-    }
-    
-    // Try to play audio
-    if (audioRef.current.paused) {
-      audioRef.current.play().catch(e => console.warn('Autoplay prevented:', e));
-    }
-  };
-  
-  // Update visualization in a separate effect
+  // Update visualization in a separate effect - only if not in low performance mode
   useEffect(() => {
-    if (!shouldRender || !analyserRef.current) return;
+    if (!shouldRender || !analyserRef.current || lowPerformanceMode) return;
     
     const bufferLength = analyserRef.current.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -200,29 +253,38 @@ const MusicPlayer = () => {
         // Safety check in case component is unmounting
         if (!analyserRef.current) return;
         
-        analyserRef.current.getByteFrequencyData(dataArray);
+        // Check if we should update based on performance constraints
+        const now = performance.now();
+        const timeSinceLastUpdate = now - (window.audioState.lastVisualizationUpdate || 0);
         
-        // Update both local and global state
-        const newData = [...dataArray];
-        setAudioFrequencyData(newData);
-        
-        // Safely update global state
-        if (window.audioState) {
-          window.audioState.frequencyData = newData;
+        // Only update visualization at 15fps (about 66ms per frame)
+        // This is a significant reduction from 30fps
+        if (timeSinceLastUpdate >= 66) {
+          analyserRef.current.getByteFrequencyData(dataArray);
+          
+          // Update both local and global state
+          const newData = [...dataArray];
+          setAudioFrequencyData(newData);
+          
+          // Update global state
+          if (window.audioState) {
+            window.audioState.frequencyData = newData;
+            window.audioState.lastVisualizationUpdate = now;
+          }
         }
         
-        // Limit rate to 30fps to reduce CPU usage
+        // Use timeout instead of requestAnimationFrame for more control
         setTimeout(() => {
-          if (analyserRef.current) { // Check again in case component unmounted during timeout
+          if (analyserRef.current && !lowPerformanceMode) {
             animationFrameRef.current = requestAnimationFrame(updateVisualization);
           }
-        }, 33); // ~30fps
+        }, 66); // ~15fps maximum update rate
+        
       } catch (err) {
-        console.warn('Error in visualization update:', err);
-        // If there was an error, retry less frequently
-        setTimeout(() => {
-          animationFrameRef.current = requestAnimationFrame(updateVisualization);
-        }, 1000);
+        console.warn('Visualization error:', err);
+        // Enable low performance mode on error
+        setLowPerformanceMode(true);
+        window.audioState.isLowPerformanceMode = true;
       }
     };
     
@@ -234,7 +296,7 @@ const MusicPlayer = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [shouldRender]);
+  }, [shouldRender, lowPerformanceMode]);
   
   // Keep volume in sync with global state
   useEffect(() => {
@@ -248,9 +310,8 @@ const MusicPlayer = () => {
     }
   }, [volume, isMuted]);
   
-  // Enhanced toggle play with strong event handling for game screen
+  // Toggle play function
   const togglePlay = (e) => {
-    // Stop event propagation to prevent game from capturing it
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -258,41 +319,26 @@ const MusicPlayer = () => {
     
     if (!audioRef.current) return;
     
-    // Debug log
-    console.log('Music player: togglePlay clicked');
-    
     if (isPlaying) {
       audioRef.current.pause();
     } else {
       // Resume context if needed
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
+        audioContextRef.current.resume().catch(e => console.warn('Resume failed:', e));
       }
       
       audioRef.current.play().catch(e => {
         console.warn('Play failed:', e);
-        // Force play through user interaction
-        const playAudio = () => {
-          audioRef.current.play();
-          document.removeEventListener('click', playAudio);
-          document.removeEventListener('touchstart', playAudio);
-        };
-        document.addEventListener('click', playAudio, { once: true });
-        document.addEventListener('touchstart', playAudio, { once: true });
       });
     }
   };
   
-  // Enhanced toggle mute with strong event handling for game screen
+  // Toggle mute function
   const toggleMute = (e) => {
-    // Stop event propagation to prevent game from capturing it
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    
-    // Debug log
-    console.log('Music player: toggleMute clicked');
     
     if (!audioRef.current) return;
     
@@ -301,16 +347,12 @@ const MusicPlayer = () => {
     window.audioState.isMuted = newMuteState;
   };
   
-  // Enhanced volume change with strong event handling for game screen
+  // Volume change handler
   const handleVolumeChange = (e) => {
-    // Stop event propagation to prevent game from capturing it
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    
-    // Debug log
-    console.log('Music player: volume change');
     
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
@@ -322,11 +364,29 @@ const MusicPlayer = () => {
     }
   };
   
+  // Toggle performance mode function
+  const togglePerformanceMode = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    const newMode = !lowPerformanceMode;
+    setLowPerformanceMode(newMode);
+    window.audioState.isLowPerformanceMode = newMode;
+    
+    // Force a reload of audio setup if needed
+    if (!newMode && !window.audioState.audioContext) {
+      // This will trigger the setup effect
+      window.location.reload();
+    }
+  };
+  
   // Don't render if another player is already showing
   if (!shouldRender) return null;
   
-  // Determine number of bars based on screen size
-  const barsToShow = isMobile ? 16 : 32;
+  // Determine number of bars based on screen size and performance mode
+  const barsToShow = lowPerformanceMode ? 0 : (isMobile ? 8 : 16); // Reduced number of bars
   
   // Use frequency data from state or global state
   const displayData = audioFrequencyData.length > 0 
@@ -336,7 +396,7 @@ const MusicPlayer = () => {
   return (
     <div 
       ref={playerRef} 
-      className={`music-player ${isMuted ? 'player-muted' : ''} ${isInGameScreen ? 'game-screen' : ''}`}
+      className={`music-player ${isMuted ? 'player-muted' : ''} ${isInGameScreen ? 'game-screen' : ''} ${lowPerformanceMode ? 'low-performance' : ''}`}
     >
       <div className="player-content">
         <button 
@@ -349,17 +409,19 @@ const MusicPlayer = () => {
           {isPlaying ? <FaPause /> : <FaPlay />}
         </button>
         
-        <div className="visualization-container">
-          {displayData.slice(0, barsToShow).map((value, index) => (
-            <div
-              key={index}
-              className="visualization-bar"
-              style={{
-                height: `${(value / 255) * 100}%`,
-              }}
-            />
-          ))}
-        </div>
+        {!lowPerformanceMode && (
+          <div className="visualization-container">
+            {displayData.slice(0, barsToShow).map((value, index) => (
+              <div
+                key={index}
+                className="visualization-bar"
+                style={{
+                  height: `${(value / 255) * 100}%`,
+                }}
+              />
+            ))}
+          </div>
+        )}
         
         <div 
           className="volume-control"
@@ -387,6 +449,9 @@ const MusicPlayer = () => {
             className="volume-slider"
           />
         </div>
+        
+        {/* Optional performance mode toggle */}
+   
       </div>
     </div>
   );

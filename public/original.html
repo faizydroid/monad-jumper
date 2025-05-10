@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>Doodle Jump</title>
+    <title>Jumpnads</title>
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fredoka:wght@400;600&family=Short+Stack&display=swap" rel="stylesheet">
     <style>
         * {
@@ -755,7 +755,6 @@
     <audio id="sound-spring" src="/sounds/spring.mp3" preload="auto"></audio>
     <audio id="sound-fall" src="sound effects/fall.mp3" preload="auto"></audio>
     <!-- Add background music audio element -->
-    <audio id="bg-music" src="/sound effects/bgmusic.mp3" loop preload="auto"></audio>
     
     <div id="startScreen">
         <!-- Add decorative elements -->
@@ -831,32 +830,9 @@
                     handleContinueResponse(data);
                     break;
                 
-                // Add music control message handling
-                case 'MUSIC_VOLUME':
-                    const bgMusic = document.getElementById('bg-music');
-                    if (bgMusic) {
-                        bgMusic.volume = event.data.volume;
-                        console.log('Set background music volume:', event.data.volume);
-                        
-                        // Also save to localStorage for persistence
-                        localStorage.setItem('bgMusicVolume', event.data.volume);
-                    }
-                    break;
+             
                 
-                case 'MUSIC_PLAY_STATE':
-                    const bgMusicElement = document.getElementById('bg-music');
-                    if (bgMusicElement) {
-                        if (event.data.isPlaying) {
-                            bgMusicElement.play().catch(err => {
-                                console.error("Failed to play background music:", err);
-                            });
-                            console.log('Playing background music');
-                        } else {
-                            bgMusicElement.pause();
-                            console.log('Paused background music');
-                        }
-                    }
-                    break;
+              
                     
                 // Handle audio mute state
                 case 'AUDIO_MUTE_STATE':
@@ -885,21 +861,7 @@
                     }
                     break;
                     
-                // New message types
-                case 'PLAY_BACKGROUND_MUSIC':
-                    // Play background music directly
-                    const bgMusicToPlay = document.getElementById('bg-music');
-                    if (bgMusicToPlay) {
-                        const volume = event.data.volume || 0.5;
-                        bgMusicToPlay.volume = volume;
-                        bgMusicToPlay.muted = false;
-                        bgMusicToPlay.currentTime = 0;
-                        bgMusicToPlay.play().catch(err => {
-                            console.error("Failed to play background music:", err);
-                        });
-                        console.log('Playing background music from explicit request');
-                    }
-                    break;
+             
                 
                 case 'FORCE_AUDIO_UNMUTE':
                     // Force parent UI to unmute audio
@@ -1846,17 +1808,7 @@
                     playPromise.then(() => {
                         console.log('Audio playback unlocked by user interaction');
                         
-                        // Try to play background music
-                        const bgMusic = document.getElementById('bg-music');
-                        if (bgMusic) {
-                            bgMusic.muted = false;
-                            bgMusic.volume = 0.5;
-                            bgMusic.play().then(() => {
-                                console.log('Background music started playing successfully');
-                            }).catch(err => {
-                                console.warn('Could not play background music:', err);
-                            });
-                        }
+                     
                         
                         // Also try to use AudioManager if available
                         if (window.audioManager) {

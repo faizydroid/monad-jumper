@@ -258,7 +258,7 @@ export class Player {
             // Skip platforms that are far away vertically
             const verticalDistance = Math.abs(platform.y - playerBottom);
             if (verticalDistance > checkDistance) continue;
-            
+                
             // Skip platforms that don't overlap horizontally
             if (platform.x > playerRight || platform.x + platform.width < playerLeft) continue;
             
@@ -324,8 +324,8 @@ export class Player {
             // Mark all brown platforms for deletion
             for (let i = 0; i < brownPlatforms.length; i++) {
                 brownPlatforms[i].markedForDeletion = true;
-            }
-            
+        }
+        
             // Set a small downward velocity immediately to help detect platforms below
             this.vy = Math.max(this.vy, 2);
             return 'brown';

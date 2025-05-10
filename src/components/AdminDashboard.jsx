@@ -7,6 +7,7 @@ import { usePublicClient, useWalletClient } from 'wagmi';
 import { parseEther } from 'viem';
 import { supabase } from '../lib/supabaseClient';
 import { EncryptedStorageService } from '../services/EncryptedStorageService';
+import ReviveAdmin from './ReviveAdmin';
 
 // Log the available tables to help debug
 async function logTableInfo() {
@@ -22,267 +23,6 @@ async function logTableInfo() {
     console.error('Cannot check tables:', e);
   }
 }
-
-// Add RevivePanel component for managing the revive contract
-const RevivePanel = () => {
-  const [reviveStats, setReviveStats] = useState({
-    totalRevives: 0,
-    uniqueUsers: 0,
-    totalRevenue: 0,
-    contractBalance: 0,
-    revivePrice: 0.5
-  });
-  const [withdrawing, setWithdrawing] = useState(false);
-  const [withdrawSuccess, setWithdrawSuccess] = useState(null);
-  const [withdrawError, setWithdrawError] = useState(null);
-  const [newPrice, setNewPrice] = useState("");
-  const [isPriceUpdating, setIsPriceUpdating] = useState(false);
-  const [priceUpdateSuccess, setPriceUpdateSuccess] = useState(false);
-  
-  const publicClient = usePublicClient();
-  const { data: walletClient } = useWalletClient();
-  
-  // Fetch revive contract stats
-  useEffect(() => {
-    const fetchReviveStats = async () => {
-      try {
-        // Fetch stats from Supabase
-        const { data, error } = await supabase
-          .from('revive_contract_view')
-          .select('*')
-          .single();
-        
-        if (error) {
-          console.error("Error fetching revive stats:", error);
-          return;
-        }
-        
-        if (data) {
-          setReviveStats({
-            totalRevives: data.total_revives || 0,
-            uniqueUsers: data.unique_users || 0,
-            totalRevenue: data.total_revenue || 0,
-            contractBalance: data.balance || 0,
-            revivePrice: data.revive_price || 0.5
-          });
-        }
-        
-        // Get contract balance from blockchain
-        const reviveContractAddress = '0xf8e81D47203A594245E36C48e151709F0C19fBe8';
-        const balanceWei = await publicClient.getBalance({ 
-          address: reviveContractAddress 
-        });
-        
-        // Convert balance from wei to MON
-        const balanceMON = Number(balanceWei) / 1e18;
-        
-        // Update contract balance in database
-        await supabase.rpc('update_revive_contract_balance', {
-          contract_addr: reviveContractAddress,
-          new_balance: balanceMON
-        });
-        
-        // Update local state with blockchain balance
-        setReviveStats(prev => ({
-          ...prev,
-          contractBalance: balanceMON
-        }));
-        
-      } catch (error) {
-        console.error("Error fetching revive contract data:", error);
-      }
-    };
-    
-    fetchReviveStats();
-  }, [publicClient]);
-  
-  // Handle withdraw funds from revive contract
-  const handleWithdrawFunds = async () => {
-    if (!walletClient) {
-      setWithdrawError("Wallet not connected");
-      return;
-    }
-    
-    try {
-      setWithdrawing(true);
-      setWithdrawError(null);
-      setWithdrawSuccess(null);
-      
-      const reviveContractAddress = '0xf8e81D47203A594245E36C48e151709F0C19fBe8';
-      
-      // Execute withdraw transaction
-      const hash = await walletClient.writeContract({
-        address: reviveContractAddress,
-        abi: [
-          {
-            name: "withdraw",
-            type: "function",
-            stateMutability: "nonpayable",
-            inputs: [],
-            outputs: []
-          }
-        ],
-        functionName: "withdraw"
-      });
-      
-      console.log("Withdraw transaction sent:", hash);
-      
-      // Wait for confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log("Withdraw transaction confirmed:", receipt);
-      
-      // Record withdraw in database
-      await supabase.rpc('record_contract_withdraw', {
-        contract_addr: reviveContractAddress,
-        admin_addr: walletClient.account.address,
-        amount: reviveStats.contractBalance,
-        tx_hash: hash.toString()
-      });
-      
-      // Update local state
-      setReviveStats(prev => ({
-        ...prev,
-        contractBalance: 0
-      }));
-      
-      setWithdrawSuccess("Funds withdrawn successfully!");
-    } catch (error) {
-      console.error("Error withdrawing funds:", error);
-      setWithdrawError(error.message || "Failed to withdraw funds");
-    } finally {
-      setWithdrawing(false);
-    }
-  };
-  
-  // Handle updating revive price
-  const handleUpdatePrice = async () => {
-    if (!walletClient || !newPrice) {
-      setWithdrawError("Wallet not connected or invalid price");
-      return;
-    }
-    
-    try {
-      setIsPriceUpdating(true);
-      setWithdrawError(null);
-      setPriceUpdateSuccess(false);
-      
-      const reviveContractAddress = '0xf8e81D47203A594245E36C48e151709F0C19fBe8';
-      const priceInWei = parseEther(newPrice);
-      
-      // Execute update price transaction
-      const hash = await walletClient.writeContract({
-        address: reviveContractAddress,
-        abi: [
-          {
-            name: "setRevivePrice",
-            type: "function",
-            stateMutability: "nonpayable",
-            inputs: [{ type: "uint256", name: "newPrice" }],
-            outputs: []
-          }
-        ],
-        functionName: "setRevivePrice",
-        args: [priceInWei]
-      });
-      
-      console.log("Update price transaction sent:", hash);
-      
-      // Wait for confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log("Update price transaction confirmed:", receipt);
-      
-      // Update price in database
-      await supabase.rpc('update_revive_price', {
-        contract_addr: reviveContractAddress,
-        new_price: parseFloat(newPrice)
-      });
-      
-      // Update local state
-      setReviveStats(prev => ({
-        ...prev,
-        revivePrice: parseFloat(newPrice)
-      }));
-      
-      setPriceUpdateSuccess(true);
-      setNewPrice("");
-    } catch (error) {
-      console.error("Error updating price:", error);
-      setWithdrawError(error.message || "Failed to update price");
-    } finally {
-      setIsPriceUpdating(false);
-    }
-  };
-  
-  return (
-    <div className="admin-panel-section">
-      <h2>Revive Contract Management</h2>
-      
-      <div className="stats-grid">
-        <div className="stat-card">
-          <h3>Total Revives</h3>
-          <p className="stat-value">{reviveStats.totalRevives}</p>
-        </div>
-        
-        <div className="stat-card">
-          <h3>Unique Users</h3>
-          <p className="stat-value">{reviveStats.uniqueUsers}</p>
-        </div>
-        
-        <div className="stat-card">
-          <h3>Total Revenue</h3>
-          <p className="stat-value">{reviveStats.totalRevenue.toFixed(2)} MON</p>
-        </div>
-        
-        <div className="stat-card">
-          <h3>Contract Balance</h3>
-          <p className="stat-value">{reviveStats.contractBalance.toFixed(4)} MON</p>
-        </div>
-        
-        <div className="stat-card">
-          <h3>Current Price</h3>
-          <p className="stat-value">{reviveStats.revivePrice.toFixed(2)} MON</p>
-        </div>
-      </div>
-      
-      <div className="admin-controls">
-        <div className="control-group">
-          <h3>Withdraw Funds</h3>
-          <button 
-            onClick={handleWithdrawFunds}
-            disabled={withdrawing || reviveStats.contractBalance <= 0}
-            className={`admin-button ${withdrawing ? 'loading' : ''}`}
-          >
-            {withdrawing ? 'Withdrawing...' : 'Withdraw All Funds'}
-          </button>
-          {withdrawSuccess && <p className="success-message">{withdrawSuccess}</p>}
-          {withdrawError && <p className="error-message">{withdrawError}</p>}
-        </div>
-        
-        <div className="control-group">
-          <h3>Update Revive Price</h3>
-          <div className="input-group">
-            <input
-              type="number"
-              value={newPrice}
-              onChange={(e) => setNewPrice(e.target.value)}
-              placeholder="New price in MON"
-              step="0.1"
-              min="0.1"
-            />
-            <button
-              onClick={handleUpdatePrice}
-              disabled={isPriceUpdating || !newPrice}
-              className={`admin-button ${isPriceUpdating ? 'loading' : ''}`}
-            >
-              {isPriceUpdating ? 'Updating...' : 'Update Price'}
-            </button>
-          </div>
-          {priceUpdateSuccess && <p className="success-message">Price updated successfully!</p>}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export default function AdminDashboard() {
   const { account } = useWeb3();
@@ -328,10 +68,30 @@ export default function AdminDashboard() {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   
+  // Add Revive contract states
+  const [reviveStats, setReviveStats] = useState({
+    totalRevives: 0,
+    totalReviveValue: 0,
+    reviveContractBalance: 0
+  });
+  const [isReviveWithdrawing, setIsReviveWithdrawing] = useState(false);
+  const [reviveWithdrawSuccess, setReviveWithdrawSuccess] = useState(null);
+  const [reviveWithdrawError, setReviveWithdrawError] = useState(null);
+  const [reviveAttempts, setReviveAttempts] = useState([]);
+  
+  // ReviveContract address
+  const REVIVE_CONTRACT_ADDRESS = "0xe56a5d27bd9d27fcdf6beaab97a5faa8fcb53cf9";
+  console.log("Admin panel using ReviveContract address:", REVIVE_CONTRACT_ADDRESS);
+  
   // Log tables on load to help debug
   useEffect(() => {
     logTableInfo();
   }, []);
+  
+  // Add effect to fetch revive stats
+  useEffect(() => {
+    fetchReviveStats();
+  }, [publicClient]);
   
   // Update the fetchGameStats function to fetch jumps from the jumps table
   useEffect(() => {
@@ -1107,6 +867,166 @@ export default function AdminDashboard() {
     }
   };
   
+  // Function to fetch statistics about revives
+  const fetchReviveStats = async () => {
+    try {
+      console.log('Fetching revive contract statistics...');
+      
+      // Fetch revive contract balance
+      console.log('Getting balance for contract address:', REVIVE_CONTRACT_ADDRESS);
+      let balanceInMON = 0;
+      try {
+        const balance = await publicClient.getBalance({
+          address: REVIVE_CONTRACT_ADDRESS,
+        });
+        
+        console.log('Raw balance result:', balance.toString());
+        
+        // Convert from wei to MON
+        balanceInMON = Number(balance) / 1e18;
+        console.log('Revive contract balance:', balanceInMON, 'MON');
+      } catch (balanceError) {
+        console.error('Error fetching contract balance:', balanceError);
+      }
+      
+      // Fetch revive attempts from database
+      let totalRevives = 0;
+      let totalReviveValue = 0;
+      
+      try {
+        // Check if revive_attempts table exists
+        const { data: reviveAttemptsData, error: reviveError } = await supabase
+          .from('revive_attempts')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (reviveError) {
+          console.error('Error fetching revive attempts:', reviveError);
+        } else if (reviveAttemptsData) {
+          console.log(`Found ${reviveAttemptsData.length} revive attempts`);
+          
+          // Store all revive attempts
+          setReviveAttempts(reviveAttemptsData);
+          
+          totalRevives = reviveAttemptsData.length;
+          
+          // Calculate total value
+          totalReviveValue = reviveAttemptsData.reduce((sum, record) => 
+            sum + (record.price_paid || 0.5), 0);
+        }
+      } catch (dbError) {
+        console.error('Error fetching revive attempts from database:', dbError);
+      }
+      
+      // Update stats
+      setReviveStats({
+        totalRevives,
+        totalReviveValue,
+        reviveContractBalance: balanceInMON
+      });
+      
+    } catch (error) {
+      console.error('Error fetching revive stats:', error);
+    }
+  };
+  
+  // Function to withdraw funds from the ReviveContract
+  const handleReviveWithdraw = async () => {
+    if (!walletClient) {
+      setReviveWithdrawError("Wallet not connected correctly.");
+      return;
+    }
+    
+    setIsReviveWithdrawing(true);
+    setReviveWithdrawSuccess(null);
+    setReviveWithdrawError(null);
+    
+    try {
+      console.log("Attempting to withdraw funds from ReviveContract:", REVIVE_CONTRACT_ADDRESS);
+      
+      // ReviveContract ABI - only need the withdraw function
+      const reviveContractABI = [
+        {
+          "inputs": [],
+          "name": "withdraw",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ];
+      
+      // Create transaction
+      const { request } = await publicClient.simulateContract({
+        address: REVIVE_CONTRACT_ADDRESS,
+        abi: reviveContractABI,
+        functionName: 'withdraw',
+        account: account
+      });
+      
+      // Send transaction
+      const txHash = await walletClient.writeContract(request);
+      console.log(`Revive contract withdraw transaction submitted: ${txHash}`);
+      
+      // Wait for transaction confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      
+      if (receipt.status === "success") {
+        setReviveWithdrawSuccess("Funds successfully withdrawn from ReviveContract!");
+        
+        // Refresh revive contract balance
+        const newBalance = await publicClient.getBalance({
+          address: REVIVE_CONTRACT_ADDRESS,
+        });
+        
+        // Update state with new balance
+        setReviveStats(prev => ({
+          ...prev,
+          reviveContractBalance: Number(newBalance) / 1e18
+        }));
+      } else {
+        throw new Error("Transaction failed or was reverted");
+      }
+    } catch (error) {
+      console.error("Withdraw error:", String(error));
+      setReviveWithdrawError(`Failed to withdraw from ReviveContract: ${String(error.message || error)}`);
+    } finally {
+      setIsReviveWithdrawing(false);
+    }
+  };
+  
+  // Add function to check if contract exists
+  const checkContractExists = async () => {
+    if (!publicClient) return false;
+    
+    try {
+      console.log('Checking if ReviveContract exists at:', REVIVE_CONTRACT_ADDRESS);
+      
+      // Try to get the code at the contract address
+      const code = await publicClient.getBytecode({
+        address: REVIVE_CONTRACT_ADDRESS,
+      });
+      
+      // If code exists (not 0x or null), the contract exists
+      const exists = code && code !== '0x';
+      console.log('Contract exists:', exists, 'Code length:', code ? code.length : 0);
+      
+      if (!exists) {
+        console.error('⚠️ WARNING: No contract found at the specified address!');
+      }
+      
+      return exists;
+    } catch (error) {
+      console.error('Error checking contract existence:', error);
+      return false;
+    }
+  };
+  
+  // Call this function in useEffect
+  useEffect(() => {
+    fetchReviveStats();
+    checkContractExists();
+  }, [publicClient]);
+  
   if (!account) {
     return (
       <div className="admin-dashboard">
@@ -1127,9 +1047,18 @@ export default function AdminDashboard() {
   
   return (
     <div className="admin-dashboard">
-      <h1>Admin Dashboard</h1>
+      <h2>Admin Dashboard</h2>
       
-      <div className="tabs">
+      <AdminLinkGenerator />
+      
+      {error && (
+        <div className="admin-error">
+          <p>{error}</p>
+          <p>Please check your Supabase database setup.</p>
+        </div>
+      )}
+      
+      <div className="admin-tabs">
         <button 
           className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
@@ -1137,62 +1066,62 @@ export default function AdminDashboard() {
           Overview
         </button>
         <button 
-          className={`tab-button ${activeTab === 'players' ? 'active' : ''}`}
-          onClick={() => setActiveTab('players')}
+          className={`tab-button ${activeTab === 'stats' ? 'active' : ''}`}
+          onClick={() => setActiveTab('stats')}
         >
-          Players
+          Detailed Stats
         </button>
         <button 
-          className={`tab-button ${activeTab === 'transactions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('transactions')}
+          className={`tab-button ${activeTab === 'user' ? 'active' : ''}`}
+          onClick={() => setActiveTab('user')}
         >
-          Transactions
+          User Search
         </button>
         <button 
-          className={`tab-button ${activeTab === 'contracts' ? 'active' : ''}`}
-          onClick={() => setActiveTab('contracts')}
+          className={`tab-button ${activeTab === 'contract' ? 'active' : ''}`}
+          onClick={() => setActiveTab('contract')}
         >
-          Contract Info
+          NFT Contract
         </button>
         <button 
           className={`tab-button ${activeTab === 'revive' ? 'active' : ''}`}
           onClick={() => setActiveTab('revive')}
         >
-          Revive Manager
+          Revive Contract
         </button>
       </div>
       
-      <div className="tab-content">
-        {activeTab === 'overview' && (
-          <div className="admin-panel-section">
-            <h2>Game Overview</h2>
-            <div className="stats-row">
-              <div className="stat-card">
-                <h3>Total Registered Users</h3>
-                <div className="stat-value">{formatNumber(gameStats.totalUsers)}</div>
-              </div>
-              
-              <div className="stat-card">
-                <h3>Total Jumps (All Users)</h3>
-                <div className="stat-value">{formatNumber(gameStats.totalJumps)}</div>
-              </div>
-              
-              <div className="stat-card">
-                <h3>Total NFTs Minted</h3>
-                <div className="stat-value">{formatNumber(gameStats.totalMints)}</div>
-              </div>
-              
-              <div className="stat-card">
-                <h3>Total Revenue (MON)</h3>
-                <div className="stat-value">{formatNumber(gameStats.totalRevenue)}</div>
-              </div>
+      {activeTab === 'overview' && (
+      <div className="admin-stats-container">
+          <h2>Game Overview</h2>
+        <div className="stats-row">
+          <div className="stat-card">
+            <h3>Total Registered Users</h3>
+              <div className="stat-value">{formatNumber(gameStats.totalUsers)}</div>
+          </div>
+          
+          <div className="stat-card">
+            <h3>Total Jumps (All Users)</h3>
+              <div className="stat-value">{formatNumber(gameStats.totalJumps)}</div>
+          </div>
+          
+          <div className="stat-card">
+            <h3>Total NFTs Minted</h3>
+              <div className="stat-value">{formatNumber(gameStats.totalMints)}</div>
+          </div>
+          
+          <div className="stat-card">
+            <h3>Total Revenue (MON)</h3>
+              <div className="stat-value">{formatNumber(gameStats.totalRevenue)}</div>
             </div>
           </div>
-        )}
-        
-        {activeTab === 'players' && (
-          <div className="admin-panel-section">
-            <h2>Registered Players</h2>
+        </div>
+      )}
+      
+      {activeTab === 'stats' && (
+        <div className="admin-stats-container">
+          <div className="stats-section">
+            <h3>Registered Players</h3>
             <div className="stats-grid">
               <div className="stat-card sm">
                 <div className="stat-label">Last Hour</div>
@@ -1213,76 +1142,220 @@ export default function AdminDashboard() {
               <div className="stat-card sm">
                 <div className="stat-label">All Time</div>
                 <div className="stat-value">{formatNumber(timeStats.users.allTime)}</div>
-              </div>
-            </div>
           </div>
-        )}
-        
-        {activeTab === 'transactions' && (
-          <div className="admin-panel-section">
-            <h2>Transaction Statistics</h2>
+        </div>
+      </div>
+   
+          <div className="stats-section">
+            <h3>Total Jumps</h3>
             <div className="stats-grid">
-              <div className="stat-card">
-                <h3>Total Transactions</h3>
-                <div className="stat-value">{formatNumber(totalTransactions)}</div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last Hour</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.hourly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 24 Hours</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.daily)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 7 Days</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.weekly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">Last 30 Days</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.monthly)}</div>
+              </div>
+              <div className="stat-card sm">
+                <div className="stat-label">All Time</div>
+                <div className="stat-value">{formatNumber(timeStats.jumps.allTime)}</div>
               </div>
             </div>
           </div>
-        )}
-        
-        {activeTab === 'contracts' && (
-          <div className="admin-panel-section">
-            <h2>Contract Information</h2>
-            <div className="contract-stats-grid">
-              <div className="stat-card">
-                <h4>Contract Address</h4>
-                <div className="contract-address">{import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS || 'Not configured'}</div>
+        </div>
+      )}
+      
+      {activeTab === 'user' && (
+        <div className="admin-user-search">
+          <h3>Search User</h3>
+          <div className="search-container">
+            <input 
+              type="text" 
+              placeholder="Enter username or wallet address" 
+              value={searchUsername}
+              onChange={(e) => setSearchUsername(e.target.value)}
+              onKeyUp={(e) => e.key === 'Enter' && handleUserSearch()}
+            />
+            <button 
+              onClick={handleUserSearch}
+              disabled={searchLoading || !searchUsername}
+            >
+              {searchLoading ? 'Searching...' : 'Search'}
+            </button>
+          </div>
+          
+          {userSearchResults && !userSearchResults.notFound && !userSearchResults.error && (
+            <div className="user-results">
+              <h3>User Details</h3>
+              
+              <div className="user-info-grid">
+                <div className="user-info-item">
+                  <span className="label">Username:</span>
+                  <span className="value">{userSearchResults.username || 'N/A'}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">Wallet Address:</span>
+                  <span className="value">{userSearchResults.wallet_address || userSearchResults.address || 'N/A'}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">Joined Date:</span>
+                  <span className="value">{formatDate(userSearchResults.created_at || userSearchResults.join_date || userSearchResults.joined_at)}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">Total Jumps:</span>
+                  <span className="value">{formatNumber(userSearchResults.totalJumps)}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">Games Played:</span>
+                  <span className="value">{formatNumber(userSearchResults.games_played || userSearchResults.totalGames || 0)}</span>
+                </div>
+                <div className="user-info-item">
+                  <span className="label">High Score:</span>
+                  <span className="value">{formatNumber(userSearchResults.high_score || userSearchResults.score || 0)}</span>
+                </div>
               </div>
               
-              <div className="stat-card">
-                <h4>Total NFTs Minted</h4>
-                <div className="stat-value">{formatNumber(gameStats.totalMints)}</div>
-              </div>
+              {userSearchResults.gameHistory && userSearchResults.gameHistory.length > 0 && (
+                <div className="user-history">
+                  <h4>Game History</h4>
+                  <div className="history-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Score</th>
+                          <th>Jumps</th>
+                          <th>Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {userSearchResults.gameHistory.map((game, index) => (
+                          <tr key={index}>
+                            <td>{formatDate(game.played_at || game.created_at)}</td>
+                            <td>{formatNumber(game.score)}</td>
+                            <td>{formatNumber(game.jumps)}</td>
+                            <td>{game.duration ? `${game.duration}s` : 'N/A'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               
-              <div className="stat-card">
-                <h4>Total Transactions</h4>
-                <div className="stat-value">{formatNumber(totalTransactions)}</div>
-              </div>
-              
-              <div className="stat-card">
-                <h4>Contract Balance</h4>
-                <div className="stat-value">{contractBalance.toFixed(4)} MON</div>
-              </div>
+              {userSearchResults.jumpHistory && userSearchResults.jumpHistory.length > 0 && (
+                <div className="user-history">
+                  <h4>Jump History</h4>
+                  <div className="history-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Jumps</th>
+                          <th>Game Session</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {userSearchResults.jumpHistory.map((jump, index) => (
+                          <tr key={index}>
+                            <td>{formatDate(jump.created_at || jump.timestamp)}</td>
+                            <td>{formatNumber(jump.count)}</td>
+                            <td>{jump.game_session_id || 'N/A'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {userSearchResults && userSearchResults.notFound && (
+            <div className="user-not-found">
+              <p>No user found with this username or wallet address.</p>
+            </div>
+          )}
+          
+          {userSearchResults && userSearchResults.error && (
+            <div className="user-search-error">
+              <p>Error searching for user: {userSearchResults.error}</p>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {activeTab === 'contract' && (
+        <div className="admin-section contract-info">
+          <h3>Contract Information</h3>
+          
+          <div className="contract-stats-grid">
+            <div className="stat-card">
+              <h4>Contract Address</h4>
+              <div className="contract-address">{import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS || 'Not configured'}</div>
             </div>
             
-            <div className="withdraw-section">
-              <h4>Contract Management</h4>
-              <button 
-                className="admin-button withdraw-button"
-                onClick={handleWithdrawFunds}
-                disabled={withdrawing || contractBalance <= 0}
-              >
-                {withdrawing ? 'Withdrawing...' : 'Withdraw Funds to Owner'}
-              </button>
-              
-              {withdrawSuccess && (
-                <div className="withdraw-success">
-                  {withdrawSuccess}
-                </div>
-              )}
-              
-              {withdrawError && (
-                <div className="withdraw-error">
-                  {withdrawError}
-                </div>
-              )}
+            <div className="stat-card">
+              <h4>Total NFTs Minted</h4>
+              <div className="stat-value">{formatNumber(gameStats.totalMints)}</div>
             </div>
-          </div>
-        )}
+            
+            <div className="stat-card">
+              <h4>Total Transactions</h4>
+              <div className="stat-value">{formatNumber(totalTransactions)}</div>
+            </div>
+            
+            <div className="stat-card">
+              <h4>Contract Balance</h4>
+              <div className="stat-value">{contractBalance.toFixed(4)} MON</div>
+            </div>
+        </div>
         
-        {activeTab === 'revive' && (
-          <RevivePanel />
-        )}
+          <div className="withdraw-section">
+            <h4>Contract Management</h4>
+          <button 
+            className="admin-button withdraw-button"
+            onClick={handleWithdrawFunds}
+            disabled={withdrawing || contractBalance <= 0}
+          >
+            {withdrawing ? 'Withdrawing...' : 'Withdraw Funds to Owner'}
+          </button>
+          
+          {withdrawSuccess && (
+            <div className="withdraw-success">
+              {withdrawSuccess}
+            </div>
+          )}
+          
+          {withdrawError && (
+            <div className="withdraw-error">
+              {withdrawError}
+            </div>
+          )}
+        </div>
+      </div>
+      )}
+      
+      {activeTab === 'revive' && (
+        <ReviveAdmin account={account} />
+      )}
+      
+      <div className="admin-actions">
+        <button 
+          className="admin-button"
+          onClick={() => window.location.href = '/'}
+        >
+          Return to Game
+        </button>
       </div>
     </div>
   );

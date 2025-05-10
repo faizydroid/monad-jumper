@@ -23,7 +23,7 @@ export const monadTestnet = defineChain({
 });
 
 export const wagmiConfig = getDefaultConfig({
-  appName: 'Doodle Jump Game',
+  appName: 'Jumpnads Game',
   projectId: import.meta.env.VITE_PROJECT_ID,
   chains: [monadTestnet],
   transports: {

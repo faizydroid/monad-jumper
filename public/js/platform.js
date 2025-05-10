@@ -81,32 +81,30 @@ export class Platform {
     }
 
     draw(context) {
-        // Only draw if platform is visible (in or near the viewport)
-        // This is a critical optimization to avoid drawing offscreen platforms
-        if (this.y < -this.height || this.y > this.game.height) {
-            return; // Skip drawing completely if offscreen
+        // Skip drawing completely if outside viewable area
+        if (this.y < -100 || this.y > this.game.height + 50) {
+            return;
         }
         
         // Select the correct image based on platform type and state
         const imageToUse = (this.type === 'spring' && this.pressed) ? this.pressedImage : this.image;
         
-        // Wait for image to load
+        // Draw only if image is loaded
         if (imageToUse.complete) {
-            context.drawImage(imageToUse, this.x, this.y, this.width, this.height);
+            // Use integer coordinates for sharper rendering
+            const x = Math.floor(this.x);
+            const y = Math.floor(this.y);
+            context.drawImage(imageToUse, x, y, this.width, this.height);
         } else {
-            // Fallback until image loads
+            // Fallback: Draw a colored rectangle
             context.fillStyle = '#2196F3'; // Blue fallback
-            context.fillRect(this.x, this.y, this.width, this.height);
+            context.fillRect(Math.floor(this.x), Math.floor(this.y), this.width, this.height);
             
-            // Add a one-time load listener to redraw once the image loads
+            // Add image load listener only once
             if (!this.imageLoadListenerAdded) {
                 imageToUse.onload = () => {
-                    // Only log on development
-                    if (window.location.hostname === 'localhost') {
-                    console.log('Platform image loaded!');
-                    }
+                    this.imageLoadListenerAdded = true;
                 };
-                this.imageLoadListenerAdded = true;
             }
         }
     }

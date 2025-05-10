@@ -1,0 +1,54 @@
+.ownership-status {
+  margin-bottom: 15px;
+  font-size: 14px;
+}
+
+.owner-badge {
+  background-color: #4CAF50;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.not-owner-badge {
+  background-color: #ff9800;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.owner-warning {
+  margin-top: 10px;
+  color: #ff5722;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.withdraw-success {
+  margin-top: 10px;
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+.withdraw-error {
+  margin-top: 10px;
+  color: #f44336;
+  font-weight: bold;
+}
+
+.tx-hash {
+  margin-top: 10px;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.tx-hash a {
+  color: #2196F3;
+  text-decoration: none;
+}
+
+.tx-hash a:hover {
+  text-decoration: underline;
+} 

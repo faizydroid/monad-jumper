@@ -406,6 +406,13 @@ export function Web3Provider({ children }) {
       return false;
     }
     
+    // Check for revive cancellation transactions that App.jsx already processed
+    if (window.__processedReviveCancellations && 
+        window.__processedReviveCancellations.has(gameSessionId)) {
+      console.log(`SKIPPING: recordBundledJumps - Session ${gameSessionId} already processed by App.jsx`);
+      return true; // Return true to indicate "success" and allow flow to continue
+    }
+    
     try {
       // First save to Supabase database
       const account = address;
@@ -415,6 +422,19 @@ export function Web3Provider({ children }) {
       
       // Update local total jumps count
       setTotalJumps(prev => (prev || 0) + jumpCount);
+      
+      // Check if our global transaction system exists and if this transaction is already processed
+      if (window.__GLOBAL_TX_SYSTEM) {
+        const txKey = `jumps_${gameSessionId}_${address}_${jumpCount}`;
+        
+        // Check if this transaction is already recorded or in progress
+        if (window.__GLOBAL_TX_SYSTEM.txHistory.has(txKey) || 
+            window.__GLOBAL_TX_SYSTEM.activeTransactions.has(txKey) || 
+            window.__GLOBAL_TX_SYSTEM.pendingLock) {
+          console.log(`🔄 Web3Context: Skipping duplicate jump transaction (${txKey}) - already handled by App.jsx`);
+          return true;
+        }
+      }
       
       // Use wagmi hooks for blockchain transaction instead of ethers.js
       // This prevents network switching issues
@@ -446,7 +466,9 @@ export function Web3Provider({ children }) {
             abi: contractAbi,
             functionName: 'recordJumps',
             args: [BigInt(jumpCount)],
-            account: address
+            account: address,
+            // Only set reasonable gas limit
+            gas: BigInt(200000)
           });
           
           console.log("Jump transaction sent:", hash);
@@ -1490,6 +1512,13 @@ export function Web3Provider({ children }) {
           // ONLY process jumps from BUNDLE_JUMPS - the single source of truth
           if (event.data.type === 'BUNDLE_JUMPS' && event.data.data) {
             const { score, jumpCount, saveId } = event.data.data || {};
+            
+            // Check if this is from a revive cancellation that App.jsx already processed
+            if (window.__processedReviveCancellations && 
+                window.__processedReviveCancellations.has(saveId)) {
+              console.log(`SKIPPING: Web3Context - BUNDLE_JUMPS already processed by App.jsx for ${saveId}`);
+              return;
+            }
             
             // Mark this event as processed to avoid duplicates
             window.__processedEvents[eventKey] = Date.now();
