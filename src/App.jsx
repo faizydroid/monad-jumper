@@ -26,7 +26,7 @@ import characterImg from '/images/monad0.png'; // correct path with leading slas
 import { FaXTwitter, FaDiscord } from "react-icons/fa6";
 import { monadTestnet } from './config/chains';
 // Import the utility functions
-import { debounce, fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelpers';
+import { debounce, fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelpers.utils';
 
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
@@ -3822,7 +3822,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               onClick={() => {
                 document.getElementById('iframe-error-fallback').style.display = 'none';
                 if (typeof handlePlayAgain === 'function') {
-                  handlePlayAgain();
+                handlePlayAgain();
                 } else {
                   console.error('handlePlayAgain function not available');
                   // Fallback: Force reload the iframe
