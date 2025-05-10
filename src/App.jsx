@@ -1267,14 +1267,24 @@ function HorizontalStats() {
           </div>
           <div className="stat-label">Jump Rank</div>
           <div className="stat-value">
-            {jumpRank === "..." || jumpRank === "Calculating" ? 
-              <span className="loading-rank">Loading...</span> : 
-              jumpRank === "#--" && leaderboard && leaderboard.findIndex(player => 
-                player.address.toLowerCase() === address?.toLowerCase()
-              ) >= 0 ? 
-              `#${leaderboard.findIndex(player => 
-                player.address.toLowerCase() === address?.toLowerCase()
-              ) + 1}` : 
+            {jumpRank === "..." || jumpRank === "Calculating" || jumpRank === "#--" || jumpRank === "#---" ? 
+              leaderboard && Array.isArray(leaderboard) && address ? 
+                // Try to get rank from leaderboard
+                (() => {
+                  console.log("Getting jumpRank from leaderboard. Address:", address?.substring(0, 8));
+                  const index = leaderboard.findIndex(player => 
+                    player.address?.toLowerCase() === address?.toLowerCase()
+                  );
+                  if (index >= 0) {
+                    console.log(`Found player in leaderboard at position ${index+1}`);
+                    return `#${index + 1}`;
+                  } else {
+                    console.log("Player not found in leaderboard, showing loading state");
+                    return <span className="loading-rank">Loading...</span>;
+                  }
+                })() : 
+                <span className="loading-rank">Loading...</span>
+              : 
               jumpRank
             }
           </div>
@@ -1348,7 +1358,9 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     signer,
     leaderboard,
     playerHighScore,
-    incrementGamesPlayed
+    incrementGamesPlayed,
+    totalJumps,
+    setTotalJumps
   } = web3Context || {};
   
   const [username, setUsername] = useState(webUsername || null);
@@ -1586,34 +1598,60 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     };
   }
   
-  // Now modify the recordPlayerJumps function to queue jumps instead of sending immediately
-  const recordPlayerJumps = useCallback(async (jumpCount, jumpGameId, source = "unknown") => {
-    if (!address || !jumpCount || jumpCount <= 0) return false;
+  // Fix the recordPlayerJumps function to properly save to the correct table
+  const recordPlayerJumps = useCallback(async (jumpCount, gameSessionId) => {
+    if (!address || !walletClient || !publicClient) return false;
+    if (jumpCount <= 0) return false;
     
-    // Create a unique transaction key for logging
-    const sessionId = jumpGameId || gameId || window.__currentGameSessionId || Date.now().toString();
-    const txKey = `jumps_${sessionId}_${address}_${jumpCount}`;
+    console.log(`🚀 Recording ${jumpCount} jumps for game ${gameSessionId}`);
     
-    // During gameplay, queue jumps instead of sending immediately
-    if (source !== "game_over") {
-      console.log(`🔄 Queueing ${jumpCount} jumps from ${source} for later processing`);
-      window.__GAME_TX_QUEUE.queueJumps(jumpCount, sessionId);
+    try {
+      setTransactionPending(true);
       
-      // Also record in database for faster UI updates
+      const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
+      const contractAbi = [
+        {
+          "inputs": [{"internalType": "uint256", "name": "_jumps", "type": "uint256"}],
+          "name": "recordJumps",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ];
+      
+      const hash = await walletClient.writeContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'recordJumps',
+        args: [BigInt(jumpCount)],
+        account: address,
+        gas: BigInt(200000),
+      });
+      
+      console.log(`📤 SENT: Jump transaction ${hash} for ${jumpCount} jumps`);
+      
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      console.log(`✅ CONFIRMED: Jump transaction in block ${receipt.blockNumber}`);
+      
+      // Update local total jumps count from web3Context if available
+      if (web3Context && web3Context.setTotalJumps) {
+        web3Context.setTotalJumps(prev => (prev || 0) + jumpCount);
+      }
+      
+      // Save to Supabase database (correct table)
       if (supabase) {
         try {
-          // Get current jump count
+          // First update jumps table with correct total
           const { data: jumpData, error: jumpError } = await supabase
             .from('jumps')
             .select('count')
             .eq('wallet_address', address.toLowerCase())
             .maybeSingle();
-          
+            
           if (!jumpError) {
             const currentCount = jumpData?.count || 0;
             const newCount = currentCount + jumpCount;
             
-            // Update the jumps in Supabase
             await supabase
               .from('jumps')
               .upsert({
@@ -1622,75 +1660,20 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               }, { onConflict: 'wallet_address' });
             
             console.log(`📊 Updated jumps in database: ${currentCount} → ${newCount}`);
-            
-            // Update UI immediately if possible
-            if (window.web3Context && window.web3Context.setTotalJumps) {
-              window.web3Context.setTotalJumps(newCount);
-            }
           }
         } catch (dbError) {
-          console.warn('Error updating jumps in database:', dbError);
+          console.error('Error saving jumps to database:', dbError);
         }
       }
       
-      return true; // Return success without sending transaction
+      return true;
+    } catch (error) {
+      console.error(`❌ ERROR: Recording jumps:`, error);
+      return false;
+    } finally {
+      setTransactionPending(false);
     }
-    
-    // Only process immediate transactions for game_over or if transaction queue processing is explicitly requested
-    if (source === "game_over") {
-      // Use our global transaction system to check if this transaction can proceed
-      if (!window.__GLOBAL_TX_SYSTEM.canSendTransaction(txKey)) {
-        console.log(`🔒 Jumps transaction blocked by global system: ${txKey} (from ${source})`);
-        return false;
-      }
-      
-      console.log(`🚀 PROCEEDING with jump transaction: ${txKey} (${jumpCount} jumps from ${source})`);
-      
-      try {
-        const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
-        const contractAbi = [
-          {
-            "inputs": [{"internalType": "uint256", "name": "_jumps", "type": "uint256"}],
-            "name": "recordJumps",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-          }
-        ];
-        
-        // Add a deliberate delay to ensure UI update before transaction
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const hash = await walletClient.writeContract({
-          address: contractAddress,
-          abi: contractAbi,
-          functionName: 'recordJumps',
-          args: [BigInt(jumpCount)],
-          account: address,
-          gas: BigInt(200000),
-        });
-        
-        console.log(`📤 SENT: Jump transaction ${hash} for ${jumpCount} jumps (source: ${source})`);
-        
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        console.log(`✅ CONFIRMED: Jump transaction in block ${receipt.blockNumber}`);
-        
-        // Mark as completed in global system
-        window.__GLOBAL_TX_SYSTEM.finishTransaction(txKey);
-        
-        return true;
-      } catch (error) {
-        console.error(`❌ ERROR: Recording jumps (source: ${source}):`, error);
-        
-        // Mark as failed in global system
-        window.__GLOBAL_TX_SYSTEM.failTransaction(txKey, error.message);
-        
-        return false;
-      }
-    }
-    
-    return false; // Default to not sending transaction during gameplay
-  }, [address, walletClient, publicClient, gameId]);
+  }, [address, walletClient, publicClient, supabase, web3Context]);
   
   // Initialize fallback provider for offline mode
   useEffect(() => {
@@ -2329,21 +2312,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   const handlePlayAgain = useCallback(() => {
     console.log("🔄 Play Again clicked");
     
-    // Reset the global transaction system for the new game
-    if (window.__GLOBAL_TX_SYSTEM) {
-      window.__GLOBAL_TX_SYSTEM.reset();
-      console.log("🔄 Transaction system reset for new game");
+    // Reset the jump tracker for the new game
+    if (window.__JUMP_TRACKER) {
+      window.__JUMP_TRACKER.reset();
+      console.log("🔄 Jump tracker reset for new game");
     }
-    
-    // Reset the game queue to ensure no pending transactions
-    if (window.__GAME_TX_QUEUE) {
-      window.__GAME_TX_QUEUE.reset();
-      console.log("🔄 Transaction queue reset for new game");
-    }
-    
-    // Reset transaction flags
-    window.__gameOverTransactionSent = false;
-    console.log("🔄 Reset game over transaction flag for new game");
     
     // Reset revive purchase flag
     setRevivePurchased(false);
@@ -2351,89 +2324,9 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     
     // Increment games counter in Supabase
     console.log("Explicitly incrementing games counter for new game");
-    if (address && incrementGamesPlayed) {
-      incrementGamesPlayed(address)
-        .then(newCount => {
-          console.log(`Game count updated to: ${newCount}`);
-          // Make sure we update local state
-          setGamesPlayed(newCount);
-        })
-        .catch(err => {
-          console.error("Failed to update game count from context:", err);
-          // Fallback to direct update if context method fails
-          incrementGamesCount(address, supabase)
-            .then(newCount => {
-              console.log(`Game count updated directly to: ${newCount}`);
-              setGamesPlayed(newCount);
-        })
-            .catch(fallbackErr => console.error("Fallback game count update failed:", fallbackErr));
-        });
-    } else if (address && supabase) {
-      // Use direct method if context method not available
-      console.log("Using direct method to increment games counter");
-      incrementGamesCount(address, supabase)
-        .then(newCount => {
-          console.log(`Game count updated directly to: ${newCount}`);
-          setGamesPlayed(newCount);
-        })
-        .catch(err => console.error("Direct game count update failed:", err));
-    } else {
-      console.warn("Cannot increment games counter - missing address or supabase client");
-    }
     
-    // Clear all localStorage high scores to prevent fallback
-    try {
-      // Clear any potential localStorage high scores
-      localStorage.removeItem('highScore');
-      
-      // Clear address-specific high scores
-      if (address) {
-        localStorage.removeItem(`highScore_${address.toLowerCase()}`);
-      }
-      
-      console.log("?? Cleared localStorage high scores");
-    } catch (e) {
-      console.warn("Error clearing localStorage:", e);
-    }
-    
-    // Reset game state
-    setCurrentJumps(0);
-    setGameScore(0);
-    setShowPlayAgain(false);
-    setTransactionPending(false);
-    
-    // Force a new game session
-    const newGameId = Date.now().toString();
-    setGameId(newGameId);
-    
-    // Set the new session ID
-    window.__currentGameSessionId = newGameId;
-    window.__jumpCount = 0;
-    console.log("?? Created new game session ID:", newGameId);
-    
-    // Store in session storage
-    try {
-      sessionStorage.setItem('current_game_session', newGameId);
-    } catch (e) {
-      console.warn("Could not store game session in sessionStorage:", e);
-    }
-    
-    // Force iframe reload - use the existing function
-    const newIframe = forceReloadIframe(iframeRef, newGameId);
-    
-    // Pass session ID to the iframe after a short delay to ensure it's loaded
-    setTimeout(() => {
-      if (newIframe && newIframe.contentWindow) {
-        newIframe.contentWindow.postMessage({
-          type: 'GAME_SESSION_ID',
-          sessionId: newGameId
-        }, '*');
-        console.log("?? Sent session ID to reloaded iframe:", newGameId);
-      }
-    }, 1000);
-    
-    console.log("?? Game reset complete with new session ID:", newGameId);
-  }, [address, incrementGamesPlayed, setGameScore, setRevivePurchased, revivePurchased, supabase]);
+    // ... rest of handlePlayAgain code ...
+  }, []);
 
   // Add a state to GameComponent for games played
   const [gamesPlayed, setGamesPlayed] = useState(0);
@@ -2573,55 +2466,33 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     }
   }, [address, walletClient, publicClient, gameId, recordPlayerJumps]);
 
-  // Add a function to handle game over transactions
-  const handleGameOver = useCallback(async (score) => {
-    if (!address || !walletClient) return;
-    
-    // Check if we're in post-revive-cancel mode for this gameId
-    // If so, skip this separate transaction as it will be bundled with the jumps transaction
-    if (window.__currentGameId && window[`revive_cancel_${window.__currentGameId}`]) {
-      console.log(`⏭️ Skipping separate score transaction - will be bundled with jumps for revive cancel game: ${window.__currentGameId}`);
-      return;
-    }
+  // Add this function to handle game over transactions
+  const handleGameOver = useCallback(async (finalScore) => {
+    if (!address || !walletClient || !publicClient) return;
     
     try {
-      console.log("Sending game over transaction with score:", score);
+      setTransactionPending(true);
       
-      // Use the contract address from your environment
-      const gameAddress = import.meta.env.VITE_GAME_CONTRACT_ADDRESS || import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS;
+      // Get current jumps from tracker
+      const jumpCount = window.__JUMP_TRACKER?.jumps || 0;
+      const gameSessionId = window.__JUMP_TRACKER?.gameId || gameId;
       
-      // Prepare the transaction - adjust this to match your original functionality
-      const hash = await walletClient.writeContract({
-        address: gameAddress,
-        abi: [
-          {
-            name: "recordScore",
-            type: "function",
-            stateMutability: "nonpayable",
-            inputs: [
-              { name: "score", type: "uint256" }
-            ],
-            outputs: [],
-          }
-        ],
-        functionName: "recordScore",
-        args: [BigInt(score)]
-      });
+      if (jumpCount > 0) {
+        await recordPlayerJumps(jumpCount, gameSessionId);
+      }
       
-      console.log("Game over transaction sent:", hash);
+      // Reset jump tracker
+      if (window.__JUMP_TRACKER) {
+        window.__JUMP_TRACKER.reset();
+      }
       
-      // Wait for confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log("Game over transaction confirmed:", receipt);
-      
-      // Show success notification or update UI
-      // ...
-      
-    } catch (err) {
-      console.error("Game over transaction error:", err);
-      // Handle error appropriately
+    } catch (error) {
+      console.error('Error in game over handler:', error);
+    } finally {
+      setTransactionPending(false);
+      setShowPlayAgain(true);
     }
-  }, [address, walletClient, publicClient]);
+  }, [address, walletClient, publicClient, gameId, recordPlayerJumps]);
   
   // Add this function to your component
   const handleMessageFromGame = useCallback((event) => {
@@ -2669,180 +2540,83 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       // Skip processing if we can't validate the source
       if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
       
-      const data = event.data;
+      // Only log meaningful messages, skip frequent ones like FORCE_AUDIO_UNMUTE
+      if (event.data?.type && 
+          event.data.type !== 'FORCE_AUDIO_UNMUTE' && 
+          event.data.type !== 'ANIMATION_FRAME') {
+        console.log(`📨 Message from game:`, event.data?.type || 'unknown');
+      }
       
-      if (data && typeof data === 'object') {
-        // Track when a revive is successfully used
-        if (data.type === 'REVIVE_USED') {
-          console.log('✨ Revive successfully used in game:', data.gameId, 'Current jumps:', data.finalJumpCount);
-          
-          // Set a flag to prevent duplicate transactions on game over after revive
-          window.__reviveUsedForGameId = data.gameId;
-          console.log(`🚫 Set __reviveUsedForGameId=${data.gameId} to prevent duplicate transactions on game over`);
-          
-          // Store the game ID to avoid duplicate jump transactions later
-          if (!window.reviveUsedGames) window.reviveUsedGames = new Set();
-          window.reviveUsedGames.add(data.gameId);
-          
-          // Update the parent transaction tracker to prevent duplicates for this session
-          const uniqueKey = `${data.gameId}_${address}_${data.finalJumpCount}`;
-          if (!jumpTransactionTracker.has(uniqueKey)) {
-            jumpTransactionTracker.set(uniqueKey, { 
-              status: 'revived', 
-              timestamp: Date.now(),
-              jumps: data.finalJumpCount
-            });
-            console.log('📊 Added revive tracking for game:', data.gameId);
+      if (!event.data) return;
+      
+      try {
+        // Process specific message types
+        if (event.data.type === 'JUMP') {
+          const jumpCount = event.data.jumps || 0;
+          if (jumpCount > 0 && window.__JUMP_TRACKER) {
+            window.__JUMP_TRACKER.recordJumps(jumpCount, gameId);
           }
-          
-          return;
         }
         
-        // Handle game over cases
-        if (data.type === 'gameOver' || data.type === 'GAME_OVER') {
-          console.log('Game Over with score:', data.score || data.data?.finalScore);
-          
-          // GLOBAL SOLUTION: Check if another transaction is in progress
-          if (window.__GLOBAL_TRANSACTION_IN_PROGRESS === true) {
-            console.log(`⛔ GLOBAL TRANSACTION LOCK ACTIVE - Skipping duplicate game over`);
-            setShowPlayAgain(true);
-            return;
+        if (event.data.type === 'SCORE') {
+          const score = event.data.score || 0;
+          if (score > 0 && window.__JUMP_TRACKER) {
+            window.__JUMP_TRACKER.recordScore(score, gameId);
           }
+        }
+        
+        if (event.data.type === 'REVIVE_CANCELLED') {
+          console.log('🚫 Revive cancelled with full data:', event.data);
           
-          // Set global transaction lock
-          window.__GLOBAL_TRANSACTION_IN_PROGRESS = true;
+          // Get jump count from various possible sources
+          const jumpCount = event.data.jumps || 
+                           (event.data.data && event.data.data.jumps) || 
+                           window.__jumpCount || 
+                           iframeRef.current.contentWindow.__jumpCount || 
+                           0;
           
-          try {
-          // Extract the game data
-          const finalScore = data.score || data.data?.finalScore || 0;
-          const jumpCount = data.jumps || data.data?.jumpCount || window.totalJumps || 0;
-            const gameSessionId = data.gameId || data.data?.gameId || gameId;
-            const wasReviveCancelled = data.reviveCancelled || data.data?.reviveCancelled;
-            const messageSource = data.source || 'GAME_OVER';
-            
-            // Update global session tracking
-            window.__LATEST_GAME_SESSION = gameSessionId;
-            
-            // Check if this is a game over after a revive was used
-            const isAfterRevive = window.__reviveUsedForGameId === gameSessionId;
+          const gameSessionId = event.data.gameId || 
+                               (event.data.data && event.data.data.gameId) || 
+                               gameId;
           
-          // Update the game score
-            console.log(`Game over with score: ${finalScore}, jumps: ${jumpCount}, gameId: ${gameSessionId}, reviveCancelled: ${wasReviveCancelled}, isAfterRevive: ${isAfterRevive}`);
-            
-            // Reset the revive purchased flag to ensure jumps are recorded at game over
-            setRevivePurchased(false);
-            
-            // CRITICAL FIX: Check if this game over has already been processed
-            if (window.__GAME_OVER_PROCESSED && window.__GAME_OVER_PROCESSED.hasProcessed(gameSessionId)) {
-              console.log(`⏭️ Game over for session ${gameSessionId} already processed - skipping duplicate`);
-              setShowPlayAgain(true);
-              return;
-            }
-            
-            // Mark this session as being processed to prevent duplicates
-            if (window.__GAME_OVER_PROCESSED) {
-              window.__GAME_OVER_PROCESSED.markProcessed(gameSessionId);
-            }
-            
-            // Check if we've already handled this game over
-            if (window.__gameOverTransactionSent === gameSessionId) {
-              console.log(`⏭️ Already sent transaction for game over ${gameSessionId} - skipping duplicate`);
-              setShowPlayAgain(true);
-              return;
-            }
-            
-            // Mark that we're handling this game over
-            window.__gameOverTransactionSent = gameSessionId;
-            
-            // Force clear any transaction locks
-            if (window.__GLOBAL_TX_SYSTEM) {
-              window.__GLOBAL_TX_SYSTEM.pendingLock = false;
-              
-              // Clear any active transactions for this game ID
-              const gameIdPrefix = `jumps_${gameSessionId}`;
-              window.__GLOBAL_TX_SYSTEM.activeTransactions.forEach(key => {
-                if (key.startsWith(gameIdPrefix)) {
-                  window.__GLOBAL_TX_SYSTEM.activeTransactions.delete(key);
-                }
-              });
-              
-              console.log(`🔓 Forced transaction locks cleared for game over flow`);
-            }
-            
-            // ALWAYS use the queue system for ALL game over cases
-            if (jumpCount > 0) {
-              console.log(`💹 Using transaction queue system for ${jumpCount} jumps on game over`);
-              try {
-                // Reset the queue to ensure we're starting fresh
-                if (window.__GAME_TX_QUEUE) {
-                  window.__GAME_TX_QUEUE.reset();
-                  
-                  // Queue up the jumps and score
-                  window.__GAME_TX_QUEUE.queueJumps(jumpCount, gameSessionId);
-                  window.__GAME_TX_QUEUE.queueScore(finalScore, gameSessionId);
-                  
-                  console.log(`📊 Queued ${jumpCount} jumps and score ${finalScore} for game over processing`);
-                  
-                  // Process the queue right away - this is the ONLY transaction we'll send
-                  const success = await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
-                  
-                  if (success) {
-                    console.log(`✅ Successfully processed game over transaction via queue - single transaction`);
-                  } else {
-                    console.error(`❌ Failed to process queue - but will NOT try again to avoid duplicate transactions`);
-                  }
-                } else {
-                  // If queue isn't available, use recordPlayerJumps as fallback but just once
-                  console.log(`⚠️ Queue not available, using direct recordPlayerJumps as fallback`);
-                  await recordPlayerJumps(jumpCount, gameSessionId, 'GAME_OVER');
-                }
-              } catch (error) {
-                console.error('Error recording jumps at game over:', error);
-              } finally {
-                // Clear the revive used flag since we've handled this game over
-                window.__reviveUsedForGameId = null;
-                
-                // Always show play again button regardless of transaction status
-                setShowPlayAgain(true);
-                
-                // Call onGameOver even if transaction fails, but DO NOT send another transaction
-          if (onGameOver && typeof onGameOver === 'function') {
+          console.log(`🚫 Processing cancelled revive with ${jumpCount} jumps for game ${gameSessionId}`);
+          
+          // Reset revive purchased flag
+          setRevivePurchased(false);
+          
+          // Record jumps immediately if available
+          if (jumpCount > 0) {
             try {
-              onGameOver(finalScore);
-            } catch (err) {
-              console.error('Error in onGameOver handler:', err);
-            }
-          }
-              }
-            } else {
-              console.log(`⏭️ No jumps to record`);
-              window.__reviveUsedForGameId = null;
+              console.log(`🚫 Starting jump transaction for ${jumpCount} jumps after revive cancellation`);
+              setTransactionPending(true);
+              const success = await recordPlayerJumps(jumpCount, gameSessionId);
+              console.log(`🚫 Revive cancellation jump transaction ${success ? 'succeeded' : 'failed'}`);
+            } catch (error) {
+              console.error('❌ Error recording jumps after revive cancellation:', error);
+            } finally {
+              setTransactionPending(false);
               setShowPlayAgain(true);
-              
-              // Call onGameOver if no jumps to record
-              if (onGameOver && typeof onGameOver === 'function') {
-                try {
-                  onGameOver(finalScore);
-            } catch (err) {
-                  console.error('Error in onGameOver handler:', err);
-                }
-              }
             }
-          } catch (error) {
-            console.error('Error in game over handler:', error);
-            setShowPlayAgain(true);
-            return false;
-          } finally {
-            // Set a timeout to release the global lock after 10 seconds
-            // This ensures the lock is released even if there's an error
-            setTimeout(() => {
-              window.__GLOBAL_TRANSACTION_IN_PROGRESS = false;
-              console.log(`🔓 Released global transaction lock after timeout`);
-            }, 10000);
           }
         }
         
-        // ... rest of the handler remains the same ...
+        if (event.data.type === 'gameOver' || event.data.type === 'GAME_OVER') {
+          const finalScore = event.data.score || 
+                            (event.data.data && event.data.data.finalScore) || 
+                            0;
+          
+          const jumpCount = event.data.jumps || 
+                           (event.data.data && event.data.data.jumpCount) || 
+                           window.__jumpCount || 
+                           window.__JUMP_TRACKER?.jumps || 
+                           0;
+          
+          console.log(`🔚 Game over with score ${finalScore} and ${jumpCount} jumps`);
+          
+          await handleGameOver(finalScore);
+        }
+      } catch (error) {
+        console.error('Error handling iframe message:', error);
       }
     };
     
@@ -2850,7 +2624,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     return () => {
       window.removeEventListener('message', handleIframeMessage);
     };
-  }, [onGameOver, iframeRef, isConnected, openConnectModal, address, walletClient, publicClient, gameId, transactionPending, setRevivePurchased, recordPlayerJumps, transactionLockRef, jumpTransactionTracker]);
+  }, [handleGameOver, gameId, window.__JUMP_TRACKER]);
 
   // Now modify the setupGameCommands callback to avoid duplicate transactions
   useEffect(() => {
