@@ -485,7 +485,7 @@ const HorizontalStats = memo(function HorizontalStats() {
           <div className="stat-value">
             {jumpRank === "..." ? 
               totalJumps > 0 ? 
-                <span className="loading-rank">Loading...</span> : 
+                jumpRank : 
                 <span>Unranked</span>
               : 
               jumpRank
