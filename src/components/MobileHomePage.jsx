@@ -102,60 +102,70 @@ const MobileHomePage = ({
     <div className="mobile-container">
       {/* Top Navigation Bar */}
       <div className="mobile-top-nav">
-        <button 
-          className="hamburger-button" 
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuOpen(!menuOpen);
-            if (leaderboardOpen) setLeaderboardOpen(false);
-          }}
-        >
-          <FaBars />
-        </button>
-        
-        <h1 className="mobile-nav-title">JumpNads</h1>
-        
-        <button 
-          className="leaderboard-button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setLeaderboardOpen(!leaderboardOpen);
-            if (menuOpen) setMenuOpen(false);
-          }}
-        >
-          <FaTrophy />
-        </button>
+        {isConnected ? (
+          <>
+            <button 
+              className="hamburger-button" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(!menuOpen);
+                if (leaderboardOpen) setLeaderboardOpen(false);
+              }}
+            >
+              <FaBars />
+            </button>
+            
+            <h1 className="mobile-nav-title">JumpNads</h1>
+            
+            <button 
+              className="leaderboard-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLeaderboardOpen(!leaderboardOpen);
+                if (menuOpen) setMenuOpen(false);
+              }}
+            >
+              <FaTrophy />
+            </button>
+          </>
+        ) : (
+          <h1 className="mobile-nav-title">JumpNads</h1>
+        )}
       </div>
       
-      {/* Sliding Menu */}
-      <div className={`mobile-side-menu ${menuOpen ? 'open' : ''}`}>
-        <button 
-          className="close-menu-button"
-          onClick={() => setMenuOpen(false)}
-        >
-          <FaTimes />
-        </button>
-        <div className="mobile-navbar-container">
-          <Navbar isMobile={true} />
+      {/* Sliding Menu - only when connected */}
+      {isConnected && (
+        <div className={`mobile-side-menu ${menuOpen ? 'open' : ''}`}>
+          <button 
+            className="close-menu-button"
+            onClick={() => setMenuOpen(false)}
+          >
+            <FaTimes />
+          </button>
+          <div className="mobile-navbar-container">
+            <Navbar isMobile={true} />
+          </div>
         </div>
-      </div>
+      )}
       
-      {/* Sliding Leaderboard Panel */}
-      <div className={`mobile-leaderboard-panel ${leaderboardOpen ? 'open' : ''}`}>
-        <button 
-          className="close-leaderboard-button"
-          onClick={() => setLeaderboardOpen(false)}
-        >
-          <FaTimes />
-        </button>
-        <h2>Leaderboard</h2>
-        <div className="mobile-leaderboard-container">
-          <Leaderboard isMobile={true} />
+      {/* Sliding Leaderboard Panel - only when connected */}
+      {isConnected && (
+        <div className={`mobile-leaderboard-panel ${leaderboardOpen ? 'open' : ''}`}>
+          <button 
+            className="close-leaderboard-button"
+            onClick={() => setLeaderboardOpen(false)}
+          >
+            <FaTimes />
+          </button>
+          <h2>Leaderboard</h2>
+          <div className="mobile-leaderboard-container">
+            <Leaderboard isMobile={true} />
+          </div>
         </div>
-      </div>
+      )}
       
-      {/* Overlay when menus are open */}
-      {(menuOpen || leaderboardOpen) && (
+      {/* Overlay when menus are open - only when connected */}
+      {isConnected && (menuOpen || leaderboardOpen) && (
         <div 
           className="mobile-overlay" 
           onClick={() => {
