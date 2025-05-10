@@ -130,24 +130,59 @@ if (typeof window !== 'undefined') {
     sessionIds: new Set(),
     isProcessing: false,
     lastProcessed: null,
+    processingTimeout: null,
     
     // Check if this game over has been processed
     hasProcessed: function(sessionId) {
-      return this.sessionIds.has(sessionId);
+      // First check exact match
+      if (this.sessionIds.has(sessionId)) {
+        console.log(`🔍 Found exact session ID match: ${sessionId}`);
+        return true;
+      }
+      
+      // Also check if we're currently processing ANY game over
+      if (this.isProcessing && Date.now() - this.lastProcessed < 5000) {
+        console.log(`🔍 Another game over is still processing (started ${Date.now() - this.lastProcessed}ms ago)`);
+        return true;
+      }
+      
+      // Also check close timestamps (within 3 seconds)
+      if (this.lastProcessed && Date.now() - this.lastProcessed < 3000) {
+        console.log(`🔍 Game over was processed recently (${Date.now() - this.lastProcessed}ms ago)`);
+        return true;
+      }
+      
+      return false;
     },
     
     // Mark a session as processed
     markProcessed: function(sessionId) {
+      if (!sessionId) return;
+      
       this.sessionIds.add(sessionId);
       this.lastProcessed = Date.now();
+      this.isProcessing = true;
+      
       console.log(`🔒 Game over for session ${sessionId} marked as processed`);
+      
+      // Auto-reset processing flag after 5 seconds
+      clearTimeout(this.processingTimeout);
+      this.processingTimeout = setTimeout(() => {
+        this.isProcessing = false;
+        console.log(`🔓 Game over processing lock auto-released after timeout`);
+      }, 5000);
     },
     
     // Reset processing state
     resetProcessing: function() {
       this.isProcessing = false;
+      clearTimeout(this.processingTimeout);
+      console.log(`🔓 Game over processing lock manually released`);
     }
   };
+  
+  // Global variable to track the most recent game session
+  window.__LATEST_GAME_SESSION = null;
   
   // Set up regular cleanup to prevent memory leaks
   setInterval(() => {
@@ -1825,69 +1860,95 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             onGameOver: async (finalScore) => {
               console.log('Game over handler called with score:', finalScore);
               
-              // Get the current game session ID
-              const currentGameId = window.__currentGameSessionId || gameId;
-              
-              // CRITICAL FIX: First check if this game over has already been processed
-              if (window.__GAME_OVER_PROCESSED && window.__GAME_OVER_PROCESSED.hasProcessed(currentGameId)) {
-                console.log(`⏭️ Game over for session ${currentGameId} already processed in iframe handler - skipping duplicate`);
+              // GLOBAL SOLUTION: Check if another transaction is in progress
+              if (window.__GLOBAL_TRANSACTION_IN_PROGRESS === true) {
+                console.log(`⛔ GLOBAL TRANSACTION LOCK ACTIVE - Skipping duplicate game over handler`);
                 setShowPlayAgain(true);
-                return true; // Return success to avoid further processing
+                return true; // Return success to prevent further handling
               }
               
-              // Check if we've already processed this game over with our iframe message handler
-              if (window.__gameOverTransactionSent === currentGameId) {
-                console.log('⚠️ Transaction already sent for this game over - skipping duplicate');
-                setShowPlayAgain(true);
-                return true; // Return success to avoid further processing
-              }
-              
-              // If after revive, don't process here - let the iframe message handler handle it
-              if (window.__reviveUsedForGameId === currentGameId) {
-                console.log(`⚠️ Game over after revive - letting iframe message handler process it`);
-                setShowPlayAgain(true);
-                return true; // Return success to avoid further processing
-              }
+              // Set global transaction lock
+              window.__GLOBAL_TRANSACTION_IN_PROGRESS = true;
               
               try {
-                // Mark this session as processed to prevent duplicates in the iframe handler
-                if (window.__GAME_OVER_PROCESSED) {
-                  window.__GAME_OVER_PROCESSED.markProcessed(currentGameId);
+                // Get the current game session ID
+                const currentGameId = window.__currentGameSessionId || gameId;
+                
+                // Update global session tracking
+                window.__LATEST_GAME_SESSION = currentGameId;
+                
+                // CRITICAL FIX: First check if this game over has already been processed
+                if (window.__GAME_OVER_PROCESSED && window.__GAME_OVER_PROCESSED.hasProcessed(currentGameId)) {
+                  console.log(`⏭️ Game over for session ${currentGameId} already processed in iframe handler - skipping duplicate`);
+                  setShowPlayAgain(true);
+                  return true; // Return success to avoid further processing
                 }
                 
-                // Get the jump count directly from the game's display
-                const jumpCount = iframeRef.current.contentWindow.__jumpCount || 0;
-                console.log('Final jump count from game:', jumpCount);
+                // Check if we've already processed this game over with our iframe message handler
+                if (window.__gameOverTransactionSent === currentGameId) {
+                  console.log('⚠️ Transaction already sent for this game over - skipping duplicate');
+                  setShowPlayAgain(true);
+                  return true; // Return success to avoid further processing
+                }
+                
+                // If after revive, don't process here - let the iframe message handler handle it
+                if (window.__reviveUsedForGameId === currentGameId) {
+                  console.log(`⚠️ Game over after revive - letting iframe message handler process it`);
+                  setShowPlayAgain(true);
+                  return true; // Return success to avoid further processing
+                }
+                
+                try {
+                  // Mark this session as processed to prevent duplicates in the iframe handler
+                  if (window.__GAME_OVER_PROCESSED) {
+                    window.__GAME_OVER_PROCESSED.markProcessed(currentGameId);
+                  }
+                  
+                  // Get the jump count directly from the game's display
+                  const jumpCount = iframeRef.current.contentWindow.__jumpCount || 0;
+                  console.log('Final jump count from game:', jumpCount);
 
-                if (typeof finalScore !== 'number') {
-                  throw new Error('Invalid final score: ' + finalScore);
+                  if (typeof finalScore !== 'number') {
+                    throw new Error('Invalid final score: ' + finalScore);
+                  }
+                  
+                  // Set the flag to prevent duplicate transactions for this specific game
+                  window.__gameOverTransactionSent = currentGameId;
+                  
+                  // Use our transaction queue system for bundling score and jumps
+                  console.log('Using bundled transaction for score and jumps at game over');
+                  const success = await recordScoreAndJumpsInOneTx(finalScore, jumpCount, currentGameId);
+                  
+                  if (success) {
+                      console.log('Score and jumps saved successfully in one transaction');
+                  } else {
+                    console.error('Failed to save score and jumps');
+                  }
+                  
+                  console.log(`Game over transaction result: ${success}`);
+                  return success;
+                } catch (error) {
+                  console.error('Error in game over handler:', error);
+                    // Still show play again button on error
+                  setShowPlayAgain(true);
+                  return false;
+                } finally {
+                  // Reset processing state regardless of success or failure
+                  if (window.__GAME_OVER_PROCESSED) {
+                    window.__GAME_OVER_PROCESSED.resetProcessing();
+                  }
                 }
-                
-                // Set the flag to prevent duplicate transactions for this specific game
-                window.__gameOverTransactionSent = currentGameId;
-                
-                // Use our transaction queue system for bundling score and jumps
-                console.log('Using bundled transaction for score and jumps at game over');
-                const success = await recordScoreAndJumpsInOneTx(finalScore, jumpCount, currentGameId);
-                
-                if (success) {
-                    console.log('Score and jumps saved successfully in one transaction');
-                } else {
-                  console.error('Failed to save score and jumps');
-                }
-                
-                console.log(`Game over transaction result: ${success}`);
-                return success;
               } catch (error) {
                 console.error('Error in game over handler:', error);
-                  // Still show play again button on error
                 setShowPlayAgain(true);
                 return false;
               } finally {
-                // Reset processing state regardless of success or failure
-                if (window.__GAME_OVER_PROCESSED) {
-                  window.__GAME_OVER_PROCESSED.resetProcessing();
-                }
+                // Set a timeout to release the global lock after 10 seconds
+                // This ensures the lock is released even if there's an error
+                setTimeout(() => {
+                  window.__GLOBAL_TRANSACTION_IN_PROGRESS = false;
+                  console.log(`🔓 Released global transaction lock after timeout`);
+                }, 10000);
               }
             },
             onJump: async (platformType) => {
@@ -2619,96 +2680,124 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         if (data.type === 'gameOver' || data.type === 'GAME_OVER') {
           console.log('Game Over with score:', data.score || data.data?.finalScore);
           
-          // Extract the game data
-          const finalScore = data.score || data.data?.finalScore || 0;
-          const jumpCount = data.jumps || data.data?.jumpCount || window.totalJumps || 0;
-          const gameSessionId = data.gameId || data.data?.gameId || gameId;
-          const wasReviveCancelled = data.reviveCancelled || data.data?.reviveCancelled;
-          const messageSource = data.source || 'GAME_OVER';
-          
-          // Check if this is a game over after a revive was used
-          const isAfterRevive = window.__reviveUsedForGameId === gameSessionId;
-          
-          // Update the game score
-          console.log(`Game over with score: ${finalScore}, jumps: ${jumpCount}, gameId: ${gameSessionId}, reviveCancelled: ${wasReviveCancelled}, isAfterRevive: ${isAfterRevive}`);
-          
-          // Reset the revive purchased flag to ensure jumps are recorded at game over
-          setRevivePurchased(false);
-          
-          // CRITICAL FIX: Check if this game over has already been processed
-          if (window.__GAME_OVER_PROCESSED && window.__GAME_OVER_PROCESSED.hasProcessed(gameSessionId)) {
-            console.log(`⏭️ Game over for session ${gameSessionId} already processed - skipping duplicate`);
+          // GLOBAL SOLUTION: Check if another transaction is in progress
+          if (window.__GLOBAL_TRANSACTION_IN_PROGRESS === true) {
+            console.log(`⛔ GLOBAL TRANSACTION LOCK ACTIVE - Skipping duplicate game over`);
             setShowPlayAgain(true);
             return;
           }
           
-          // Mark this session as being processed to prevent duplicates
-          if (window.__GAME_OVER_PROCESSED) {
-            window.__GAME_OVER_PROCESSED.markProcessed(gameSessionId);
-          }
+          // Set global transaction lock
+          window.__GLOBAL_TRANSACTION_IN_PROGRESS = true;
           
-          // Check if we've already handled this game over
-          if (window.__gameOverTransactionSent === gameSessionId) {
-            console.log(`⏭️ Already sent transaction for game over ${gameSessionId} - skipping duplicate`);
-            setShowPlayAgain(true);
-            return;
-          }
-          
-          // Mark that we're handling this game over
-          window.__gameOverTransactionSent = gameSessionId;
-          
-          // Force clear any transaction locks
-          if (window.__GLOBAL_TX_SYSTEM) {
-            window.__GLOBAL_TX_SYSTEM.pendingLock = false;
+          try {
+            // Extract the game data
+            const finalScore = data.score || data.data?.finalScore || 0;
+            const jumpCount = data.jumps || data.data?.jumpCount || window.totalJumps || 0;
+            const gameSessionId = data.gameId || data.data?.gameId || gameId;
+            const wasReviveCancelled = data.reviveCancelled || data.data?.reviveCancelled;
+            const messageSource = data.source || 'GAME_OVER';
             
-            // Clear any active transactions for this game ID
-            const gameIdPrefix = `jumps_${gameSessionId}`;
-            window.__GLOBAL_TX_SYSTEM.activeTransactions.forEach(key => {
-              if (key.startsWith(gameIdPrefix)) {
-                window.__GLOBAL_TX_SYSTEM.activeTransactions.delete(key);
-              }
-            });
+            // Update global session tracking
+            window.__LATEST_GAME_SESSION = gameSessionId;
             
-            console.log(`🔓 Forced transaction locks cleared for game over flow`);
-          }
-          
-          // ALWAYS use the queue system for ALL game over cases
-          if (jumpCount > 0) {
-            console.log(`💹 Using transaction queue system for ${jumpCount} jumps on game over`);
-            try {
-              // Reset the queue to ensure we're starting fresh
-              if (window.__GAME_TX_QUEUE) {
-                window.__GAME_TX_QUEUE.reset();
-                
-                // Queue up the jumps and score
-                window.__GAME_TX_QUEUE.queueJumps(jumpCount, gameSessionId);
-                window.__GAME_TX_QUEUE.queueScore(finalScore, gameSessionId);
-                
-                console.log(`📊 Queued ${jumpCount} jumps and score ${finalScore} for game over processing`);
-                
-                // Process the queue right away - this is the ONLY transaction we'll send
-                const success = await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
-                
-                if (success) {
-                  console.log(`✅ Successfully processed game over transaction via queue - single transaction`);
-                } else {
-                  console.error(`❌ Failed to process queue - but will NOT try again to avoid duplicate transactions`);
-                }
-              } else {
-                // If queue isn't available, use recordPlayerJumps as fallback but just once
-                console.log(`⚠️ Queue not available, using direct recordPlayerJumps as fallback`);
-                await recordPlayerJumps(jumpCount, gameSessionId, 'GAME_OVER');
-              }
-            } catch (error) {
-              console.error('Error recording jumps at game over:', error);
-            } finally {
-              // Clear the revive used flag since we've handled this game over
-              window.__reviveUsedForGameId = null;
+            // Check if this is a game over after a revive was used
+            const isAfterRevive = window.__reviveUsedForGameId === gameSessionId;
+            
+            // Update the game score
+            console.log(`Game over with score: ${finalScore}, jumps: ${jumpCount}, gameId: ${gameSessionId}, reviveCancelled: ${wasReviveCancelled}, isAfterRevive: ${isAfterRevive}`);
+            
+            // Reset the revive purchased flag to ensure jumps are recorded at game over
+            setRevivePurchased(false);
+            
+            // CRITICAL FIX: Check if this game over has already been processed
+            if (window.__GAME_OVER_PROCESSED && window.__GAME_OVER_PROCESSED.hasProcessed(gameSessionId)) {
+              console.log(`⏭️ Game over for session ${gameSessionId} already processed - skipping duplicate`);
+              setShowPlayAgain(true);
+              return;
+            }
+            
+            // Mark this session as being processed to prevent duplicates
+            if (window.__GAME_OVER_PROCESSED) {
+              window.__GAME_OVER_PROCESSED.markProcessed(gameSessionId);
+            }
+            
+            // Check if we've already handled this game over
+            if (window.__gameOverTransactionSent === gameSessionId) {
+              console.log(`⏭️ Already sent transaction for game over ${gameSessionId} - skipping duplicate`);
+              setShowPlayAgain(true);
+              return;
+            }
+            
+            // Mark that we're handling this game over
+            window.__gameOverTransactionSent = gameSessionId;
+            
+            // Force clear any transaction locks
+            if (window.__GLOBAL_TX_SYSTEM) {
+              window.__GLOBAL_TX_SYSTEM.pendingLock = false;
               
-              // Always show play again button regardless of transaction status
+              // Clear any active transactions for this game ID
+              const gameIdPrefix = `jumps_${gameSessionId}`;
+              window.__GLOBAL_TX_SYSTEM.activeTransactions.forEach(key => {
+                if (key.startsWith(gameIdPrefix)) {
+                  window.__GLOBAL_TX_SYSTEM.activeTransactions.delete(key);
+                }
+              });
+              
+              console.log(`🔓 Forced transaction locks cleared for game over flow`);
+            }
+            
+            // ALWAYS use the queue system for ALL game over cases
+            if (jumpCount > 0) {
+              console.log(`💹 Using transaction queue system for ${jumpCount} jumps on game over`);
+              try {
+                // Reset the queue to ensure we're starting fresh
+                if (window.__GAME_TX_QUEUE) {
+                  window.__GAME_TX_QUEUE.reset();
+                  
+                  // Queue up the jumps and score
+                  window.__GAME_TX_QUEUE.queueJumps(jumpCount, gameSessionId);
+                  window.__GAME_TX_QUEUE.queueScore(finalScore, gameSessionId);
+                  
+                  console.log(`📊 Queued ${jumpCount} jumps and score ${finalScore} for game over processing`);
+                  
+                  // Process the queue right away - this is the ONLY transaction we'll send
+                  const success = await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
+                  
+                  if (success) {
+                    console.log(`✅ Successfully processed game over transaction via queue - single transaction`);
+                  } else {
+                    console.error(`❌ Failed to process queue - but will NOT try again to avoid duplicate transactions`);
+                  }
+                } else {
+                  // If queue isn't available, use recordPlayerJumps as fallback but just once
+                  console.log(`⚠️ Queue not available, using direct recordPlayerJumps as fallback`);
+                  await recordPlayerJumps(jumpCount, gameSessionId, 'GAME_OVER');
+                }
+              } catch (error) {
+                console.error('Error recording jumps at game over:', error);
+              } finally {
+                // Clear the revive used flag since we've handled this game over
+                window.__reviveUsedForGameId = null;
+                
+                // Always show play again button regardless of transaction status
+                setShowPlayAgain(true);
+                
+                // Call onGameOver even if transaction fails, but DO NOT send another transaction
+                if (onGameOver && typeof onGameOver === 'function') {
+                  try {
+                    onGameOver(finalScore);
+                  } catch (err) {
+                    console.error('Error in onGameOver handler:', err);
+                  }
+                }
+              }
+            } else {
+              console.log(`⏭️ No jumps to record`);
+              window.__reviveUsedForGameId = null;
               setShowPlayAgain(true);
               
-              // Call onGameOver even if transaction fails, but DO NOT send another transaction
+              // Call onGameOver if no jumps to record
               if (onGameOver && typeof onGameOver === 'function') {
                 try {
                   onGameOver(finalScore);
@@ -2717,19 +2806,17 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 }
               }
             }
-          } else {
-            console.log(`⏭️ No jumps to record`);
-            window.__reviveUsedForGameId = null;
+          } catch (error) {
+            console.error('Error in game over handler:', error);
             setShowPlayAgain(true);
-            
-            // Call onGameOver if no jumps to record
-            if (onGameOver && typeof onGameOver === 'function') {
-              try {
-                onGameOver(finalScore);
-              } catch (err) {
-                console.error('Error in onGameOver handler:', err);
-              }
-            }
+            return false;
+          } finally {
+            // Set a timeout to release the global lock after 10 seconds
+            // This ensures the lock is released even if there's an error
+            setTimeout(() => {
+              window.__GLOBAL_TRANSACTION_IN_PROGRESS = false;
+              console.log(`🔓 Released global transaction lock after timeout`);
+            }, 10000);
           }
         }
         
@@ -2796,59 +2883,95 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             onGameOver: async (finalScore) => {
               console.log('Game over handler called with score:', finalScore);
               
-              // Check if we've already processed this game over with our iframe message handler
-              if (window.__gameOverTransactionSent) {
-                console.log('⚠️ Transaction already sent for this game over - skipping duplicate');
+              // GLOBAL SOLUTION: Check if another transaction is in progress
+              if (window.__GLOBAL_TRANSACTION_IN_PROGRESS === true) {
+                console.log(`⛔ GLOBAL TRANSACTION LOCK ACTIVE - Skipping duplicate game over handler`);
                 setShowPlayAgain(true);
-                return true; // Return success to avoid further processing
+                return true; // Return success to prevent further handling
               }
               
-              // If after revive, don't process here - let the iframe message handler handle it
-              if (window.__reviveUsedForGameId) {
-                console.log(`⚠️ Game over after revive - letting iframe message handler process it`);
-                setShowPlayAgain(true);
-                return true; // Return success to avoid further processing
-              }
+              // Set global transaction lock
+              window.__GLOBAL_TRANSACTION_IN_PROGRESS = true;
               
               try {
-                // Mark this session as processed to prevent duplicates in the iframe handler
-                if (window.__GAME_OVER_PROCESSED) {
-                  window.__GAME_OVER_PROCESSED.markProcessed(window.__currentGameSessionId || gameId);
-                }
-                
-                // Get the jump count directly from the game's display
-                const jumpCount = iframeRef.current.contentWindow.__jumpCount || 0;
-                console.log('Final jump count from game:', jumpCount);
-
-                if (typeof finalScore !== 'number') {
-                  throw new Error('Invalid final score: ' + finalScore);
-                }
-                
-                // Set the flag to prevent duplicate transactions for this specific game
+                // Get the current game session ID
                 const currentGameId = window.__currentGameSessionId || gameId;
-                window.__gameOverTransactionSent = currentGameId;
                 
-                // Use our transaction queue system for bundling score and jumps
-                console.log('Using bundled transaction for score and jumps at game over');
-                const success = await recordScoreAndJumpsInOneTx(finalScore, jumpCount, currentGameId);
+                // Update global session tracking
+                window.__LATEST_GAME_SESSION = currentGameId;
                 
-                if (success) {
-                    console.log('Score and jumps saved successfully in one transaction');
-                } else {
-                  console.error('Failed to save score and jumps');
+                // CRITICAL FIX: First check if this game over has already been processed
+                if (window.__GAME_OVER_PROCESSED && window.__GAME_OVER_PROCESSED.hasProcessed(currentGameId)) {
+                  console.log(`⏭️ Game over for session ${currentGameId} already processed in iframe handler - skipping duplicate`);
+                  setShowPlayAgain(true);
+                  return true; // Return success to avoid further processing
                 }
                 
-                return success;
+                // Check if we've already processed this game over with our iframe message handler
+                if (window.__gameOverTransactionSent === currentGameId) {
+                  console.log('⚠️ Transaction already sent for this game over - skipping duplicate');
+                  setShowPlayAgain(true);
+                  return true; // Return success to avoid further processing
+                }
+                
+                // If after revive, don't process here - let the iframe message handler handle it
+                if (window.__reviveUsedForGameId === currentGameId) {
+                  console.log(`⚠️ Game over after revive - letting iframe message handler process it`);
+                  setShowPlayAgain(true);
+                  return true; // Return success to avoid further processing
+                }
+                
+                try {
+                  // Mark this session as processed to prevent duplicates in the iframe handler
+                  if (window.__GAME_OVER_PROCESSED) {
+                    window.__GAME_OVER_PROCESSED.markProcessed(currentGameId);
+                  }
+                  
+                  // Get the jump count directly from the game's display
+                  const jumpCount = iframeRef.current.contentWindow.__jumpCount || 0;
+                  console.log('Final jump count from game:', jumpCount);
+
+                  if (typeof finalScore !== 'number') {
+                    throw new Error('Invalid final score: ' + finalScore);
+                  }
+                  
+                  // Set the flag to prevent duplicate transactions for this specific game
+                  const currentGameId = window.__currentGameSessionId || gameId;
+                  window.__gameOverTransactionSent = currentGameId;
+                  
+                  // Use our transaction queue system for bundling score and jumps
+                  console.log('Using bundled transaction for score and jumps at game over');
+                  const success = await recordScoreAndJumpsInOneTx(finalScore, jumpCount, currentGameId);
+                  
+                  if (success) {
+                      console.log('Score and jumps saved successfully in one transaction');
+                  } else {
+                    console.error('Failed to save score and jumps');
+                  }
+                  
+                  return success;
+                } catch (error) {
+                  console.error('Error in game over handler:', error);
+                    // Still show play again button on error
+                  setShowPlayAgain(true);
+                  return false;
+                } finally {
+                  // Reset processing state regardless of success or failure
+                  if (window.__GAME_OVER_PROCESSED) {
+                    window.__GAME_OVER_PROCESSED.resetProcessing();
+                  }
+                }
               } catch (error) {
                 console.error('Error in game over handler:', error);
-                  // Still show play again button on error
                 setShowPlayAgain(true);
                 return false;
               } finally {
-                // Reset processing state regardless of success or failure
-                if (window.__GAME_OVER_PROCESSED) {
-                  window.__GAME_OVER_PROCESSED.resetProcessing();
-                }
+                // Set a timeout to release the global lock after 10 seconds
+                // This ensures the lock is released even if there's an error
+                setTimeout(() => {
+                  window.__GLOBAL_TRANSACTION_IN_PROGRESS = false;
+                  console.log(`🔓 Released global transaction lock after timeout`);
+                }, 10000);
               }
             },
             onJump: async (platformType) => {
