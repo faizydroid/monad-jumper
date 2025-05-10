@@ -1285,7 +1285,7 @@ function HorizontalStats() {
                   return `#${index + 1}`;
                 } else if (totalJumps > 0) {
                   // Player has jumps but not in top leaderboard
-                  return "#396";
+                  return "#12";
                 } else {
                   // No jumps recorded yet
                   return "Unranked";
