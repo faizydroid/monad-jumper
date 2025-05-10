@@ -125,6 +125,30 @@ if (typeof window !== 'undefined') {
     }
   };
   
+  // Add a global transaction lock for game over specifically
+  window.__GAME_OVER_PROCESSED = {
+    sessionIds: new Set(),
+    isProcessing: false,
+    lastProcessed: null,
+    
+    // Check if this game over has been processed
+    hasProcessed: function(sessionId) {
+      return this.sessionIds.has(sessionId);
+    },
+    
+    // Mark a session as processed
+    markProcessed: function(sessionId) {
+      this.sessionIds.add(sessionId);
+      this.lastProcessed = Date.now();
+      console.log(`🔒 Game over for session ${sessionId} marked as processed`);
+    },
+    
+    // Reset processing state
+    resetProcessing: function() {
+      this.isProcessing = false;
+    }
+  };
+  
   // Set up regular cleanup to prevent memory leaks
   setInterval(() => {
     if (window.__GLOBAL_TX_SYSTEM) {
@@ -1801,14 +1825,36 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             onGameOver: async (finalScore) => {
               console.log('Game over handler called with score:', finalScore);
               
-              // Check if a transaction has already been sent for this game over
-              if (window.__gameOverTransactionSent) {
+              // Get the current game session ID
+              const currentGameId = window.__currentGameSessionId || gameId;
+              
+              // CRITICAL FIX: First check if this game over has already been processed
+              if (window.__GAME_OVER_PROCESSED && window.__GAME_OVER_PROCESSED.hasProcessed(currentGameId)) {
+                console.log(`⏭️ Game over for session ${currentGameId} already processed in iframe handler - skipping duplicate`);
+                setShowPlayAgain(true);
+                return true; // Return success to avoid further processing
+              }
+              
+              // Check if we've already processed this game over with our iframe message handler
+              if (window.__gameOverTransactionSent === currentGameId) {
                 console.log('⚠️ Transaction already sent for this game over - skipping duplicate');
                 setShowPlayAgain(true);
                 return true; // Return success to avoid further processing
               }
               
+              // If after revive, don't process here - let the iframe message handler handle it
+              if (window.__reviveUsedForGameId === currentGameId) {
+                console.log(`⚠️ Game over after revive - letting iframe message handler process it`);
+                setShowPlayAgain(true);
+                return true; // Return success to avoid further processing
+              }
+              
               try {
+                // Mark this session as processed to prevent duplicates in the iframe handler
+                if (window.__GAME_OVER_PROCESSED) {
+                  window.__GAME_OVER_PROCESSED.markProcessed(currentGameId);
+                }
+                
                 // Get the jump count directly from the game's display
                 const jumpCount = iframeRef.current.contentWindow.__jumpCount || 0;
                 console.log('Final jump count from game:', jumpCount);
@@ -1817,12 +1863,12 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   throw new Error('Invalid final score: ' + finalScore);
                 }
                 
-                // Set the flag to prevent duplicate transactions
-                window.__gameOverTransactionSent = true;
+                // Set the flag to prevent duplicate transactions for this specific game
+                window.__gameOverTransactionSent = currentGameId;
                 
-                // Use our new bundled transaction approach
+                // Use our transaction queue system for bundling score and jumps
                 console.log('Using bundled transaction for score and jumps at game over');
-                const success = await recordScoreAndJumpsInOneTx(finalScore, jumpCount, gameId);
+                const success = await recordScoreAndJumpsInOneTx(finalScore, jumpCount, currentGameId);
                 
                 if (success) {
                     console.log('Score and jumps saved successfully in one transaction');
@@ -1830,12 +1876,18 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   console.error('Failed to save score and jumps');
                 }
                 
+                console.log(`Game over transaction result: ${success}`);
                 return success;
               } catch (error) {
                 console.error('Error in game over handler:', error);
                   // Still show play again button on error
                 setShowPlayAgain(true);
                 return false;
+              } finally {
+                // Reset processing state regardless of success or failure
+                if (window.__GAME_OVER_PROCESSED) {
+                  window.__GAME_OVER_PROCESSED.resetProcessing();
+                }
               }
             },
             onJump: async (platformType) => {
@@ -2583,6 +2635,18 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           // Reset the revive purchased flag to ensure jumps are recorded at game over
           setRevivePurchased(false);
           
+          // CRITICAL FIX: Check if this game over has already been processed
+          if (window.__GAME_OVER_PROCESSED && window.__GAME_OVER_PROCESSED.hasProcessed(gameSessionId)) {
+            console.log(`⏭️ Game over for session ${gameSessionId} already processed - skipping duplicate`);
+            setShowPlayAgain(true);
+            return;
+          }
+          
+          // Mark this session as being processed to prevent duplicates
+          if (window.__GAME_OVER_PROCESSED) {
+            window.__GAME_OVER_PROCESSED.markProcessed(gameSessionId);
+          }
+          
           // Check if we've already handled this game over
           if (window.__gameOverTransactionSent === gameSessionId) {
             console.log(`⏭️ Already sent transaction for game over ${gameSessionId} - skipping duplicate`);
@@ -2747,6 +2811,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               }
               
               try {
+                // Mark this session as processed to prevent duplicates in the iframe handler
+                if (window.__GAME_OVER_PROCESSED) {
+                  window.__GAME_OVER_PROCESSED.markProcessed(window.__currentGameSessionId || gameId);
+                }
+                
                 // Get the jump count directly from the game's display
                 const jumpCount = iframeRef.current.contentWindow.__jumpCount || 0;
                 console.log('Final jump count from game:', jumpCount);
@@ -2775,6 +2844,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   // Still show play again button on error
                 setShowPlayAgain(true);
                 return false;
+              } finally {
+                // Reset processing state regardless of success or failure
+                if (window.__GAME_OVER_PROCESSED) {
+                  window.__GAME_OVER_PROCESSED.resetProcessing();
+                }
               }
             },
             onJump: async (platformType) => {
