@@ -9,7 +9,7 @@ import RewardsContent from './RewardsContent';
 import DailyQuestContent from './DailyQuestContent';
 import MusicPlayer from './MusicPlayer';
 
-export default function Navbar() {
+export default function Navbar({ isMobile }) {
   const { account, username, playerHighScore } = useWeb3();
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
@@ -28,24 +28,34 @@ export default function Navbar() {
     
     setTransitioning(true);
     
-    // Start transition out
-    document.querySelector('.content-container').classList.add('sliding-out');
-    
-    // After exit animation completes, change section and start entry animation
-    setTimeout(() => {
-      setActiveSection(section);
-      document.querySelector('.content-container').classList.remove('sliding-out');
-      document.querySelector('.content-container').classList.add('sliding-in');
+    // Check if the content container exists (might not in mobile view)
+    const contentContainer = document.querySelector('.content-container');
+    if (contentContainer) {
+      // Start transition out
+      contentContainer.classList.add('sliding-out');
       
+      // After exit animation completes, change section and start entry animation
       setTimeout(() => {
-        document.querySelector('.content-container').classList.remove('sliding-in');
-        setTransitioning(false);
+        setActiveSection(section);
+        contentContainer.classList.remove('sliding-out');
+        contentContainer.classList.add('sliding-in');
+        
+        setTimeout(() => {
+          contentContainer.classList.remove('sliding-in');
+          setTransitioning(false);
+        }, 300); // Changed from 500ms to 300ms
       }, 300); // Changed from 500ms to 300ms
-    }, 300); // Changed from 500ms to 300ms
+    } else {
+      // Simple change without animations for mobile
+      setActiveSection(section);
+      setTransitioning(false);
+    }
   };
 
-  // Add app-content class to main containers
+  // Add app-content class to main containers - skip if in mobile mode
   useEffect(() => {
+    if (isMobile) return; // Skip in mobile view
+    
     const appDivs = document.querySelectorAll('.app, .container, .game-container');
     appDivs.forEach(div => {
       div.classList.add('app-content');
@@ -63,10 +73,12 @@ export default function Navbar() {
         div.classList.remove('app-content');
       });
     };
-  }, [isGameScreen]);
+  }, [isGameScreen, isMobile]);
   
   // Update panel visibility in game screen
   useEffect(() => {
+    if (isMobile) return; // Skip in mobile view
+    
     if (isGameScreen) {
       const container = document.querySelector('.content-container');
       if (container) {
@@ -82,8 +94,92 @@ export default function Navbar() {
         container.style.pointerEvents = 'auto';
       }
     }
-  }, [isGameScreen]);
+  }, [isGameScreen, isMobile]);
 
+  // Render mobile version with simplified UI
+  if (isMobile) {
+    return (
+      <div className="mobile-navbar">
+        {/* Username display */}
+        {account && username && (
+          <div className="mobile-navbar-username">
+            <div className="username-display">{username}</div>
+            <div className="high-score-display">
+              <span role="img" aria-label="trophy">🏆</span>
+              <span>{playerHighScore || 0}</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Navigation links */}
+        <div className="nav-links">
+          <a 
+            className={`nav-link ${activeSection === 'home' ? 'active' : ''}`}
+            onClick={() => {
+              if (isGameScreen) {
+                window.location.hash = '';
+                window.location.href = '/';
+              } else {
+                changeSection('home');
+              }
+            }}
+          >
+            <FaHome size={20} />
+            <span>Home</span>
+          </a>
+          
+          <a 
+            className={`nav-link ${activeSection === 'daily-quest' ? 'active' : ''}`}
+            onClick={() => changeSection('daily-quest')}
+          >
+            <FaCalendarCheck size={20} />
+            <span>Quests</span>
+          </a>
+          
+          <a 
+            className={`nav-link ${activeSection === 'rewards' ? 'active' : ''}`}
+            onClick={() => changeSection('rewards')}
+          >
+            <FaGift size={20} />
+            <span>Rewards</span>
+          </a>
+          
+          <a 
+            className={`nav-link ${activeSection === 'shop' ? 'active' : ''}`}
+            onClick={() => changeSection('shop')}
+          >
+            <FaShoppingCart size={20} />
+            <span>Shop</span>
+          </a>
+        </div>
+        
+        {/* Wallet connect and social links */}
+        <div className="mobile-navbar-footer">
+          {!account && (
+            <div className="mobile-connect-wallet">
+              <ConnectButton 
+                showBalance={false}
+                chainStatus="none"
+                accountStatus="address"
+                label="Connect Wallet"
+              />
+            </div>
+          )}
+          
+          <div className="mobile-social-links">
+            <a href="https://discord.gg/pK5SZDtypv" target="_blank" rel="noopener noreferrer" className="social-icon">
+              <FaDiscord size={24} />
+            </a>
+            <a href="https://x.com/jumpnads" target="_blank" rel="noopener noreferrer" className="social-icon">
+              <FaTwitter size={24} />
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop version
   return (
     <>
       <nav className="vertical-navbar">

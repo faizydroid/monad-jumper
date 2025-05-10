@@ -3739,7 +3739,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           </div>
           
           <div className="leaderboard-column">
-            <Leaderboard />
+            <Leaderboard isMobile={isMobileView} />
           </div>
         </div>
           
