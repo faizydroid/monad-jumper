@@ -1,0 +1,426 @@
+/* Base container styling */
+.mobile-container {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  background: url('/images/bg.jpg') center center / cover fixed no-repeat;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header styling */
+.mobile-header {
+  height: 60px;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 15px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.title-container {
+  flex-grow: 1;
+  text-align: center;
+}
+
+.mobile-game-title {
+  font-family: 'Bangers', cursive;
+  font-size: 2.5rem;
+  margin: 0;
+  color: #fff;
+  text-shadow: 3px 3px 0 #ff00ff, 5px 5px 0 rgba(0, 0, 0, 0.2);
+  letter-spacing: 2px;
+}
+
+/* Menu buttons */
+.hamburger-btn, .leaderboard-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.hamburger-btn:active, .leaderboard-btn:active {
+  transform: scale(0.9);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Sliding hamburger menu */
+.mobile-menu {
+  position: fixed;
+  top: 0;
+  left: -280px;
+  width: 280px;
+  height: 100vh;
+  background: rgba(30, 30, 40, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+  transition: transform 0.3s ease-in-out;
+  box-shadow: 3px 0 15px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.mobile-menu.open {
+  transform: translateX(280px);
+}
+
+/* Menu header with user info */
+.menu-header {
+  padding: 70px 20px 20px;
+  text-align: center;
+  background: linear-gradient(to bottom, rgba(153, 0, 255, 0.4), rgba(0, 0, 0, 0));
+  color: white;
+}
+
+.menu-username {
+  font-family: 'Bangers', cursive;
+  font-size: 2.2rem;
+  margin-bottom: 15px;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.menu-stats {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.menu-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.menu-stat svg {
+  font-size: 1.5rem;
+  color: #ffcc00;
+}
+
+.menu-nav {
+  flex-grow: 1;
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-nav-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px;
+}
+
+.menu-wallet {
+  margin-top: auto;
+  padding: 20px;
+}
+
+/* Sliding leaderboard panel */
+.mobile-leaderboard-panel {
+  position: fixed;
+  top: 0;
+  right: -320px;
+  width: 320px;
+  height: 100vh;
+  background: rgba(30, 30, 40, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+  transition: transform 0.3s ease-in-out;
+  box-shadow: -3px 0 15px rgba(0, 0, 0, 0.3);
+  padding-top: 70px;
+  overflow-y: auto;
+}
+
+.mobile-leaderboard-panel.open {
+  transform: translateX(-320px);
+}
+
+/* Main content area */
+.mobile-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 80px;
+  padding-bottom: 30px;
+}
+
+.mobile-character-container {
+  width: 100%;
+  height: 180px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 15px auto;
+  position: relative;
+  z-index: 1;
+}
+
+.mobile-character {
+  width: 150px;
+  height: 150px;
+  animation: character-bounce 2s infinite ease-in-out;
+}
+
+@keyframes character-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+}
+
+/* Player stats section */
+.mobile-player-stats {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 15px 0;
+  width: 100%;
+  padding: 0 10px;
+}
+
+.stat-item {
+  flex: 1;
+  max-width: 140px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  border-radius: 15px;
+  padding: 15px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stat-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-family: 'Bangers', cursive;
+  font-size: 1.8rem;
+  margin: 5px 0;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+/* Action area with play/mint buttons */
+.mobile-action-area {
+  margin-top: 40px;
+  width: 100%;
+  padding: 0 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.mobile-play-button, .mobile-mint-button {
+  width: 100%;
+  max-width: 300px;
+  height: 60px;
+  border-radius: 30px;
+  border: none;
+  font-family: 'Bangers', cursive;
+  font-size: 1.6rem;
+  letter-spacing: 1px;
+  color: white;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.mobile-play-button {
+  background: linear-gradient(135deg, #4eff9a, #00ff7f);
+}
+
+.mobile-mint-button {
+  background: linear-gradient(135deg, #ff9a4e, #ff7f00);
+}
+
+.mobile-play-button:active, .mobile-mint-button:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Loading spinner */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+  margin: 15px auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Welcome message for non-connected users */
+.mobile-welcome-message {
+  width: 90%;
+  margin: 20px auto;
+  padding: 25px 20px;
+  text-align: center;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: white;
+}
+
+.mobile-welcome-message p {
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+}
+
+.mobile-wallet-connect {
+  width: 100%;
+  max-width: 300px;
+  margin: 5px auto;
+}
+
+/* Facts bubbles */
+.mobile-game-facts {
+  width: 90%;
+  margin: 15px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.mobile-fact-bubble {
+  width: 100%;
+  padding: 15px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: white;
+  animation: bubble-appear 0.5s forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.mobile-fact-bubble span {
+  font-size: 24px;
+}
+
+.mobile-fact-bubble-1 {
+  animation-delay: 0.1s;
+}
+
+.mobile-fact-bubble-2 {
+  animation-delay: 0.2s;
+}
+
+.mobile-fact-bubble-3 {
+  animation-delay: 0.3s;
+}
+
+@keyframes bubble-appear {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dark overlay when menu is open */
+.mobile-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.mobile-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Helper for customizing Rainbowkit connect button on mobile */
+.mobile-wallet-connect [data-rk] {
+  width: 100% !important;
+}
+
+.mobile-wallet-connect [data-rk] button {
+  width: 100% !important;
+  height: 50px !important;
+  font-size: 1.2rem !important;
+  border-radius: 30px !important;
+}
+
+/* Media queries for different screen sizes */
+@media screen and (max-width: 375px) {
+  .mobile-game-title {
+    font-size: 2.2rem;
+  }
+  
+  .hamburger-btn, .leaderboard-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 1.3rem;
+  }
+  
+  .stat-value {
+    font-size: 1.6rem;
+  }
+  
+  .mobile-menu {
+    width: 260px;
+    left: -260px;
+  }
+  
+  .mobile-menu.open {
+    transform: translateX(260px);
+  }
+  
+  .mobile-leaderboard-panel {
+    width: 300px;
+    right: -300px;
+  }
+  
+  .mobile-leaderboard-panel.open {
+    transform: translateX(-300px);
+  }
+} 

@@ -22,12 +22,12 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
+import MobilePage from './components/MobilePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 import { FaXTwitter, FaDiscord } from "react-icons/fa6";
 import { monadTestnet } from './config/chains';
 // Import the utility functions
 import { debounce, fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelpers.utils';
-import MobileGameView from './components/MobileGameView';
 
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
@@ -2340,25 +2340,17 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
 
   // Detect mobile view on component mount and window resize
   const detectMobile = () => {
-    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   };
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobileView(detectMobile());
+      setIsMobileView(window.innerWidth <= 768 || detectMobile());
     };
     
-    // Check immediately
     checkMobile();
-    
-    // Listen for resize and orientation changes 
     window.addEventListener('resize', checkMobile);
-    window.addEventListener('orientationchange', checkMobile);
-    
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      window.removeEventListener('orientationchange', checkMobile);
-    };
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Remove all duplicates and just keep this version
@@ -3586,11 +3578,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   }
 
   // If wallet is not connected, show connect button
-  if (!isConnected) {
+  if (!isConnected || isMobileView) {
     return (
       <>
         {isMobileView ? (
-          <MobileHomePage 
+          <MobilePage 
             characterImg="/images/monad0.png" 
             onPlay={() => {
               console.log("Play clicked from mobile, setting showGame via state update");
@@ -3661,34 +3653,15 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
 
   // Game is ready to play, but hasn't started yet
   if (!showGame && !walletLoading) {
-    if (isMobileView) {
-      return (
-        <MobileHomePage 
-          characterImg="/images/monad0.png" 
-          onPlay={() => {
-            console.log("Play clicked from mobile, setting showGame via state update");
-            window.location.hash = 'game';
-            setShowGame(true);
-          }}
-          onMint={() => {
-            console.log("Mint clicked from mobile, showing modal via state update");
-            setShowMintModal(true);
-          }}
-          hasMintedNft={hasMintedNft}
-          isNftLoading={isNftLoading}
-        />
-      );
-    }
-    
     return (
-      <div className="container">
+        <div className="container">
         <BackgroundElements />
         
-        <header>
+          <header>
           <h1 className="title">JUMPNADS</h1>
           <p className="subtitle">Jump to the MOON!</p>
-        </header>
-        
+          </header>
+          
         <div className="game-content">
           <div className="game-main">
           {/* Character only shown when wallet is connected */}
@@ -3792,27 +3765,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Game is showing
   return (
     <div className="app">
-      {isMobileView ? (
-        <MobileGameView 
-          gameId={gameId}
-          iframeRef={iframeRef}
-          onJump={(jumpCount) => {
-            if (window.__JUMP_TRACKER) {
-              window.__JUMP_TRACKER.recordJumps(jumpCount, gameId);
-            }
-          }}
-          onScore={(score) => {
-            setGameScore(score);
-          }}
-          onGameOver={(finalScore) => handleGameOver(finalScore)}
-          onBackToHome={() => {
-            setShowGame(false);
-            window.location.hash = '';
-          }}
-        />
-      ) : (
       <div className="game-container" style={{ width: '100vw', maxWidth: '100%', margin: '0', padding: '0', overflow: 'hidden', position: 'absolute', left: '0', right: '0' }}>
-          {/* Desktop game view remains unchanged */}
+        {/* Wrapper div with background image */}
         <div className="iframe-background" style={{ width: '100vw', position: 'relative' }}>
           {/* Add a loading overlay that shows when iframe is loading */}
           {isLoading && (
@@ -3878,14 +3832,14 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             <button 
               onClick={() => {
                 document.getElementById('iframe-error-fallback').style.display = 'none';
-                  if (typeof handlePlayAgain === 'function') {
+                if (typeof handlePlayAgain === 'function') {
                 handlePlayAgain();
-                  } else {
-                    console.error('handlePlayAgain function not available');
-                    // Fallback: Force reload the iframe
-                    const newGameId = Date.now().toString();
-                    forceReloadIframe(iframeRef, newGameId);
-                  }
+                } else {
+                  console.error('handlePlayAgain function not available');
+                  // Fallback: Force reload the iframe
+                  const newGameId = Date.now().toString();
+                  forceReloadIframe(iframeRef, newGameId);
+                }
               }}
               style={{
                 padding: '12px 24px',
@@ -3901,26 +3855,25 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             </button>
           </div>
           
-            {/* Use the memoized game frame component */}
-            <MemoizedGameFrame 
-              iframeRef={iframeRef}
-              gameId={gameId}
-              isLoading={isLoading}
-              onError={() => {
-                console.error("Error loading iframe");
-                document.getElementById('iframe-error-fallback').style.display = 'flex';
-              }}
-              onLoad={() => {
-                console.log("Iframe loaded successfully");
-                // Delay hiding loading screen to ensure game assets are loaded
-                setTimeout(() => {
-                  setIsLoading(false);
-                }, 1000);
-              }}
-            />
-          </div>
+          {/* Use the memoized game frame component */}
+          <MemoizedGameFrame 
+            iframeRef={iframeRef}
+            gameId={gameId}
+            isLoading={isLoading}
+            onError={() => {
+              console.error("Error loading iframe");
+              document.getElementById('iframe-error-fallback').style.display = 'flex';
+            }}
+            onLoad={() => {
+              console.log("Iframe loaded successfully");
+              // Delay hiding loading screen to ensure game assets are loaded
+              setTimeout(() => {
+                setIsLoading(false);
+              }, 1000);
+            }}
+          />
         </div>
-      )}
+      </div>
       
       {/* Simple transaction debug info */}
       <div style={{
