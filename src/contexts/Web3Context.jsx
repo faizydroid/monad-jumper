@@ -210,7 +210,7 @@ export function Web3Provider({ children }) {
   const publicClient = usePublicClient();
 
   // First define the saveScore function since recordScore depends on it
-  const saveScore = async (walletAddress, score, sessionToken) => {
+  const saveScore = async (walletAddress, score) => {
     if (!walletAddress || score <= 0 || !supabase) {
       console.error('🏆 Invalid parameters for saving score');
       return;
@@ -222,35 +222,6 @@ export function Web3Provider({ children }) {
       
       // First ensure the user exists (required by foreign key constraint)
       await ensureUserExists(normalizedAddress);
-      
-      // Validate session token before saving score
-      if (!sessionToken) {
-        console.error('🏆 Missing session token for score validation');
-        return null;
-      }
-      
-      // Verify the session token is valid
-      const { data: tokenData, error: tokenError } = await supabase
-        .from('session_tokens')
-        .select('id, is_used')
-        .eq('token', sessionToken)
-        .eq('wallet_address', normalizedAddress)
-        .maybeSingle();
-      
-      if (tokenError) {
-        console.error('🏆 Error verifying session token:', tokenError);
-        return null;
-      }
-      
-      if (!tokenData) {
-        console.error('🏆 Invalid session token');
-        return null;
-      }
-      
-      if (tokenData.is_used) {
-        console.error('🏆 Session token already used');
-        return null;
-      }
       
       // Get the current high score for this user
       const { data: existingScore, error: fetchError } = await supabase
@@ -269,21 +240,8 @@ export function Web3Provider({ children }) {
       // Only save if this is a new high score
       if (existingScore && score <= existingScore.score) {
         console.log(`🏆 Current score (${score}) is not higher than existing high score (${existingScore.score}), not saving`);
-        
-        // Mark token as used even if score wasn't high enough
-        await supabase
-          .from('session_tokens')
-          .update({ is_used: true })
-          .eq('id', tokenData.id);
-          
         return existingScore.score;
       }
-      
-      // Mark session token as used
-      await supabase
-        .from('session_tokens')
-        .update({ is_used: true })
-        .eq('id', tokenData.id);
       
       // Insert the new score record (we always insert a new record, not update)
       console.log(`🏆 Inserting new high score: ${score}`);
@@ -291,8 +249,7 @@ export function Web3Provider({ children }) {
         .from('scores')
         .insert([{
           wallet_address: normalizedAddress,
-          score: score,
-          session_token: sessionToken
+          score: score
         }]);
       
       if (insertError) {
@@ -306,40 +263,6 @@ export function Web3Provider({ children }) {
       return score;
     } catch (error) {
       console.error('🏆 Unexpected error in saveScore:', error);
-      return null;
-    }
-  };
-  
-  // Add function to generate a new session token
-  const generateSessionToken = async () => {
-    if (!address || !supabase) return null;
-    
-    try {
-      // Generate a unique token
-      const tokenValue = `${address.substring(2, 10)}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-      
-      // Store token in database
-      const { data, error } = await supabase
-        .from('session_tokens')
-        .insert({
-          wallet_address: address.toLowerCase(),
-          token: tokenValue,
-          is_used: false,
-          created_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 3600000).toISOString() // 1 hour expiration
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('Error creating session token:', error);
-        return null;
-      }
-      
-      console.log('New game session token created');
-      return tokenValue;
-    } catch (error) {
-      console.error('Error generating session token:', error);
       return null;
     }
   };
@@ -368,7 +291,7 @@ export function Web3Provider({ children }) {
   };
   
   // Define recordScore next since the useEffect depends on it
-  const recordScore = useCallback(async (score, sessionToken) => {
+  const recordScore = useCallback(async (score) => {
     if (!isConnected || !address) {
       console.log('Cannot record score: not connected');
       return false;
@@ -379,16 +302,6 @@ export function Web3Provider({ children }) {
     if (score > 0) {
       // Always update the current game score
       setCurrentGameScore(score);
-      
-      // If no session token provided, try to get the current one or generate a new one
-      let effectiveToken = sessionToken;
-      if (!effectiveToken) {
-        effectiveToken = await generateSessionToken();
-        if (!effectiveToken) {
-          console.error('🎮 Could not generate session token for score');
-          return false;
-        }
-      }
       
       // Check if this is a new high score
       if (score > playerHighScore) {
@@ -401,7 +314,7 @@ export function Web3Provider({ children }) {
         // Save to Supabase
         try {
           console.log(`🎮 Saving high score to Supabase: ${score}`);
-          const savedScore = await saveScore(address, score, effectiveToken);
+          const savedScore = await saveScore(address, score);
           console.log(`🎮 High score saved to Supabase: ${savedScore}`);
           return true;
         } catch (error) {
@@ -415,45 +328,23 @@ export function Web3Provider({ children }) {
     }
     
     return false;
-  }, [address, isConnected, playerHighScore, saveScore, generateSessionToken]);
+  }, [address, isConnected, playerHighScore, saveScore]);
 
   // Update the saveJumpsToSupabase function to skip updating total_jumps
-  const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionToken) => {
-    if (!walletAddress || !jumpCount || jumpCount <= 0 || !supabase) {
+  const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionId) => {
+    if (!walletAddress || !jumpCount || jumpCount <= 0) {
       console.log("Invalid jump data for Supabase");
       return false;
     }
 
     try {
-      console.log(`Saving ${jumpCount} jumps to Supabase with session token`);
+      console.log(`Saving ${jumpCount} jumps to Supabase for session ${sessionId}`);
       
-      // Validate session token before saving jumps
-      if (!sessionToken) {
-        console.error('🦘 Missing session token for jump validation');
-        return false;
-      }
-      
-      // Verify the session token is valid
-      const { data: tokenData, error: tokenError } = await supabase
-        .from('session_tokens')
-        .select('id, is_used')
-        .eq('token', sessionToken)
-        .eq('wallet_address', walletAddress.toLowerCase())
-        .maybeSingle();
-      
-      if (tokenError) {
-        console.error('🦘 Error verifying session token for jumps:', tokenError);
-        return false;
-      }
-      
-      if (!tokenData) {
-        console.error('🦘 Invalid session token for jumps');
-        return false;
-      }
-      
-      if (tokenData.is_used) {
-        console.error('🦘 Session token already used');
-        return false;
+      // First check if this session has already been saved to avoid duplicates
+      const sessionKey = `saved_session_${sessionId}`;
+      if (localStorage.getItem(sessionKey)) {
+        console.log(`Session ${sessionId} already saved to Supabase, skipping`);
+        return true;
       }
       
       // First check if there's an existing record for this wallet
@@ -485,8 +376,7 @@ export function Web3Provider({ children }) {
           .from('jumps')
           .insert({
             wallet_address: walletAddress.toLowerCase(),
-            count: jumpCount,
-            session_token: sessionToken
+            count: jumpCount
           });
       }
       
@@ -495,12 +385,8 @@ export function Web3Provider({ children }) {
         return false;
       }
       
-      // Mark session token as used
-      await supabase
-        .from('session_tokens')
-        .update({ is_used: true })
-        .eq('id', tokenData.id);
-      
+      // Mark session as saved
+      localStorage.setItem(sessionKey, 'true');
       console.log(`Successfully saved ${jumpCount} jumps to Supabase`);
       
       // Update local state
@@ -511,10 +397,10 @@ export function Web3Provider({ children }) {
       console.error("Error saving jumps to Supabase:", error);
       return false;
     }
-  }, [supabase]);
+  }, []);
 
   // Replace the recordBundledJumps implementation with this version
-  const recordBundledJumps = useCallback(async (jumpCount, sessionToken) => {
+  const recordBundledJumps = async (jumpCount, gameSessionId) => {
     if (!jumpCount || jumpCount <= 0) {
       console.log("No jumps to record");
       return false;
@@ -522,8 +408,8 @@ export function Web3Provider({ children }) {
     
     // Check for revive cancellation transactions that App.jsx already processed
     if (window.__processedReviveCancellations && 
-        window.__processedReviveCancellations.has(sessionToken)) {
-      console.log(`SKIPPING: recordBundledJumps - Session ${sessionToken} already processed by App.jsx`);
+        window.__processedReviveCancellations.has(gameSessionId)) {
+      console.log(`SKIPPING: recordBundledJumps - Session ${gameSessionId} already processed by App.jsx`);
       return true; // Return true to indicate "success" and allow flow to continue
     }
     
@@ -531,14 +417,7 @@ export function Web3Provider({ children }) {
       // First save to Supabase database
       const account = address;
       if (account) {
-        // Generate a session token if not provided
-        const effectiveToken = sessionToken || await generateSessionToken();
-        if (!effectiveToken) {
-          console.error('Failed to generate session token for jumps');
-          return false;
-        }
-        
-        await saveJumpsToSupabase(account, jumpCount, effectiveToken);
+        await saveJumpsToSupabase(account, jumpCount, gameSessionId);
       }
       
       // Update local total jumps count
@@ -546,7 +425,7 @@ export function Web3Provider({ children }) {
       
       // Check if our global transaction system exists and if this transaction is already processed
       if (window.__GLOBAL_TX_SYSTEM) {
-        const txKey = `jumps_${sessionToken}_${address}_${jumpCount}`;
+        const txKey = `jumps_${gameSessionId}_${address}_${jumpCount}`;
         
         // Check if this transaction is already recorded or in progress
         if (window.__GLOBAL_TX_SYSTEM.txHistory.has(txKey) || 
@@ -606,7 +485,7 @@ export function Web3Provider({ children }) {
       console.error("Error in recordBundledJumps:", error);
       return false;
     }
-  }, [address, walletClient, publicClient, generateSessionToken, saveJumpsToSupabase]);
+  };
   
   // Optimize the updateScore function to avoid redundant calls
   const updateScore = useCallback(async (score, jumpCount) => {
@@ -1081,17 +960,28 @@ export function Web3Provider({ children }) {
 
   // Optimize the jump message handler
   const handleGameMessages = useCallback(async (event) => {
+    // Guard conditions
     if (!event.data || typeof event.data !== 'object') return;
     
+    // Extract message data
     const { type, data } = event.data;
     
-    // Skip processing individual jump messages - only handle bundles
-    if (type === 'JUMP_PERFORMED' || type === 'FINAL_JUMP_COUNT') {
-      console.log(`Tracking local jump: ${data?.jumpCount || 'unknown'}`);
+    // Special handling for revive cancellation
+    if (type === 'REVIVE_CANCELLED') {
+      console.log('🏆 Web3Context: Processing revive cancellation');
+      const score = event.data.score || 0;
+      
+      // Save score directly when a revive is cancelled
+      if (score > 0) {
+        console.log(`🏆 Web3Context: Saving score ${score} after revive cancellation`);
+        await recordScore(score);
+      }
+      
+      // Return early - the jumps will be handled by the recordBundledJumps call below
       return;
     }
-    
-    // Handle the bundle message with a debounce mechanism
+
+    // Handle bundle jumps messages
     if (type === 'BUNDLE_JUMPS' && data) {
       // Use a key to prevent duplicate processing of the same session
       const sessionKey = `processed_session_${data.sessionId || Date.now()}`;

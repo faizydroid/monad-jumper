@@ -22,7 +22,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
-import MobilePage from './components/MobilePage';
 import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
 import { FaXTwitter, FaDiscord } from "react-icons/fa6";
 import { monadTestnet } from './config/chains';
@@ -2582,28 +2581,40 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                            iframeRef.current.contentWindow.__jumpCount || 
                            0;
           
+          // Get the score from the event data - IMPORTANT FIX
+          const finalScore = event.data.score || 
+                            (event.data.data && event.data.data.score) || 
+                            0;
+          
           const gameSessionId = event.data.gameId || 
                                (event.data.data && event.data.data.gameId) || 
                                gameId;
           
-          console.log(`🚫 Processing cancelled revive with ${jumpCount} jumps for game ${gameSessionId}`);
+          console.log(`🚫 Processing cancelled revive with ${jumpCount} jumps and score ${finalScore} for game ${gameSessionId}`);
           
           // Reset revive purchased flag
           setRevivePurchased(false);
           
-          // Record jumps immediately if available
-          if (jumpCount > 0) {
-            try {
-              console.log(`🚫 Starting jump transaction for ${jumpCount} jumps after revive cancellation`);
-              setTransactionPending(true);
+          try {
+            console.log(`🚫 Starting transactions for revive cancellation`);
+            setTransactionPending(true);
+            
+            // First save the score to Supabase (ADDED THIS)
+            if (finalScore > 0 && web3Context && web3Context.recordScore) {
+              console.log(`🏆 Saving final score after revive cancellation: ${finalScore}`);
+              await web3Context.recordScore(finalScore);
+            }
+            
+            // Then save the jumps
+            if (jumpCount > 0) {
               const success = await recordPlayerJumps(jumpCount, gameSessionId);
               console.log(`🚫 Revive cancellation jump transaction ${success ? 'succeeded' : 'failed'}`);
-            } catch (error) {
-              console.error('❌ Error recording jumps after revive cancellation:', error);
-            } finally {
-              setTransactionPending(false);
-              setShowPlayAgain(true);
             }
+          } catch (error) {
+            console.error('❌ Error processing revive cancellation:', error);
+          } finally {
+            setTransactionPending(false);
+            setShowPlayAgain(true);
           }
         }
         
@@ -3578,11 +3589,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   }
 
   // If wallet is not connected, show connect button
-  if (!isConnected || isMobileView) {
+  if (!isConnected) {
     return (
       <>
         {isMobileView ? (
-          <MobilePage 
+          <MobileHomePage 
             characterImg="/images/monad0.png" 
             onPlay={() => {
               console.log("Play clicked from mobile, setting showGame via state update");
@@ -3594,7 +3605,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               setShowMintModal(true);
             }}
             hasMintedNft={hasMintedNft}
-            isNftLoading={isNftLoading}
+            isNftLoading={isNftBalanceLoading}
           />
         ) : (
           <>
@@ -3933,6 +3944,20 @@ const MemoizedGameFrame = React.memo(OptimizedGameFrame,
 function App() {
   const [showMintModal, setShowMintModal] = useState(false);
   const { isConnected, address } = useAccount();
+  const [isMobileView, setIsMobileView] = useState(false);
+  
+  // Detect mobile view on component mount and window resize
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobile = window.innerWidth <= 768 || 
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobileView(isMobile);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Use useReadContract instead of useContractRead for Wagmi v2
   const { 
@@ -3974,8 +3999,23 @@ function App() {
     }
   }, [address, isConnected, refetchNftBalance]);
 
-  // Memoize components to prevent re-renders
-  const gameComponent = useMemo(() => (
+  // Memoize mobile component
+  const mobileComponent = useMemo(() => (
+    <ErrorBoundary>
+      <MobileHomePage 
+        characterImg="/images/monad0.png"
+        onPlay={() => {
+          window.location.hash = 'game';
+        }}
+        onMint={() => setShowMintModal(true)}
+        hasMintedNft={hasMintedNft}
+        isNftLoading={isNftBalanceLoading}
+      />
+    </ErrorBoundary>
+  ), [hasMintedNft, isNftBalanceLoading]);
+
+  // Memoize desktop component
+  const desktopComponent = useMemo(() => (
     <ErrorBoundary>
       <GameComponent 
         hasMintedNft={hasMintedNft} 
@@ -3987,10 +4027,10 @@ function App() {
 
   return (
     <Web3Provider>
-      {isConnected && <Navbar />}
+      {isConnected && !isMobileView && <Navbar />}
       
       <Routes>
-        <Route path="/" element={gameComponent} />
+        <Route path="/" element={isMobileView ? mobileComponent : desktopComponent} />
         <Route path="/admin" element={<AdminAccess />} />
       </Routes>
       <TransactionNotifications />
@@ -4001,8 +4041,6 @@ function App() {
           onClose={()=>setShowMintModal(false)} 
         />
       )}
-
-    
     </Web3Provider>
   );
 }
