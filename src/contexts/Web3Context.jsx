@@ -418,20 +418,42 @@ export function Web3Provider({ children }) {
   }, [address, isConnected, playerHighScore, saveScore, generateSessionToken]);
 
   // Update the saveJumpsToSupabase function to skip updating total_jumps
-  const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionId) => {
-    if (!walletAddress || !jumpCount || jumpCount <= 0) {
+  const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionToken) => {
+    if (!walletAddress || !jumpCount || jumpCount <= 0 || !supabase) {
       console.log("Invalid jump data for Supabase");
       return false;
     }
 
     try {
-      console.log(`Saving ${jumpCount} jumps to Supabase for session ${sessionId}`);
+      console.log(`Saving ${jumpCount} jumps to Supabase with session token`);
       
-      // First check if this session has already been saved to avoid duplicates
-      const sessionKey = `saved_session_${sessionId}`;
-      if (localStorage.getItem(sessionKey)) {
-        console.log(`Session ${sessionId} already saved to Supabase, skipping`);
-        return true;
+      // Validate session token before saving jumps
+      if (!sessionToken) {
+        console.error('🦘 Missing session token for jump validation');
+        return false;
+      }
+      
+      // Verify the session token is valid
+      const { data: tokenData, error: tokenError } = await supabase
+        .from('session_tokens')
+        .select('id, is_used')
+        .eq('token', sessionToken)
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .maybeSingle();
+      
+      if (tokenError) {
+        console.error('🦘 Error verifying session token for jumps:', tokenError);
+        return false;
+      }
+      
+      if (!tokenData) {
+        console.error('🦘 Invalid session token for jumps');
+        return false;
+      }
+      
+      if (tokenData.is_used) {
+        console.error('🦘 Session token already used');
+        return false;
       }
       
       // First check if there's an existing record for this wallet
@@ -463,7 +485,8 @@ export function Web3Provider({ children }) {
           .from('jumps')
           .insert({
             wallet_address: walletAddress.toLowerCase(),
-            count: jumpCount
+            count: jumpCount,
+            session_token: sessionToken
           });
       }
       
@@ -472,8 +495,12 @@ export function Web3Provider({ children }) {
         return false;
       }
       
-      // Mark session as saved
-      localStorage.setItem(sessionKey, 'true');
+      // Mark session token as used
+      await supabase
+        .from('session_tokens')
+        .update({ is_used: true })
+        .eq('id', tokenData.id);
+      
       console.log(`Successfully saved ${jumpCount} jumps to Supabase`);
       
       // Update local state
@@ -484,10 +511,10 @@ export function Web3Provider({ children }) {
       console.error("Error saving jumps to Supabase:", error);
       return false;
     }
-  }, []);
+  }, [supabase]);
 
   // Replace the recordBundledJumps implementation with this version
-  const recordBundledJumps = async (jumpCount, gameSessionId) => {
+  const recordBundledJumps = useCallback(async (jumpCount, sessionToken) => {
     if (!jumpCount || jumpCount <= 0) {
       console.log("No jumps to record");
       return false;
@@ -495,8 +522,8 @@ export function Web3Provider({ children }) {
     
     // Check for revive cancellation transactions that App.jsx already processed
     if (window.__processedReviveCancellations && 
-        window.__processedReviveCancellations.has(gameSessionId)) {
-      console.log(`SKIPPING: recordBundledJumps - Session ${gameSessionId} already processed by App.jsx`);
+        window.__processedReviveCancellations.has(sessionToken)) {
+      console.log(`SKIPPING: recordBundledJumps - Session ${sessionToken} already processed by App.jsx`);
       return true; // Return true to indicate "success" and allow flow to continue
     }
     
@@ -504,7 +531,14 @@ export function Web3Provider({ children }) {
       // First save to Supabase database
       const account = address;
       if (account) {
-        await saveJumpsToSupabase(account, jumpCount, gameSessionId);
+        // Generate a session token if not provided
+        const effectiveToken = sessionToken || await generateSessionToken();
+        if (!effectiveToken) {
+          console.error('Failed to generate session token for jumps');
+          return false;
+        }
+        
+        await saveJumpsToSupabase(account, jumpCount, effectiveToken);
       }
       
       // Update local total jumps count
@@ -512,7 +546,7 @@ export function Web3Provider({ children }) {
       
       // Check if our global transaction system exists and if this transaction is already processed
       if (window.__GLOBAL_TX_SYSTEM) {
-        const txKey = `jumps_${gameSessionId}_${address}_${jumpCount}`;
+        const txKey = `jumps_${sessionToken}_${address}_${jumpCount}`;
         
         // Check if this transaction is already recorded or in progress
         if (window.__GLOBAL_TX_SYSTEM.txHistory.has(txKey) || 
@@ -572,7 +606,7 @@ export function Web3Provider({ children }) {
       console.error("Error in recordBundledJumps:", error);
       return false;
     }
-  };
+  }, [address, walletClient, publicClient, generateSessionToken, saveJumpsToSupabase]);
   
   // Optimize the updateScore function to avoid redundant calls
   const updateScore = useCallback(async (score, jumpCount) => {

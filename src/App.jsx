@@ -1606,7 +1606,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   }
   
   // Fix the recordPlayerJumps function to properly save to the correct table
-  const recordPlayerJumps = useCallback(async (jumpCount, gameSessionId) => {
+  const recordPlayerJumps = useCallback(async (jumpCount, gameSessionId, sessionToken) => {
     if (!address || !walletClient || !publicClient) return false;
     if (jumpCount <= 0) return false;
     
@@ -1615,6 +1615,54 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     try {
       setTransactionPending(true);
       
+      // Validate session token if provided
+      if (sessionToken && web3Context && web3Context.saveJumpsToSupabase) {
+        console.log('🔐 Using session token validation for jumps');
+        
+        // Use the Web3Context function that validates session tokens
+        const supabaseSuccess = await web3Context.saveJumpsToSupabase(
+          address, 
+          jumpCount, 
+          sessionToken
+        );
+        
+        if (!supabaseSuccess) {
+          console.error('❌ Failed to save jumps with session token - possible replay attack');
+          setTransactionPending(false);
+          return false;
+        }
+      } else {
+        // If no session token, fall back to direct Supabase save
+        // This should eventually be removed after session tokens are fully implemented
+        if (supabase) {
+          try {
+            // First update jumps table with correct total
+            const { data: jumpData, error: jumpError } = await supabase
+              .from('jumps')
+              .select('count')
+              .eq('wallet_address', address.toLowerCase())
+              .maybeSingle();
+              
+            if (!jumpError) {
+              const currentCount = jumpData?.count || 0;
+              const newCount = currentCount + jumpCount;
+              
+              await supabase
+                .from('jumps')
+                .upsert({
+                  wallet_address: address.toLowerCase(),
+                  count: newCount
+                }, { onConflict: 'wallet_address' });
+              
+              console.log(`📊 Updated jumps in database: ${currentCount} → ${newCount}`);
+            }
+          } catch (dbError) {
+            console.error('Error saving jumps to database:', dbError);
+          }
+        }
+      }
+      
+      // Blockchain transaction
       const contractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
       const contractAbi = [
         {
@@ -1643,34 +1691,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       // Update local total jumps count from web3Context if available
       if (web3Context && web3Context.setTotalJumps) {
         web3Context.setTotalJumps(prev => (prev || 0) + jumpCount);
-      }
-      
-      // Save to Supabase database (correct table)
-      if (supabase) {
-        try {
-          // First update jumps table with correct total
-          const { data: jumpData, error: jumpError } = await supabase
-            .from('jumps')
-            .select('count')
-            .eq('wallet_address', address.toLowerCase())
-            .maybeSingle();
-            
-          if (!jumpError) {
-            const currentCount = jumpData?.count || 0;
-            const newCount = currentCount + jumpCount;
-            
-            await supabase
-              .from('jumps')
-              .upsert({
-                wallet_address: address.toLowerCase(),
-                count: newCount
-              }, { onConflict: 'wallet_address' });
-            
-            console.log(`📊 Updated jumps in database: ${currentCount} → ${newCount}`);
-          }
-        } catch (dbError) {
-          console.error('Error saving jumps to database:', dbError);
-        }
       }
       
       return true;
@@ -2451,7 +2471,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       console.log("🔍 BUNDLE_JUMPS received from", event.data?.source || 'unknown');
       
       const originalData = event.data.data;
-      const { score, jumpCount, saveId = `game_${gameId}_${Date.now()}` } = originalData;
+      const { score, jumpCount, saveId = `game_${gameId}_${Date.now()}`, sessionToken } = originalData;
       
       // Skip if no jumps or if transaction already pending or global lock is active
       if (jumpCount <= 0) {
@@ -2471,7 +2491,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       // Everything looks good - proceed with jump recording
       try {
         setTransactionPending(true);
-        await recordPlayerJumps(jumpCount, saveId, 'BUNDLE_JUMPS');
+        // Pass the session token for validation
+        await recordPlayerJumps(jumpCount, saveId, sessionToken);
       } catch (error) {
         console.error('BUNDLE_JUMPS transaction error:', error);
       } finally {
@@ -2492,8 +2513,15 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       const jumpCount = window.__JUMP_TRACKER?.jumps || 0;
       const gameSessionId = window.__JUMP_TRACKER?.gameId || gameId;
       
+      // Generate a session token for jumps if not provided
+      let jumpSessionToken = sessionToken;
+      if (!jumpSessionToken && web3Context && web3Context.generateSessionToken) {
+        jumpSessionToken = await web3Context.generateSessionToken();
+      }
+      
       if (jumpCount > 0) {
-        await recordPlayerJumps(jumpCount, gameSessionId);
+        // Use session token to validate jumps
+        await recordPlayerJumps(jumpCount, gameSessionId, jumpSessionToken);
       }
       
       // Record the score using the session token for validation
@@ -2512,7 +2540,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       setTransactionPending(false);
       setShowPlayAgain(true);
     }
-  }, [address, walletClient, publicClient, gameId, recordPlayerJumps, web3Context]);
+  }, [address, walletClient, publicClient, gameId, recordPlayerJumps, web3Context, web3Context?.generateSessionToken, web3Context?.recordScore]);
   
   // Add this function to your component
   const handleMessageFromGame = useCallback((event) => {
@@ -2616,6 +2644,33 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           await handleGameOver(finalScore, sessionToken);
         }
         
+        // Handle SAVE_JUMPS message with session token
+        if (event.data.type === 'SAVE_JUMPS') {
+          const jumpCount = event.data.jumps || 0;
+          const saveId = event.data.saveId || `game_${gameId}_${Date.now()}`;
+          const sessionToken = event.data.sessionToken;
+          
+          console.log(`🦘 Received SAVE_JUMPS: ${jumpCount} jumps with session token`);
+          
+          if (jumpCount > 0 && sessionToken) {
+            try {
+              // Use session token validation for more security
+              await recordPlayerJumps(jumpCount, saveId, sessionToken);
+              console.log(`✅ Successfully saved ${jumpCount} jumps with secure validation`);
+            } catch (error) {
+              console.error('❌ Error saving jumps:', error);
+            }
+          } else if (jumpCount > 0) {
+            console.warn('⚠️ Received SAVE_JUMPS without session token - less secure!');
+            // Fall back to old method without session token
+            try {
+              await recordPlayerJumps(jumpCount, saveId);
+            } catch (error) {
+              console.error('❌ Error saving jumps:', error);
+            }
+          }
+        }
+        
         // Handle the rest of the message types
         if (event.data.type === 'REVIVE_CANCELLED') {
           console.log('🚫 Revive cancelled with full data:', event.data);
@@ -2630,6 +2685,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           const gameSessionId = event.data.gameId || 
                                (event.data.data && event.data.data.gameId) || 
                                gameId;
+                               
+          // Get session token if it exists
+          const sessionToken = event.data.sessionToken ||
+                              (event.data.data && event.data.data.sessionToken);
           
           console.log(`🚫 Processing cancelled revive with ${jumpCount} jumps for game ${gameSessionId}`);
           
@@ -2641,7 +2700,19 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             try {
               console.log(`🚫 Starting jump transaction for ${jumpCount} jumps after revive cancellation`);
               setTransactionPending(true);
-              const success = await recordPlayerJumps(jumpCount, gameSessionId);
+              
+              // Generate a session token if one wasn't provided
+              let effectiveToken = sessionToken;
+              if (!effectiveToken && web3Context && web3Context.generateSessionToken) {
+                try {
+                  effectiveToken = await web3Context.generateSessionToken();
+                  console.log('🔐 Generated new session token for revive cancellation');
+                } catch (tokenError) {
+                  console.error('Error generating session token:', tokenError);
+                }
+              }
+              
+              const success = await recordPlayerJumps(jumpCount, gameSessionId, effectiveToken);
               console.log(`🚫 Revive cancellation jump transaction ${success ? 'succeeded' : 'failed'}`);
             } catch (error) {
               console.error('❌ Error recording jumps after revive cancellation:', error);
@@ -2660,7 +2731,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     return () => {
       window.removeEventListener('message', handleIframeMessage);
     };
-  }, [handleGameOver, gameId, window.__JUMP_TRACKER, web3Context]);
+  }, [handleGameOver, gameId, window.__JUMP_TRACKER, web3Context, recordPlayerJumps, web3Context?.generateSessionToken]);
 
   // Now modify the setupGameCommands callback to avoid duplicate transactions
   useEffect(() => {

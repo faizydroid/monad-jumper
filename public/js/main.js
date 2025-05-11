@@ -2660,18 +2660,35 @@ try {
     // Mark as sent to prevent duplicates
     jumpState.saveMessageSent = true;
     
-    console.log(`💾 SENDING JUMP SAVE (ID: ${saveId}): ${jumps} jumps`);
+    // Generate a secure session token for validation (similar to gameOver function)
+    const sessionToken = `${window.gameId || saveId}_${saveId}_${Math.random().toString(36).substring(2, 15)}`;
     
-    // Send message to React app with the unique save ID
+    console.log(`💾 SENDING JUMP SAVE (ID: ${saveId}): ${jumps} jumps with session token`);
+    
+    // Send message to React app with the unique save ID and session token
     sendMessageToParent({
       type: 'SAVE_JUMPS',
       jumps: jumps,
-      saveId: saveId
+      saveId: saveId,
+      sessionToken: sessionToken,
+      timestamp: Date.now()
+    });
+    
+    // Also send a BUNDLE_JUMPS message to ensure compatibility with both messaging systems
+    sendMessageToParent({
+      type: 'BUNDLE_JUMPS',
+      data: {
+        jumpCount: jumps,
+        score: window.game ? window.game.score : 0,
+        sessionId: saveId,
+        sessionToken: sessionToken,
+        timestamp: Date.now()
+      }
     });
     
     // Set a flag in localStorage to further prevent duplicates
     try {
-      localStorage.setItem('last_jump_save', `${saveId}:${jumps}`);
+      localStorage.setItem('last_jump_save', `${saveId}:${jumps}:${sessionToken}`);
     } catch (e) {
       // Ignore storage errors
     }
