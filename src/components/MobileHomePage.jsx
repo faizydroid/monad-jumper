@@ -4,9 +4,9 @@ import { useAccount } from 'wagmi';
 import { useWeb3 } from '../contexts/Web3Context';
 import './MobileHomePage.css';
 import MusicPlayer from './MusicPlayer';
-import { FaList, FaTrophy, FaTimes } from 'react-icons/fa';
 import Navbar from './Navbar';
 import Leaderboard from './Leaderboard';
+import { FaBars, FaTrophy, FaTimes } from 'react-icons/fa';
 
 const MobileHomePage = ({ 
   characterImg, 
@@ -18,12 +18,38 @@ const MobileHomePage = ({
   const { isConnected, address } = useAccount();
   const { playerHighScore, totalJumps, username } = useWeb3();
   const [showTutorial, setShowTutorial] = useState(false);
+  
+  // Add states for menu and leaderboard panels
   const [menuOpen, setMenuOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   
   // Simple animation for character
   const [characterPosition, setCharacterPosition] = useState(0);
   
+  // Close panels when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuOpen && !document.getElementById('mobile-nav-menu').contains(e.target) && 
+          !document.getElementById('menu-toggle-btn').contains(e.target)) {
+        setMenuOpen(false);
+      }
+      
+      if (leaderboardOpen && !document.getElementById('mobile-leaderboard').contains(e.target) && 
+          !document.getElementById('leaderboard-toggle-btn').contains(e.target)) {
+        setLeaderboardOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [menuOpen, leaderboardOpen]);
+  
+  // Character animation
   useEffect(() => {
     // Animate character jump
     let animationFrame;
@@ -62,44 +88,20 @@ const MobileHomePage = ({
     
     return () => cancelAnimationFrame(animationFrame);
   }, []);
+  
+  // Toggle functions
+  const toggleMenu = () => {
+    setMenuOpen(!menuOpen);
+    if (leaderboardOpen) setLeaderboardOpen(false);
+  };
+  
+  const toggleLeaderboard = () => {
+    setLeaderboardOpen(!leaderboardOpen);
+    if (menuOpen) setMenuOpen(false);
+  };
 
-  // Close menus when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuOpen && !e.target.closest('.mobile-menu') && !e.target.closest('.menu-toggle-btn')) {
-        setMenuOpen(false);
-      }
-      
-      if (leaderboardOpen && !e.target.closest('.mobile-leaderboard-panel') && !e.target.closest('.leaderboard-toggle-btn')) {
-        setLeaderboardOpen(false);
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-    
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, [menuOpen, leaderboardOpen]);
-
-  // Prevent scrolling when menu or leaderboard is open
-  useEffect(() => {
-    if (menuOpen || leaderboardOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [menuOpen, leaderboardOpen]);
-
-  // Only render the enhanced UI when wallet is connected
+  // If not connected, show standard connect screen
   if (!isConnected) {
-    // Original non-connected UI
     return (
       <div className="mobile-container">
         {/* Game logo and header */}
@@ -119,7 +121,6 @@ const MobileHomePage = ({
           <div className="mobile-character-shadow"></div>
         </div>
         
-        {/* Connect wallet instructions */}
         <div className="mobile-welcome-message">
           <p>Connect your wallet to start your jumping adventure</p>
           <div className="mobile-wallet-connect">
@@ -154,78 +155,69 @@ const MobileHomePage = ({
     );
   }
 
-  // Connected user UI with new layout
+  // Connected user view with new layout
   return (
     <div className="mobile-container">
-      {/* Top navigation bar */}
-      <div className="mobile-top-nav">
+      {/* Header with menu, title, and leaderboard button */}
+      <div className="mobile-nav-header">
         <button 
-          className="menu-toggle-btn" 
-          onClick={() => setMenuOpen(!menuOpen)}
+          id="menu-toggle-btn"
+          className="mobile-menu-toggle" 
+          onClick={toggleMenu}
           aria-label="Toggle menu"
         >
-          {menuOpen ? <FaTimes /> : <FaList />}
+          <FaBars size={24} />
         </button>
         
         <h1 className="mobile-nav-title">JumpNads</h1>
         
         <button 
-          className="leaderboard-toggle-btn" 
-          onClick={() => setLeaderboardOpen(!leaderboardOpen)}
+          id="leaderboard-toggle-btn"
+          className="mobile-leaderboard-toggle" 
+          onClick={toggleLeaderboard}
           aria-label="Toggle leaderboard"
         >
-          <FaTrophy />
+          <FaTrophy size={24} />
         </button>
       </div>
       
-      {/* Sliding Menu Panel */}
-      <div className={`mobile-menu ${menuOpen ? 'open' : ''}`}>
-        <div className="mobile-menu-header">
-          <h2>Menu</h2>
+      {/* Sliding menu panel */}
+      <div id="mobile-nav-menu" className={`mobile-nav-menu ${menuOpen ? 'open' : ''}`}>
+        <div className="mobile-nav-menu-header">
           <button 
-            className="mobile-menu-close" 
+            className="mobile-nav-close" 
             onClick={() => setMenuOpen(false)}
             aria-label="Close menu"
           >
-            <FaTimes />
+            <FaTimes size={24} />
           </button>
+          <h2>Menu</h2>
         </div>
-        <div className="mobile-menu-content">
-          <Navbar />
+        <div className="mobile-nav-content">
+          <Navbar mobile={true} />
         </div>
       </div>
       
-      {/* Sliding Leaderboard Panel */}
-      <div className={`mobile-leaderboard-panel ${leaderboardOpen ? 'open' : ''}`}>
-        <div className="mobile-panel-header">
+      {/* Sliding leaderboard panel */}
+      <div id="mobile-leaderboard" className={`mobile-leaderboard-panel ${leaderboardOpen ? 'open' : ''}`}>
+        <div className="mobile-leaderboard-header">
           <h2>Leaderboard</h2>
           <button 
-            className="mobile-panel-close" 
+            className="mobile-leaderboard-close" 
             onClick={() => setLeaderboardOpen(false)}
             aria-label="Close leaderboard"
           >
-            <FaTimes />
+            <FaTimes size={24} />
           </button>
         </div>
-        <div className="mobile-panel-content">
-          <Leaderboard />
+        <div className="mobile-leaderboard-content">
+          <Leaderboard mobile={true} />
         </div>
       </div>
       
-      {/* Main content */}
-      <div className="mobile-content">
-        {/* Animated character */}
-        <div className="mobile-character-container">
-          <img 
-            src={characterImg} 
-            alt="Game Character" 
-            className="mobile-character"
-            style={{ transform: `translateY(${characterPosition}px)` }} 
-          />
-          <div className="mobile-character-shadow"></div>
-        </div>
-        
-        {/* Stats only shown when connected and has username */}
+      {/* Main content - only visible when panels are closed */}
+      <div className={`mobile-main-content ${menuOpen || leaderboardOpen ? 'blurred' : ''}`}>
+        {/* Stats */}
         {username && (
           <div className="mobile-stats-container">
             <div className="mobile-stat">
@@ -241,8 +233,19 @@ const MobileHomePage = ({
           </div>
         )}
         
-        {/* Main action area */}
-        <div className="mobile-welcome-message">
+        {/* Animated character */}
+        <div className="mobile-character-container">
+          <img 
+            src={characterImg} 
+            alt="Game Character" 
+            className="mobile-character"
+            style={{ transform: `translateY(${characterPosition}px)` }} 
+          />
+          <div className="mobile-character-shadow"></div>
+        </div>
+        
+        {/* Play/Mint buttons */}
+        <div className="mobile-action-container">
           {isNftLoading ? (
             <>
               <p>Checking NFT ownership...</p>
@@ -250,7 +253,6 @@ const MobileHomePage = ({
             </>
           ) : hasMintedNft ? (
             <>
-              <p>You're ready to jump!</p>
               <button 
                 onClick={onPlay}
                 className="mobile-play-button"
@@ -276,10 +278,10 @@ const MobileHomePage = ({
             </>
           )}
         </div>
+        
+        {/* Background music player */}
+        <MusicPlayer />
       </div>
-      
-      {/* Background music player */}
-      <MusicPlayer />
       
       {/* Game tutorial modal */}
       {showTutorial && (
@@ -312,7 +314,7 @@ const MobileHomePage = ({
         </div>
       )}
       
-      {/* Overlay when menu or leaderboard is open */}
+      {/* Overlay for when menu or leaderboard is open */}
       {(menuOpen || leaderboardOpen) && (
         <div 
           className="mobile-overlay" 
