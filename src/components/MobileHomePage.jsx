@@ -4,9 +4,9 @@ import { useAccount } from 'wagmi';
 import { useWeb3 } from '../contexts/Web3Context';
 import './MobileHomePage.css';
 import MusicPlayer from './MusicPlayer';
+import { FaList, FaTrophy, FaTimes } from 'react-icons/fa';
 import Navbar from './Navbar';
 import Leaderboard from './Leaderboard';
-import { FaBars, FaTrophy, FaTimes } from 'react-icons/fa';
 
 const MobileHomePage = ({ 
   characterImg, 
@@ -23,28 +23,6 @@ const MobileHomePage = ({
   
   // Simple animation for character
   const [characterPosition, setCharacterPosition] = useState(0);
-  
-  // Close panels when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      // Check if click is outside the menu and not on the menu button
-      if (menuOpen && 
-          !e.target.closest('.mobile-side-menu') && 
-          !e.target.closest('.hamburger-button')) {
-        setMenuOpen(false);
-      }
-      
-      // Check if click is outside the leaderboard and not on the leaderboard button
-      if (leaderboardOpen && 
-          !e.target.closest('.mobile-leaderboard-panel') && 
-          !e.target.closest('.leaderboard-button')) {
-        setLeaderboardOpen(false);
-      }
-    };
-    
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [menuOpen, leaderboardOpen]);
   
   useEffect(() => {
     // Animate character jump
@@ -84,101 +62,49 @@ const MobileHomePage = ({
     
     return () => cancelAnimationFrame(animationFrame);
   }, []);
-  
-  // Prevent body scrolling when menus are open
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuOpen && !e.target.closest('.mobile-menu') && !e.target.closest('.menu-toggle-btn')) {
+        setMenuOpen(false);
+      }
+      
+      if (leaderboardOpen && !e.target.closest('.mobile-leaderboard-panel') && !e.target.closest('.leaderboard-toggle-btn')) {
+        setLeaderboardOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [menuOpen, leaderboardOpen]);
+
+  // Prevent scrolling when menu or leaderboard is open
   useEffect(() => {
     if (menuOpen || leaderboardOpen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = '';
     }
     
     return () => {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = '';
     };
   }, [menuOpen, leaderboardOpen]);
 
-  return (
-    <div className="mobile-container">
-      {/* Top Navigation Bar */}
-      <div className="mobile-top-nav">
-        {isConnected ? (
-          <>
-            <button 
-              className="hamburger-button" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(!menuOpen);
-                if (leaderboardOpen) setLeaderboardOpen(false);
-              }}
-            >
-              <FaBars />
-            </button>
-            
-            <h1 className="mobile-nav-title">JumpNads</h1>
-            
-            <button 
-              className="leaderboard-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLeaderboardOpen(!leaderboardOpen);
-                if (menuOpen) setMenuOpen(false);
-              }}
-            >
-              <FaTrophy />
-            </button>
-          </>
-        ) : (
-          <h1 className="mobile-nav-title">JumpNads</h1>
-        )}
-      </div>
-      
-      {/* Sliding Menu - only when connected */}
-      {isConnected && (
-        <div className={`mobile-side-menu ${menuOpen ? 'open' : ''}`}>
-          <button 
-            className="close-menu-button"
-            onClick={() => setMenuOpen(false)}
-          >
-            <FaTimes />
-          </button>
-          <div className="mobile-navbar-container">
-            <Navbar isMobile={true} />
-          </div>
-        </div>
-      )}
-      
-      {/* Sliding Leaderboard Panel - only when connected */}
-      {isConnected && (
-        <div className={`mobile-leaderboard-panel ${leaderboardOpen ? 'open' : ''}`}>
-          <button 
-            className="close-leaderboard-button"
-            onClick={() => setLeaderboardOpen(false)}
-          >
-            <FaTimes />
-          </button>
-          <h2>Leaderboard</h2>
-          <div className="mobile-leaderboard-container">
-            <Leaderboard isMobile={true} />
-          </div>
-        </div>
-      )}
-      
-      {/* Overlay when menus are open - only when connected */}
-      {isConnected && (menuOpen || leaderboardOpen) && (
-        <div 
-          className="mobile-overlay" 
-          onClick={() => {
-            setMenuOpen(false);
-            setLeaderboardOpen(false);
-          }}
-        />
-      )}
-      
-      {/* Main Content */}
-      <div className="mobile-content">
+  // Only render the enhanced UI when wallet is connected
+  if (!isConnected) {
+    // Original non-connected UI
+    return (
+      <div className="mobile-container">
         {/* Game logo and header */}
         <div className="mobile-header">
+          <h1 className="mobile-game-title">JumpNads</h1>
           <p className="mobile-game-subtitle">Jump to the MOON!</p>
         </div>
         
@@ -193,8 +119,114 @@ const MobileHomePage = ({
           <div className="mobile-character-shadow"></div>
         </div>
         
+        {/* Connect wallet instructions */}
+        <div className="mobile-welcome-message">
+          <p>Connect your wallet to start your jumping adventure</p>
+          <div className="mobile-wallet-connect">
+            <ConnectButton 
+              showBalance={false}
+              chainStatus="none"
+              accountStatus="address"
+              label="Connect Wallet"
+            />
+          </div>
+        </div>
+        
+        {/* Background music player */}
+        <MusicPlayer />
+        
+        {/* Info bubbles */}
+        <div className="mobile-game-facts">
+          <div className="mobile-fact-bubble mobile-fact-bubble-1">
+            <span>🚀</span>
+            <p>Play & Earn!</p>
+          </div>
+          <div className="mobile-fact-bubble mobile-fact-bubble-2">
+            <span>🎮</span>
+            <p>Fun Gameplay!</p>
+          </div>
+          <div className="mobile-fact-bubble mobile-fact-bubble-3">
+            <span>⛓️</span>
+            <p>Powered by Monad!</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Connected user UI with new layout
+  return (
+    <div className="mobile-container">
+      {/* Top navigation bar */}
+      <div className="mobile-top-nav">
+        <button 
+          className="menu-toggle-btn" 
+          onClick={() => setMenuOpen(!menuOpen)}
+          aria-label="Toggle menu"
+        >
+          {menuOpen ? <FaTimes /> : <FaList />}
+        </button>
+        
+        <h1 className="mobile-nav-title">JumpNads</h1>
+        
+        <button 
+          className="leaderboard-toggle-btn" 
+          onClick={() => setLeaderboardOpen(!leaderboardOpen)}
+          aria-label="Toggle leaderboard"
+        >
+          <FaTrophy />
+        </button>
+      </div>
+      
+      {/* Sliding Menu Panel */}
+      <div className={`mobile-menu ${menuOpen ? 'open' : ''}`}>
+        <div className="mobile-menu-header">
+          <h2>Menu</h2>
+          <button 
+            className="mobile-menu-close" 
+            onClick={() => setMenuOpen(false)}
+            aria-label="Close menu"
+          >
+            <FaTimes />
+          </button>
+        </div>
+        <div className="mobile-menu-content">
+          <Navbar />
+        </div>
+      </div>
+      
+      {/* Sliding Leaderboard Panel */}
+      <div className={`mobile-leaderboard-panel ${leaderboardOpen ? 'open' : ''}`}>
+        <div className="mobile-panel-header">
+          <h2>Leaderboard</h2>
+          <button 
+            className="mobile-panel-close" 
+            onClick={() => setLeaderboardOpen(false)}
+            aria-label="Close leaderboard"
+          >
+            <FaTimes />
+          </button>
+        </div>
+        <div className="mobile-panel-content">
+          <Leaderboard />
+        </div>
+      </div>
+      
+      {/* Main content */}
+      <div className="mobile-content">
+        {/* Animated character */}
+        <div className="mobile-character-container">
+          <img 
+            src={characterImg} 
+            alt="Game Character" 
+            className="mobile-character"
+            style={{ transform: `translateY(${characterPosition}px)` }} 
+          />
+          <div className="mobile-character-shadow"></div>
+        </div>
+        
         {/* Stats only shown when connected and has username */}
-        {isConnected && username && (
+        {username && (
           <div className="mobile-stats-container">
             <div className="mobile-stat">
               <span className="mobile-stat-icon">🏆</span>
@@ -211,19 +243,7 @@ const MobileHomePage = ({
         
         {/* Main action area */}
         <div className="mobile-welcome-message">
-          {!isConnected ? (
-            <>
-              <p>Connect your wallet to start your jumping adventure</p>
-              <div className="mobile-wallet-connect">
-                <ConnectButton 
-                  showBalance={false}
-                  chainStatus="none"
-                  accountStatus="address"
-                  label="Connect Wallet"
-                />
-              </div>
-            </>
-          ) : isNftLoading ? (
+          {isNftLoading ? (
             <>
               <p>Checking NFT ownership...</p>
               <div className="mobile-loading-indicator"></div>
@@ -256,26 +276,10 @@ const MobileHomePage = ({
             </>
           )}
         </div>
-        
-        {/* Background music player */}
-        <MusicPlayer />
-        
-        {/* Info bubbles */}
-        <div className="mobile-game-facts">
-          <div className="mobile-fact-bubble mobile-fact-bubble-1">
-            <span>🚀</span>
-            <p>Play & Earn!</p>
-          </div>
-          <div className="mobile-fact-bubble mobile-fact-bubble-2">
-            <span>🎮</span>
-            <p>Fun Gameplay!</p>
-          </div>
-          <div className="mobile-fact-bubble mobile-fact-bubble-3">
-            <span>⛓️</span>
-            <p>Powered by Monad!</p>
-          </div>
-        </div>
       </div>
+      
+      {/* Background music player */}
+      <MusicPlayer />
       
       {/* Game tutorial modal */}
       {showTutorial && (
@@ -306,6 +310,17 @@ const MobileHomePage = ({
             </button>
           </div>
         </div>
+      )}
+      
+      {/* Overlay when menu or leaderboard is open */}
+      {(menuOpen || leaderboardOpen) && (
+        <div 
+          className="mobile-overlay" 
+          onClick={() => {
+            setMenuOpen(false);
+            setLeaderboardOpen(false);
+          }}
+        />
       )}
     </div>
   );

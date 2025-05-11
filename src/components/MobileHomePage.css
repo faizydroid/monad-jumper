@@ -8,9 +8,8 @@
   --text-color: #ffffff;
   --card-bg: rgba(255, 255, 255, 0.9);
   --shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  --menu-transition: 0.3s ease-in-out;
-  --menu-width: 80%;
-  --top-nav-height: 60px;
+  --menu-width: 280px;
+  --nav-height: 60px;
 }
 
 .mobile-container {
@@ -18,177 +17,236 @@
   padding: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   background-color: transparent;
   overflow-x: hidden;
   position: relative;
   background: linear-gradient(135deg, #1e3c72, #2a5298);
 }
 
-/* Top Navigation Bar */
+/* Top Navigation Bar (New) */
 .mobile-top-nav {
-  width: 100%;
-  height: var(--top-nav-height);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  padding: 0 15px;
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 100;
+  width: 100%;
+  height: var(--nav-height);
+  background: rgba(26, 26, 26, 0.9);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 15px;
+  z-index: 50;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
-.hamburger-button, 
-.leaderboard-button {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 24px;
-  padding: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 101;
-  transition: transform 0.2s;
-}
-
-.hamburger-button:active, 
-.leaderboard-button:active {
-  transform: scale(0.9);
-}
-
 .mobile-nav-title {
-  font-family: 'Bangers', cursive;
-  font-size: 2.5rem;
-  color: white;
-  text-shadow: 3px 3px 0 #9900ff, 5px 5px 0 rgba(0, 0, 0, 0.3);
+  font: 2.5rem 'Bangers', cursive;
+  color: #fff;
   margin: 0;
-  letter-spacing: 2px;
+  text-shadow: 3px 3px 0 #9900ff, 4px 4px 0 rgba(0, 0, 0, 0.3);
+  letter-spacing: 1px;
   transform: rotate(-2deg);
 }
 
-/* Sliding Menu */
-.mobile-side-menu {
+.menu-toggle-btn,
+.leaderboard-toggle-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.3s;
+}
+
+.menu-toggle-btn:active,
+.leaderboard-toggle-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Sliding Menu Panel (New) */
+.mobile-menu {
   position: fixed;
   top: 0;
   left: -100%;
   width: var(--menu-width);
-  max-width: 300px;
   height: 100vh;
-  background-color: rgba(15, 23, 42, 0.97);
+  background: rgba(26, 26, 26, 0.95);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  z-index: 1000;
-  padding: 20px;
-  padding-top: calc(var(--top-nav-height) + 20px);
-  box-shadow: 5px 0 15px rgba(0, 0, 0, 0.3);
-  transition: left var(--menu-transition);
+  z-index: 100;
+  box-shadow: 2px 0 15px rgba(0, 0, 0, 0.5);
+  transition: transform 0.4s ease-in-out;
   overflow-y: auto;
+  transform: translateX(-100%);
 }
 
-.mobile-side-menu.open {
-  left: 0;
+.mobile-menu.open {
+  transform: translateX(0);
 }
 
-.close-menu-button,
-.close-leaderboard-button {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  background: none;
+.mobile-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-menu-header h2 {
+  margin: 0;
+  color: white;
+  font-size: 1.5rem;
+}
+
+.mobile-menu-close {
+  background: transparent;
   border: none;
   color: white;
-  font-size: 20px;
-  padding: 5px;
+  font-size: 1.2rem;
   cursor: pointer;
-  z-index: 101;
 }
 
-.mobile-navbar-container {
-  width: 100%;
-  margin-top: 20px;
+.mobile-menu-content {
+  padding: 20px 0;
 }
 
-/* Sliding Leaderboard Panel */
+/* Modify Navbar styling when inside mobile menu */
+.mobile-menu-content nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-menu-content nav a,
+.mobile-menu-content nav button {
+  text-align: left;
+  padding: 15px 20px;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: white;
+  font-size: 1rem;
+}
+
+.mobile-menu-content nav a:hover,
+.mobile-menu-content nav button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Sliding Leaderboard Panel (New) */
 .mobile-leaderboard-panel {
   position: fixed;
   top: 0;
-  right: -100%;
-  width: var(--menu-width);
+  right: 0;
+  width: 100%;
   max-width: 350px;
   height: 100vh;
-  background-color: rgba(15, 23, 42, 0.97);
+  background: rgba(26, 26, 26, 0.95);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  z-index: 1000;
-  padding: 20px;
-  padding-top: calc(var(--top-nav-height) + 20px);
-  box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
-  transition: right var(--menu-transition);
+  z-index: 100;
+  box-shadow: -2px 0 15px rgba(0, 0, 0, 0.5);
+  transition: transform 0.4s ease-in-out;
+  transform: translateX(100%);
   overflow-y: auto;
 }
 
 .mobile-leaderboard-panel.open {
-  right: 0;
+  transform: translateX(0);
 }
 
-.mobile-leaderboard-panel h2 {
+.mobile-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-panel-header h2 {
+  margin: 0;
   color: white;
-  font-family: 'Bangers', cursive;
-  font-size: 2rem;
-  text-align: center;
-  margin-bottom: 20px;
-  letter-spacing: 1px;
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  font-size: 1.5rem;
 }
 
-.mobile-leaderboard-container {
-  width: 100%;
-  height: calc(100vh - 150px);
+.mobile-panel-close {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.mobile-panel-content {
+  padding: 10px;
+  height: calc(100vh - 60px);
   overflow-y: auto;
 }
 
-/* Darkening overlay */
+/* Modify Leaderboard styling when in mobile panel */
+.mobile-panel-content .leaderboard-container {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.mobile-panel-content .leaderboard-header {
+  padding: 10px;
+}
+
+.mobile-panel-content .leaderboard-list {
+  padding: 5px;
+}
+
+/* Main Content Area */
+.mobile-content {
+  margin-top: var(--nav-height);
+  width: 100%;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Semi-transparent overlay (New) */
 .mobile-overlay {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.7);
-  z-index: 900;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  animation: fadeIn 0.3s forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* Main content area */
-.mobile-content {
-  margin-top: var(--top-nav-height);
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
-  padding-top: 10px;
-  flex: 1;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 90;
+  animation: fade-in 0.3s forwards;
 }
+
+/* Preserve original styles for other elements */
 
 .mobile-header {
   width: 100%;
   text-align: center;
   margin-bottom: 10px;
+}
+
+.mobile-game-title {
+  font: 5rem 'Bangers', cursive;
+  color: #fff;
+  text-align: center;
+  margin: 30px 0 5px;
+  text-shadow: 5px 5px 0 #9900ff, 8px 8px 0 rgba(0, 0, 0, 0.3);
+  letter-spacing: 2px;
+  line-height: 0.9;
+  transform: rotate(-2deg);
+  animation: bounce-in 1s ease-out;
 }
 
 .mobile-game-subtitle {
@@ -236,7 +294,7 @@
   animation: shadow-pulse 2s infinite ease-in-out;
 }
 
-/* Stats container (new) */
+/* Stats container */
 .mobile-stats-container {
   width: 90%;
   display: flex;
@@ -339,7 +397,7 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Tutorial overlay (new) */
+/* Tutorial overlay */
 .mobile-tutorial-overlay {
   position: fixed;
   top: 0;
@@ -400,40 +458,6 @@
   margin-top: 20px !important;
 }
 
-/* Animation for character bounce */
-@keyframes mobile-character-bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-15px); }
-}
-
-@keyframes shadow-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.7; }
-  50% { transform: scale(0.8); opacity: 0.5; }
-}
-
-@keyframes bounce-in {
-  0% { transform: scale(0.8) rotate(-2deg); opacity: 0; }
-  20% { transform: scale(1.1) rotate(-2deg); }
-  40% { transform: scale(0.9) rotate(-2deg); }
-  60% { transform: scale(1.05) rotate(-2deg); }
-  80% { transform: scale(0.95) rotate(-2deg); }
-  100% { transform: scale(1) rotate(-2deg); opacity: 1; }
-}
-
-@keyframes bubble-appear {
-  0% { opacity: 0; transform: scale(0.8) translateY(20px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 /* Welcome message with connect wallet button */
 .mobile-wallet-connect {
   width: 85%;
@@ -459,13 +483,6 @@
   font-family: 'Bangers', cursive !important;
   letter-spacing: 1px !important;
   line-height: 1 !important;
-}
-
-/* Handle any spans inside the button */
-.mobile-wallet-connect button span {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
 }
 
 /* Facts bubbles */
@@ -524,10 +541,54 @@
   margin: 15px auto;
 }
 
+/* Animations */
+@keyframes mobile-character-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+}
+
+@keyframes shadow-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(0.8); opacity: 0.5; }
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.8) rotate(-2deg); opacity: 0; }
+  20% { transform: scale(1.1) rotate(-2deg); }
+  40% { transform: scale(0.9) rotate(-2deg); }
+  60% { transform: scale(1.05) rotate(-2deg); }
+  80% { transform: scale(0.95) rotate(-2deg); }
+  100% { transform: scale(1) rotate(-2deg); opacity: 1; }
+}
+
+@keyframes bubble-appear {
+  0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
 /* Media queries for different screen sizes */
 @media screen and (max-width: 375px) {
-  .mobile-nav-title {
-    font-size: 2rem;
+  .mobile-game-title {
+    font-size: 4.5rem;
   }
   
   .mobile-game-subtitle {
@@ -547,9 +608,8 @@
     font-size: 20px;
   }
   
-  .hamburger-button, 
-  .leaderboard-button {
-    font-size: 20px;
+  .mobile-nav-title {
+    font-size: 2rem;
   }
 }
 
@@ -567,16 +627,9 @@
 
 /* For short phones */
 @media screen and (max-height: 650px) {
-  .mobile-top-nav {
-    height: 50px;
-  }
-  
-  .mobile-nav-title {
-    font-size: 1.8rem;
-  }
-  
-  .mobile-content {
-    margin-top: 50px;
+  .mobile-game-title {
+    font-size: 4rem;
+    margin: 15px 0 5px;
   }
   
   .mobile-game-subtitle {
@@ -590,25 +643,35 @@
   .mobile-fact-bubble {
     padding: 12px 15px;
   }
+  
+  .mobile-top-nav {
+    height: 50px;
+  }
+  
+  .mobile-content {
+    margin-top: 50px;
+  }
+  
+  :root {
+    --nav-height: 50px;
+  }
 }
 
-/* Ensure navbar and leaderboard components display properly inside panels */
-.mobile-navbar-container :global(.navbar),
-.mobile-navbar-container :global(.nav-links) {
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  width: 100% !important;
+/* For large screens */
+@media screen and (min-width: 768px) {
+  .mobile-leaderboard-panel {
+    max-width: 400px;
+  }
+  
+  .mobile-menu {
+    width: 320px;
+  }
 }
 
-.mobile-navbar-container :global(.nav-link) {
-  margin: 10px 0 !important;
-  font-size: 1.2rem !important;
-}
-
-.mobile-leaderboard-container :global(.leaderboard-container) {
-  width: 100% !important;
-  max-height: none !important;
-  margin: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
+/* Fix for iOS behavior */
+html, body {
+  position: relative;
+  overflow-x: hidden;
+  width: 100%;
+  height: 100%;
 } 
