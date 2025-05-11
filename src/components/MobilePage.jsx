@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { useWeb3 } from '../contexts/Web3Context';
-import { FaHamburger, FaTrophy, FaPlay, FaTimes, FaHome, FaGift, FaShoppingCart, FaCalendarCheck } from 'react-icons/fa';
-import Navbar from './Navbar';
+import { FaHamburger, FaTrophy, FaPlay, FaTimes } from 'react-icons/fa';
+import MobileGameNavbar from './MobileGameNavbar';
 import Leaderboard from './Leaderboard';
 import './MobilePage.css';
 
@@ -22,7 +22,7 @@ const MobilePage = ({
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      const menu = document.querySelector('.mobile-menu');
+      const menu = document.querySelector('.mobile-game-navbar');
       const hamburgerBtn = document.querySelector('.hamburger-btn');
       
       if (menu && !menu.contains(event.target) && !hamburgerBtn.contains(event.target)) {
@@ -146,46 +146,11 @@ const MobilePage = ({
         </button>
       </div>
       
-      {/* Sliding hamburger menu */}
-      <div className={`mobile-menu ${menuOpen ? 'open' : ''}`}>
-        <div className="menu-header">
-          <div className="menu-username">{username}</div>
-          <div className="menu-score">
-            <div className="menu-highscore">
-              <span role="img" aria-label="trophy">🏆</span> {playerHighScore || 0}
-            </div>
-          </div>
-        </div>
-        
-        <div className="menu-nav">
-          <div className="menu-nav-item active">
-            <FaHome size={28} />
-            <span>Home</span>
-          </div>
-          <div className="menu-nav-item">
-            <FaGift size={26} />
-            <span>Rewards</span>
-          </div>
-          <div className="menu-nav-item">
-            <FaCalendarCheck size={25} />
-            <span>Quests</span>
-          </div>
-          <div className="menu-nav-item">
-            <FaShoppingCart size={25} />
-            <span>Shop</span>
-          </div>
-        </div>
-        
-        <div className="menu-footer">
-          <div className="menu-wallet">
-            <ConnectButton 
-              showBalance={false}
-              chainStatus="icon"
-              accountStatus="address"
-            />
-          </div>
-        </div>
-      </div>
+      {/* Use the MobileGameNavbar component for the sliding menu */}
+      <MobileGameNavbar 
+        isOpen={menuOpen} 
+        onClose={() => setMenuOpen(false)} 
+      />
       
       {/* Sliding leaderboard panel */}
       <div className={`mobile-leaderboard-panel ${leaderboardOpen ? 'open' : ''}`}>
