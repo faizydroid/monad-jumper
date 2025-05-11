@@ -545,10 +545,13 @@ window.addEventListener('load', () => {
                 this.deathReason = "fall";
             }
             
+            // Ensure score is properly formatted as a number
+            const finalScore = Math.floor(this.score);
+            
             // Send a message to the parent window with the final score and jump count
             sendMessageToParent({
                 type: 'gameOver',
-                score: this.score,
+                score: finalScore,
                 jumps: this.finalJumpCount,
                 gameId: this.gameId,
                 deathReason: this.deathReason,
@@ -556,6 +559,22 @@ window.addEventListener('load', () => {
                 hasUsedRevive: !!this.hasUsedRevive,
                 timestamp: Date.now()
             });
+            
+            // Send an additional message with different format to ensure compatibility
+            sendMessageToParent({
+                type: 'GAME_OVER',
+                data: {
+                    finalScore: finalScore,
+                    jumpCount: this.finalJumpCount,
+                    gameId: this.gameId,
+                    deathReason: this.deathReason
+                }
+            });
+            
+            // Attempt to directly set high score as a fallback
+            if (window.setDirectHighScore && typeof window.setDirectHighScore === 'function') {
+                window.setDirectHighScore(finalScore);
+            }
         }
 
         drawButton(button) {
@@ -1208,18 +1227,34 @@ window.addEventListener('load', () => {
                         type: 'GAME_OVER',
                         transactionRequired: true,
                         gameOverId: gameOverId,
-                            data: {
-                                score: finalScore,
-                                jumpCount: jumpCount,
+                        data: {
+                            score: finalScore,
+                            jumpCount: jumpCount,
                             finalScore: finalScore,
                             jumps: jumpCount,
-                                timestamp: Date.now(),
+                            timestamp: Date.now(),
                             reason: this.deathReason,
                             saveId: gameOverId
-                            }
+                        }
                     });
-                    } catch (error) {
+                    
+                    // Send backup message with original format for compatibility
+                    sendMessageToParent({
+                        type: 'gameOver',
+                        score: finalScore,
+                        jumps: jumpCount,
+                        gameId: this.gameId,
+                        deathReason: this.deathReason,
+                        timestamp: Date.now()
+                    });
+                    
+                    // Attempt to directly set high score as a fallback
+                    if (window.setDirectHighScore && typeof window.setDirectHighScore === 'function') {
+                        window.setDirectHighScore(finalScore);
+                    }
+                } catch (error) {
                     // Silent fail
+                    console.error('Failed to send game over message:', error);
                 }
                 
                 return true;

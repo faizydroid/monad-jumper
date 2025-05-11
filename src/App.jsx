@@ -2580,6 +2580,34 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           }
         }
         
+        // Handle both gameOver and GAME_OVER messages with high priority
+        if (event.data.type === 'gameOver' || event.data.type === 'GAME_OVER') {
+          const finalScore = event.data.score || 
+                            (event.data.data && event.data.data.finalScore) || 
+                            0;
+          
+          const jumpCount = event.data.jumps || 
+                           (event.data.data && event.data.data.jumpCount) || 
+                           window.__jumpCount || 
+                           window.__JUMP_TRACKER?.jumps || 
+                           0;
+          
+          console.log(`🔚 Game over with score ${finalScore} and ${jumpCount} jumps`);
+          
+          // Always save to Web3Context regardless of other handlers
+          if (web3Context && web3Context.recordScore && typeof web3Context.recordScore === 'function') {
+            try {
+              console.log(`🏆 Directly saving score ${finalScore} to Web3Context`);
+              await web3Context.recordScore(finalScore);
+            } catch (scoreError) {
+              console.error('Error saving score to Web3Context:', scoreError);
+            }
+          }
+          
+          await handleGameOver(finalScore);
+        }
+        
+        // Handle the rest of the message types
         if (event.data.type === 'REVIVE_CANCELLED') {
           console.log('🚫 Revive cancelled with full data:', event.data);
           
@@ -2614,22 +2642,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             }
           }
         }
-        
-        if (event.data.type === 'gameOver' || event.data.type === 'GAME_OVER') {
-          const finalScore = event.data.score || 
-                            (event.data.data && event.data.data.finalScore) || 
-                            0;
-          
-          const jumpCount = event.data.jumps || 
-                           (event.data.data && event.data.data.jumpCount) || 
-                           window.__jumpCount || 
-                           window.__JUMP_TRACKER?.jumps || 
-                           0;
-          
-          console.log(`🔚 Game over with score ${finalScore} and ${jumpCount} jumps`);
-          
-          await handleGameOver(finalScore);
-        }
       } catch (error) {
         console.error('Error handling iframe message:', error);
       }
@@ -2639,7 +2651,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
     return () => {
       window.removeEventListener('message', handleIframeMessage);
     };
-  }, [handleGameOver, gameId, window.__JUMP_TRACKER]);
+  }, [handleGameOver, gameId, window.__JUMP_TRACKER, web3Context]);
 
   // Now modify the setupGameCommands callback to avoid duplicate transactions
   useEffect(() => {
