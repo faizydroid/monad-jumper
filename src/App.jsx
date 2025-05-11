@@ -1503,7 +1503,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           const receipt = await publicClient.waitForTransactionReceipt({ hash });
           console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
           
-          // Update database
+          // ALWAYS update database with score, regardless of revive status
           if (supabase && this.finalScore > 0) {
             try {
               console.log(`📊 Recording score ${this.finalScore} in database`);
@@ -1525,6 +1525,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                     wallet_address: address.toLowerCase(),
                     score: this.finalScore,
                     game_id: this.gameId,
+                    revive_used: window.__reviveUsedForGameId === this.gameId,
                     created_at: new Date().toISOString()
                   });
                 
@@ -2585,10 +2586,27 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                                (event.data.data && event.data.data.gameId) || 
                                gameId;
           
-          console.log(`🚫 Processing cancelled revive with ${jumpCount} jumps for game ${gameSessionId}`);
+          // Get score from event data
+          const score = event.data.score || 
+                       (event.data.data && event.data.data.score) || 
+                       0;
+          
+          console.log(`🚫 Processing cancelled revive with ${jumpCount} jumps for game ${gameSessionId}, score: ${score}`);
           
           // Reset revive purchased flag
           setRevivePurchased(false);
+          
+          // Check if we should save as high score
+          const shouldSaveHighScore = event.data.shouldSaveHighScore || 
+                                    (event.data.data && event.data.data.shouldSaveHighScore);
+          
+          if (shouldSaveHighScore && score > 0) {
+            // Queue the score in the transaction system
+            if (window.__GAME_TX_QUEUE) {
+              window.__GAME_TX_QUEUE.queueScore(score, gameSessionId);
+              console.log(`📊 Queued score ${score} for processing after revive cancellation`);
+            }
+          }
           
           // Record jumps immediately if available
           if (jumpCount > 0) {
@@ -2597,6 +2615,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               setTransactionPending(true);
               const success = await recordPlayerJumps(jumpCount, gameSessionId);
               console.log(`🚫 Revive cancellation jump transaction ${success ? 'succeeded' : 'failed'}`);
+              
+              // After recording jumps, also process any queued score
+              if (window.__GAME_TX_QUEUE && window.__GAME_TX_QUEUE.finalScore > 0) {
+                await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
+              }
             } catch (error) {
               console.error('❌ Error recording jumps after revive cancellation:', error);
             } finally {
@@ -2618,6 +2641,17 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                            0;
           
           console.log(`🔚 Game over with score ${finalScore} and ${jumpCount} jumps`);
+          
+          // Check if this is after revive - we need to make sure high score is saved
+          const hasUsedRevive = event.data.hasUsedRevive || 
+                              (event.data.data && event.data.data.hasUsedRevive) || 
+                              window.__reviveUsedForGameId === gameId;
+          
+          if (hasUsedRevive) {
+            console.log(`Game over after revive used. Ensuring high score is processed: ${finalScore}`);
+            // Mark in the global state that we've used revive for this game
+            window.__reviveUsedForGameId = gameId;
+          }
           
           await handleGameOver(finalScore);
         }

@@ -554,7 +554,8 @@ window.addEventListener('load', () => {
                 deathReason: this.deathReason,
                 reviveCancelled: !!this.reviveCancelled,
                 hasUsedRevive: !!this.hasUsedRevive,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                highScore: true // Always mark as potential high score to be checked by parent
             });
         }
 
@@ -648,7 +649,8 @@ window.addEventListener('load', () => {
                         timestamp: Date.now(),
                         jumps: finalJumpCount,
                         score: this.score,
-                        shouldRecordJumps: true
+                        shouldRecordJumps: true,
+                        shouldSaveHighScore: true, // Flag to indicate this score should be considered for high score
                     });
                     
                     // Send the gameOver message to ensure jump transactions are processed
@@ -660,7 +662,8 @@ window.addEventListener('load', () => {
                         deathReason: this.deathReason || "fall",
                         reviveCancelled: true,
                         hasUsedRevive: false,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        highScore: true // Mark as potential high score
                     });
                     
                     return;
