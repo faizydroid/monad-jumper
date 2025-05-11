@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { useWeb3 } from '../contexts/Web3Context';
-import { FaHamburger, FaTrophy, FaPlay, FaTimes, FaCoins } from 'react-icons/fa';
+import { FaHamburger, FaTrophy, FaPlay, FaTimes, FaHome, FaGift, FaShoppingCart, FaCalendarCheck } from 'react-icons/fa';
 import Navbar from './Navbar';
 import Leaderboard from './Leaderboard';
 import './MobilePage.css';
@@ -150,29 +150,39 @@ const MobilePage = ({
       <div className={`mobile-menu ${menuOpen ? 'open' : ''}`}>
         <div className="menu-header">
           <div className="menu-username">{username}</div>
-          <div className="menu-stats">
-            <div className="menu-stat">
-              <FaTrophy />
-              <span>{playerHighScore || 0}</span>
-            </div>
-            <div className="menu-stat">
-              <FaPlay />
-              <span>{totalJumps || 0}</span>
+          <div className="menu-score">
+            <div className="menu-highscore">
+              <span role="img" aria-label="trophy">🏆</span> {playerHighScore || 0}
             </div>
           </div>
         </div>
         
         <div className="menu-nav">
-          {/* Include simplified navbar items here */}
-          <div className="menu-nav-content">
-            {/* Use a simplified version of the Navbar */}
-            <div className="menu-wallet">
-              <ConnectButton 
-                showBalance={false}
-                chainStatus="icon"
-                accountStatus="address"
-              />
-            </div>
+          <div className="menu-nav-item active">
+            <FaHome size={28} />
+            <span>Home</span>
+          </div>
+          <div className="menu-nav-item">
+            <FaGift size={26} />
+            <span>Rewards</span>
+          </div>
+          <div className="menu-nav-item">
+            <FaCalendarCheck size={25} />
+            <span>Quests</span>
+          </div>
+          <div className="menu-nav-item">
+            <FaShoppingCart size={25} />
+            <span>Shop</span>
+          </div>
+        </div>
+        
+        <div className="menu-footer">
+          <div className="menu-wallet">
+            <ConnectButton 
+              showBalance={false}
+              chainStatus="icon"
+              accountStatus="address"
+            />
           </div>
         </div>
       </div>
