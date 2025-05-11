@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useWeb3 } from '../contexts/Web3Context';
 import { Link, useLocation } from 'react-router-dom';
@@ -15,12 +15,32 @@ export default function Navbar() {
   const [activeSection, setActiveSection] = useState('home');
   const [transitioning, setTransitioning] = useState(false);
   const location = useLocation();
+  const [hasNewHighScore, setHasNewHighScore] = useState(false);
+  const prevHighScoreRef = useRef(0);
   
   // Check if we're on different pages
   const isHomepage = location.pathname === '/' && !window.location.hash.includes('game');
   const isGameScreen = window.location.hash === '#game' || 
                        location.pathname.includes('game') ||
                        document.getElementById('game-iframe') !== null;
+  
+  // Effect to detect high score changes and show animation
+  useEffect(() => {
+    if (playerHighScore > prevHighScoreRef.current && prevHighScoreRef.current > 0) {
+      // Trigger animation for new high score
+      setHasNewHighScore(true);
+      
+      // Reset animation after delay
+      const timer = setTimeout(() => {
+        setHasNewHighScore(false);
+      }, 3000); // Animation lasts 3 seconds
+      
+      return () => clearTimeout(timer);
+    }
+    
+    // Update previous high score reference
+    prevHighScoreRef.current = playerHighScore;
+  }, [playerHighScore]);
   
   // Handle section changes with animation
   const changeSection = (section) => {
@@ -95,9 +115,10 @@ export default function Navbar() {
                 <div className="username-button" style={{ fontSize: '38px', margin: '5px 0' }}>
                   {username}
                 </div>
-                <div className="high-score" style={{ margin: '10px auto', display: 'inline-flex' }}>
+                <div className={`high-score ${hasNewHighScore ? 'highlight-score' : ''}`} style={{ margin: '10px auto', display: 'inline-flex' }}>
                   <span role="img" aria-label="trophy">🏆</span>
                   <span className="score-value">{playerHighScore || 0}</span>
+                  {hasNewHighScore && <span className="new-high-score-badge">NEW!</span>}
                 </div>
               </>
             ) : (

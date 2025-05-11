@@ -1608,11 +1608,28 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           }
           
           // ALWAYS update database with score, regardless of jump count or revive status
-          if (supabase && this.finalScore > 0) {
+          if (this.finalScore > 0) {
             try {
               // Ensure score is a valid number
               const scoreValue = parseInt(this.finalScore);
               console.log(`📊 Recording score ${scoreValue} in database`);
+              
+              // IMPORTANT: Update UI high score immediately before database operations
+              // This ensures the navbar shows the new high score right away
+              if (window.web3Context && window.web3Context.setPlayerHighScore) {
+                window.web3Context.setPlayerHighScore(prevScore => {
+                  const newHighScore = Math.max(prevScore || 0, scoreValue);
+                  if (newHighScore > prevScore) {
+                    console.log(`📊 New high score set in UI: ${prevScore} → ${newHighScore}`);
+                  }
+                  return newHighScore;
+                });
+              }
+              
+              // Also set a global variable for immediate UI feedback
+              if (typeof window !== 'undefined') {
+                window.__playerHighScore = Math.max(window.__playerHighScore || 0, scoreValue);
+              }
               
               // First check if this wallet already has a score entry with higher score
               const { data: existingScore, error: queryError } = await supabase

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useWeb3 } from '../contexts/Web3Context';
 import { useNavigate, Link } from 'react-router-dom';
@@ -11,6 +11,27 @@ export default function GameNavbar() {
   const { account, username, playerStats, updateScore, pendingJumps, contract, playerHighScore } = useWeb3();
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [hasNewHighScore, setHasNewHighScore] = useState(false);
+  const [prevHighScore, setPrevHighScore] = useState(0);
+
+  // Add useEffect to detect high score changes
+  useEffect(() => {
+    // Check if this is a new high score (compared to the previous value)
+    if (playerHighScore > prevHighScore && prevHighScore > 0) {
+      // Trigger animation for new high score
+      setHasNewHighScore(true);
+      
+      // Reset animation after delay
+      const timer = setTimeout(() => {
+        setHasNewHighScore(false);
+      }, 3000); // Animation lasts 3 seconds
+      
+      return () => clearTimeout(timer);
+    }
+    
+    // Update previous high score reference
+    setPrevHighScore(playerHighScore);
+  }, [playerHighScore, prevHighScore]);
 
   const toggleDropdown = () => {
     setShowDropdown(!showDropdown);
@@ -187,10 +208,11 @@ export default function GameNavbar() {
           
           <MusicPlayer />
           
-          <div className="high-score">
+          <div className={`high-score ${hasNewHighScore ? 'highlight-score' : ''}`}>
             <span role="img" aria-label="trophy">🏆</span>
             <span className="score-label"></span>
             <span className="score-value">{playerHighScore || 0}</span>
+            {hasNewHighScore && <span className="new-high-score-badge">NEW!</span>}
           </div>
           
           {account && username && (

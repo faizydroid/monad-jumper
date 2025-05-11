@@ -208,6 +208,16 @@ export function Web3Provider({ children }) {
 
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  
+  // Make key functions available globally for direct access
+  // This allows external components to update state without going through context
+  if (typeof window !== 'undefined') {
+    window.web3Context = window.web3Context || {};
+    // Update the setPlayerHighScore reference whenever it changes
+    window.web3Context.setPlayerHighScore = setPlayerHighScore;
+    window.web3Context.setTotalJumps = setTotalJumps;
+    window.web3Context.playerHighScore = playerHighScore;
+  }
 
   // First define the saveScore function since recordScore depends on it
   const saveScore = async (walletAddress, score) => {
@@ -292,43 +302,27 @@ export function Web3Provider({ children }) {
   
   // Define recordScore next since the useEffect depends on it
   const recordScore = useCallback(async (score) => {
-    if (!isConnected || !address) {
-      console.log('Cannot record score: not connected');
+    if (!isConnected || !address || !score || score <= 0) {
+      console.log('Invalid parameters for score recording');
       return false;
     }
     
-    console.log(`🎮 Recording score: ${score}`);
-    
-    if (score > 0) {
-      // Always update the current game score
-      setCurrentGameScore(score);
+    try {
+      // IMPORTANT: Update local state immediately first, before any async operations
+      setPlayerHighScore(prevScore => {
+        const newHighScore = Math.max(prevScore || 0, score);
+        console.log(`Updating high score in recordScore: ${prevScore} → ${newHighScore}`);
+        return newHighScore;
+      });
       
-      // Check if this is a new high score
-      if (score > playerHighScore) {
-        console.log(`🎮 New high score: ${score} > ${playerHighScore}`);
-        
-        // Update local state
-        setPlayerHighScore(score);
-        setHighScore(score);
-        
-        // Save to Supabase
-        try {
-          console.log(`🎮 Saving high score to Supabase: ${score}`);
-          const savedScore = await saveScore(address, score);
-          console.log(`🎮 High score saved to Supabase: ${savedScore}`);
-          return true;
-        } catch (error) {
-          console.error('🎮 Error saving high score:', error);
-          return false;
-        }
-      } else {
-        console.log(`🎮 Score ${score} not higher than current high score ${playerHighScore}`);
-        return true;
-      }
+      // Then save to database
+      await saveScore(address, score);
+      return true;
+    } catch (error) {
+      console.error('Error recording score:', error);
+      return false;
     }
-    
-    return false;
-  }, [address, isConnected, playerHighScore, saveScore]);
+  }, [isConnected, address, saveScore]);
 
   // Update the saveJumpsToSupabase function to skip updating total_jumps
   const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionId) => {
@@ -503,9 +497,20 @@ export function Web3Provider({ children }) {
     
     console.log(`updateScore called with score: ${score}, jumpCount: ${jumpCount}`);
     
-    // Always update local state first for immediate feedback
+    // IMPORTANT: Always update local state first for immediate UI feedback
+    // Update the high score immediately if the new score is higher
     if (score > 0) {
-      setPlayerHighScore(prev => Math.max(prev || 0, score));
+      setPlayerHighScore(prevScore => {
+        const newHighScore = Math.max(prevScore || 0, score);
+        console.log(`High score updated in UI: ${prevScore} → ${newHighScore}`);
+        
+        // Make the high score available globally for other components that might need it
+        if (typeof window !== 'undefined') {
+          window.__playerHighScore = newHighScore;
+        }
+        
+        return newHighScore;
+      });
     }
     
     if (jumpCount > 0) {

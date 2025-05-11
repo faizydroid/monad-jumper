@@ -341,6 +341,7 @@
   gap: 4px; /* Reduce gap between elements */
   cursor: default;
   font-size: 16px !important;
+  transition: all 0.3s ease;
 }
 
 /* Update existing media queries */
@@ -1479,4 +1480,54 @@ span[role="img"] {
   .music-player {
     padding: 3px 8px;
   }
+} 
+
+/* Add these styles for the high score animation */
+@keyframes score-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+  50% { transform: scale(1.05); box-shadow: 0 0 15px rgba(255, 215, 0, 0.8); }
+  100% { transform: scale(1); box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+}
+
+@keyframes score-glow {
+  0% { background-color: rgba(0, 0, 0, 0.2); }
+  50% { background-color: rgba(255, 215, 0, 0.3); }
+  100% { background-color: rgba(0, 0, 0, 0.2); }
+}
+
+.highlight-score {
+  animation: score-pulse 0.8s ease-in-out infinite, score-glow 1.5s ease-in-out infinite;
+}
+
+.new-high-score-badge {
+  display: inline-block;
+  font-size: 12px;
+  background-color: #FF5252;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 8px;
+  font-weight: bold;
+  animation: badge-pop 0.5s ease-out;
+  vertical-align: middle;
+}
+
+@keyframes badge-pop {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Override existing high-score styles for smoother animations */
+.high-score {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  border-radius: 12px !important;
+  padding: 8px 15px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  min-width: 140px; /* Add minimum width to prevent text wrapping */
+  white-space: nowrap; /* Prevent text from wrapping */
+  gap: 4px; /* Reduce gap between elements */
+  cursor: default;
+  font-size: 16px !important;
+  transition: all 0.3s ease;
 } 
