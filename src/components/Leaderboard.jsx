@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useWeb3 } from '../contexts/Web3Context';
 import '../styles/Leaderboard.css';
 
-const Leaderboard = ({ isMobile }) => {
+const Leaderboard = () => {
   const web3Context = useWeb3() || { leaderboard: [] };
   const { leaderboard } = web3Context;
   const { fetchJumpsLeaderboard } = useWeb3();
@@ -76,7 +76,7 @@ const Leaderboard = ({ isMobile }) => {
   };
 
   return (
-    <div className={`leaderboard-container ${isMobile ? 'mobile-leaderboard' : ''}`}>
+    <div className="leaderboard-container">
       <h2 className="leaderboard-title">🏆 TOP PLAYERS 🏆</h2>
       
       <div className="leaderboard-tabs">
@@ -103,10 +103,7 @@ const Leaderboard = ({ isMobile }) => {
             <div className="no-scores">No scores yet! Be the first to jump!</div>
           ) : (
             <div className="leaderboard-scores">
-              {/* Only show top 20 entries in mobile view */}
-              {leaderboard
-                .slice(0, isMobile ? 20 : undefined) 
-                .map((entry, index) => (
+              {leaderboard.map((entry, index) => (
                 <div 
                   key={`${entry.address}-${entry.score}`} 
                   className={`leaderboard-row ${index < 3 ? 'top-three' : ''} ${index === 0 ? 'first-place' : ''} ${index >= 10 ? 'extended-list' : ''}`}
@@ -127,10 +124,7 @@ const Leaderboard = ({ isMobile }) => {
             <div className="no-scores">No jump data yet! Be the first to jump!</div>
           ) : (
             <div className="leaderboard-scores">
-              {/* Only show top 20 entries in mobile view */}
-              {jumpsLeaderboard
-                .slice(0, isMobile ? 20 : undefined)
-                .map((entry, index) => (
+              {jumpsLeaderboard.map((entry, index) => (
                 <div 
                   key={`${entry.address}-${entry.jumps}`} 
                   className={`leaderboard-row ${index < 3 ? 'top-three' : ''} ${index === 0 ? 'first-place' : ''} ${index >= 10 ? 'extended-list' : ''}`}

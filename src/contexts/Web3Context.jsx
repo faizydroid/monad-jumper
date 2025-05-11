@@ -960,28 +960,17 @@ export function Web3Provider({ children }) {
 
   // Optimize the jump message handler
   const handleGameMessages = useCallback(async (event) => {
-    // Guard conditions
     if (!event.data || typeof event.data !== 'object') return;
     
-    // Extract message data
     const { type, data } = event.data;
     
-    // Special handling for revive cancellation
-    if (type === 'REVIVE_CANCELLED') {
-      console.log('🏆 Web3Context: Processing revive cancellation');
-      const score = event.data.score || 0;
-      
-      // Save score directly when a revive is cancelled
-      if (score > 0) {
-        console.log(`🏆 Web3Context: Saving score ${score} after revive cancellation`);
-        await recordScore(score);
-      }
-      
-      // Return early - the jumps will be handled by the recordBundledJumps call below
+    // Skip processing individual jump messages - only handle bundles
+    if (type === 'JUMP_PERFORMED' || type === 'FINAL_JUMP_COUNT') {
+      console.log(`Tracking local jump: ${data?.jumpCount || 'unknown'}`);
       return;
     }
-
-    // Handle bundle jumps messages
+    
+    // Handle the bundle message with a debounce mechanism
     if (type === 'BUNDLE_JUMPS' && data) {
       // Use a key to prevent duplicate processing of the same session
       const sessionKey = `processed_session_${data.sessionId || Date.now()}`;

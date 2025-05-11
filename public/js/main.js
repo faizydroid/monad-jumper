@@ -545,41 +545,17 @@ window.addEventListener('load', () => {
                 this.deathReason = "fall";
             }
             
-            // Ensure score is properly formatted as a number
-            const finalScore = Math.floor(this.score);
-            
-            // Generate a secure session token for this score submission
-            const sessionToken = `${this.gameId}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-            
             // Send a message to the parent window with the final score and jump count
             sendMessageToParent({
                 type: 'gameOver',
-                score: finalScore,
+                score: this.score,
                 jumps: this.finalJumpCount,
                 gameId: this.gameId,
                 deathReason: this.deathReason,
                 reviveCancelled: !!this.reviveCancelled,
                 hasUsedRevive: !!this.hasUsedRevive,
-                sessionToken: sessionToken,
                 timestamp: Date.now()
             });
-            
-            // Send an additional message with different format to ensure compatibility
-            sendMessageToParent({
-                type: 'GAME_OVER',
-                data: {
-                    finalScore: finalScore,
-                    jumpCount: this.finalJumpCount,
-                    gameId: this.gameId,
-                    deathReason: this.deathReason,
-                    sessionToken: sessionToken
-                }
-            });
-            
-            // Attempt to directly set high score as a fallback
-            if (window.setDirectHighScore && typeof window.setDirectHighScore === 'function') {
-                window.setDirectHighScore(finalScore);
-            }
         }
 
         drawButton(button) {
@@ -1227,44 +1203,23 @@ window.addEventListener('load', () => {
                     // Use a unique ID to prevent duplicate transactions
                     const gameOverId = Date.now().toString();
                     
-                    // Generate a secure session token for validation
-                    const sessionToken = `${this.gameId}_${gameOverId}_${Math.random().toString(36).substring(2, 15)}`;
-                    
                     // Send a single message with a transaction flag
                     sendMessageToParent({
                         type: 'GAME_OVER',
                         transactionRequired: true,
                         gameOverId: gameOverId,
-                        data: {
-                            score: finalScore,
-                            jumpCount: jumpCount,
+                            data: {
+                                score: finalScore,
+                                jumpCount: jumpCount,
                             finalScore: finalScore,
                             jumps: jumpCount,
-                            timestamp: Date.now(),
+                                timestamp: Date.now(),
                             reason: this.deathReason,
-                            saveId: gameOverId,
-                            sessionToken: sessionToken
-                        }
+                            saveId: gameOverId
+                            }
                     });
-                    
-                    // Send backup message with original format for compatibility
-                    sendMessageToParent({
-                        type: 'gameOver',
-                        score: finalScore,
-                        jumps: jumpCount,
-                        gameId: this.gameId,
-                        deathReason: this.deathReason,
-                        sessionToken: sessionToken,
-                        timestamp: Date.now()
-                    });
-                    
-                    // Attempt to directly set high score as a fallback
-                    if (window.setDirectHighScore && typeof window.setDirectHighScore === 'function') {
-                        window.setDirectHighScore(finalScore);
-                    }
-                } catch (error) {
+                    } catch (error) {
                     // Silent fail
-                    console.error('Failed to send game over message:', error);
                 }
                 
                 return true;
@@ -2487,42 +2442,6 @@ window.addEventListener('load', () => {
             console.error("Game instance not found on window!");
         }
     });
-
-    // Add mobile control handler
-    window.addEventListener('message', function(event) {
-        // Handle mobile control messages
-        if (event.data && event.data.type === 'MOBILE_CONTROL') {
-            const action = event.data.action;
-            
-            if (action === 'LEFT') {
-                // Simulate left key press
-                if (window.game && window.game.character) {
-                    window.game.character.movingLeft = true;
-                    window.game.character.movingRight = false;
-                    
-                    // Stop moving after a brief delay to allow tapping
-                    setTimeout(() => {
-                        if (window.game && window.game.character) {
-                            window.game.character.movingLeft = false;
-                        }
-                    }, 100);
-                }
-            } else if (action === 'RIGHT') {
-                // Simulate right key press
-                if (window.game && window.game.character) {
-                    window.game.character.movingRight = true;
-                    window.game.character.movingLeft = false;
-                    
-                    // Stop moving after a brief delay to allow tapping
-                    setTimeout(() => {
-                        if (window.game && window.game.character) {
-                            window.game.character.movingRight = false;
-                        }
-                    }, 100);
-                }
-            }
-        }
-    });
 })
 
 class DebugPanel {
@@ -2660,35 +2579,18 @@ try {
     // Mark as sent to prevent duplicates
     jumpState.saveMessageSent = true;
     
-    // Generate a secure session token for validation (similar to gameOver function)
-    const sessionToken = `${window.gameId || saveId}_${saveId}_${Math.random().toString(36).substring(2, 15)}`;
+    console.log(`💾 SENDING JUMP SAVE (ID: ${saveId}): ${jumps} jumps`);
     
-    console.log(`💾 SENDING JUMP SAVE (ID: ${saveId}): ${jumps} jumps with session token`);
-    
-    // Send message to React app with the unique save ID and session token
+    // Send message to React app with the unique save ID
     sendMessageToParent({
       type: 'SAVE_JUMPS',
       jumps: jumps,
-      saveId: saveId,
-      sessionToken: sessionToken,
-      timestamp: Date.now()
-    });
-    
-    // Also send a BUNDLE_JUMPS message to ensure compatibility with both messaging systems
-    sendMessageToParent({
-      type: 'BUNDLE_JUMPS',
-      data: {
-        jumpCount: jumps,
-        score: window.game ? window.game.score : 0,
-        sessionId: saveId,
-        sessionToken: sessionToken,
-        timestamp: Date.now()
-      }
+      saveId: saveId
     });
     
     // Set a flag in localStorage to further prevent duplicates
     try {
-      localStorage.setItem('last_jump_save', `${saveId}:${jumps}:${sessionToken}`);
+      localStorage.setItem('last_jump_save', `${saveId}:${jumps}`);
     } catch (e) {
       // Ignore storage errors
     }
