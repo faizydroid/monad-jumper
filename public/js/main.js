@@ -548,6 +548,9 @@ window.addEventListener('load', () => {
             // Ensure score is properly formatted as a number
             const finalScore = Math.floor(this.score);
             
+            // Generate a secure session token for this score submission
+            const sessionToken = `${this.gameId}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+            
             // Send a message to the parent window with the final score and jump count
             sendMessageToParent({
                 type: 'gameOver',
@@ -557,6 +560,7 @@ window.addEventListener('load', () => {
                 deathReason: this.deathReason,
                 reviveCancelled: !!this.reviveCancelled,
                 hasUsedRevive: !!this.hasUsedRevive,
+                sessionToken: sessionToken,
                 timestamp: Date.now()
             });
             
@@ -567,7 +571,8 @@ window.addEventListener('load', () => {
                     finalScore: finalScore,
                     jumpCount: this.finalJumpCount,
                     gameId: this.gameId,
-                    deathReason: this.deathReason
+                    deathReason: this.deathReason,
+                    sessionToken: sessionToken
                 }
             });
             
@@ -1222,6 +1227,9 @@ window.addEventListener('load', () => {
                     // Use a unique ID to prevent duplicate transactions
                     const gameOverId = Date.now().toString();
                     
+                    // Generate a secure session token for validation
+                    const sessionToken = `${this.gameId}_${gameOverId}_${Math.random().toString(36).substring(2, 15)}`;
+                    
                     // Send a single message with a transaction flag
                     sendMessageToParent({
                         type: 'GAME_OVER',
@@ -1234,7 +1242,8 @@ window.addEventListener('load', () => {
                             jumps: jumpCount,
                             timestamp: Date.now(),
                             reason: this.deathReason,
-                            saveId: gameOverId
+                            saveId: gameOverId,
+                            sessionToken: sessionToken
                         }
                     });
                     
@@ -1245,6 +1254,7 @@ window.addEventListener('load', () => {
                         jumps: jumpCount,
                         gameId: this.gameId,
                         deathReason: this.deathReason,
+                        sessionToken: sessionToken,
                         timestamp: Date.now()
                     });
                     

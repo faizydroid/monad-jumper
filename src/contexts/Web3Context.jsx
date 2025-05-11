@@ -210,7 +210,7 @@ export function Web3Provider({ children }) {
   const publicClient = usePublicClient();
 
   // First define the saveScore function since recordScore depends on it
-  const saveScore = async (walletAddress, score) => {
+  const saveScore = async (walletAddress, score, sessionToken) => {
     if (!walletAddress || score <= 0 || !supabase) {
       console.error('🏆 Invalid parameters for saving score');
       return;
@@ -222,6 +222,35 @@ export function Web3Provider({ children }) {
       
       // First ensure the user exists (required by foreign key constraint)
       await ensureUserExists(normalizedAddress);
+      
+      // Validate session token before saving score
+      if (!sessionToken) {
+        console.error('🏆 Missing session token for score validation');
+        return null;
+      }
+      
+      // Verify the session token is valid
+      const { data: tokenData, error: tokenError } = await supabase
+        .from('session_tokens')
+        .select('id, is_used')
+        .eq('token', sessionToken)
+        .eq('wallet_address', normalizedAddress)
+        .maybeSingle();
+      
+      if (tokenError) {
+        console.error('🏆 Error verifying session token:', tokenError);
+        return null;
+      }
+      
+      if (!tokenData) {
+        console.error('🏆 Invalid session token');
+        return null;
+      }
+      
+      if (tokenData.is_used) {
+        console.error('🏆 Session token already used');
+        return null;
+      }
       
       // Get the current high score for this user
       const { data: existingScore, error: fetchError } = await supabase
@@ -240,8 +269,21 @@ export function Web3Provider({ children }) {
       // Only save if this is a new high score
       if (existingScore && score <= existingScore.score) {
         console.log(`🏆 Current score (${score}) is not higher than existing high score (${existingScore.score}), not saving`);
+        
+        // Mark token as used even if score wasn't high enough
+        await supabase
+          .from('session_tokens')
+          .update({ is_used: true })
+          .eq('id', tokenData.id);
+          
         return existingScore.score;
       }
+      
+      // Mark session token as used
+      await supabase
+        .from('session_tokens')
+        .update({ is_used: true })
+        .eq('id', tokenData.id);
       
       // Insert the new score record (we always insert a new record, not update)
       console.log(`🏆 Inserting new high score: ${score}`);
@@ -249,7 +291,8 @@ export function Web3Provider({ children }) {
         .from('scores')
         .insert([{
           wallet_address: normalizedAddress,
-          score: score
+          score: score,
+          session_token: sessionToken
         }]);
       
       if (insertError) {
@@ -263,6 +306,40 @@ export function Web3Provider({ children }) {
       return score;
     } catch (error) {
       console.error('🏆 Unexpected error in saveScore:', error);
+      return null;
+    }
+  };
+  
+  // Add function to generate a new session token
+  const generateSessionToken = async () => {
+    if (!address || !supabase) return null;
+    
+    try {
+      // Generate a unique token
+      const tokenValue = `${address.substring(2, 10)}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Store token in database
+      const { data, error } = await supabase
+        .from('session_tokens')
+        .insert({
+          wallet_address: address.toLowerCase(),
+          token: tokenValue,
+          is_used: false,
+          created_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 3600000).toISOString() // 1 hour expiration
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error creating session token:', error);
+        return null;
+      }
+      
+      console.log('New game session token created');
+      return tokenValue;
+    } catch (error) {
+      console.error('Error generating session token:', error);
       return null;
     }
   };
@@ -291,7 +368,7 @@ export function Web3Provider({ children }) {
   };
   
   // Define recordScore next since the useEffect depends on it
-  const recordScore = useCallback(async (score) => {
+  const recordScore = useCallback(async (score, sessionToken) => {
     if (!isConnected || !address) {
       console.log('Cannot record score: not connected');
       return false;
@@ -302,6 +379,16 @@ export function Web3Provider({ children }) {
     if (score > 0) {
       // Always update the current game score
       setCurrentGameScore(score);
+      
+      // If no session token provided, try to get the current one or generate a new one
+      let effectiveToken = sessionToken;
+      if (!effectiveToken) {
+        effectiveToken = await generateSessionToken();
+        if (!effectiveToken) {
+          console.error('🎮 Could not generate session token for score');
+          return false;
+        }
+      }
       
       // Check if this is a new high score
       if (score > playerHighScore) {
@@ -314,7 +401,7 @@ export function Web3Provider({ children }) {
         // Save to Supabase
         try {
           console.log(`🎮 Saving high score to Supabase: ${score}`);
-          const savedScore = await saveScore(address, score);
+          const savedScore = await saveScore(address, score, effectiveToken);
           console.log(`🎮 High score saved to Supabase: ${savedScore}`);
           return true;
         } catch (error) {
@@ -328,7 +415,7 @@ export function Web3Provider({ children }) {
     }
     
     return false;
-  }, [address, isConnected, playerHighScore, saveScore]);
+  }, [address, isConnected, playerHighScore, saveScore, generateSessionToken]);
 
   // Update the saveJumpsToSupabase function to skip updating total_jumps
   const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionId) => {

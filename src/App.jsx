@@ -2482,7 +2482,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   }, [address, walletClient, publicClient, gameId, recordPlayerJumps]);
 
   // Add this function to handle game over transactions
-  const handleGameOver = useCallback(async (finalScore) => {
+  const handleGameOver = useCallback(async (finalScore, sessionToken) => {
     if (!address || !walletClient || !publicClient) return;
     
     try {
@@ -2496,6 +2496,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         await recordPlayerJumps(jumpCount, gameSessionId);
       }
       
+      // Record the score using the session token for validation
+      if (finalScore > 0 && web3Context && web3Context.recordScore) {
+        await web3Context.recordScore(finalScore, sessionToken);
+      }
+      
       // Reset jump tracker
       if (window.__JUMP_TRACKER) {
         window.__JUMP_TRACKER.reset();
@@ -2507,7 +2512,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       setTransactionPending(false);
       setShowPlayAgain(true);
     }
-  }, [address, walletClient, publicClient, gameId, recordPlayerJumps]);
+  }, [address, walletClient, publicClient, gameId, recordPlayerJumps, web3Context]);
   
   // Add this function to your component
   const handleMessageFromGame = useCallback((event) => {
@@ -2592,19 +2597,23 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                            window.__JUMP_TRACKER?.jumps || 
                            0;
           
+          // Get session token for secure validation
+          const sessionToken = event.data.sessionToken || 
+                             (event.data.data && event.data.data.sessionToken);
+          
           console.log(`🔚 Game over with score ${finalScore} and ${jumpCount} jumps`);
           
           // Always save to Web3Context regardless of other handlers
           if (web3Context && web3Context.recordScore && typeof web3Context.recordScore === 'function') {
             try {
               console.log(`🏆 Directly saving score ${finalScore} to Web3Context`);
-              await web3Context.recordScore(finalScore);
+              await web3Context.recordScore(finalScore, sessionToken);
             } catch (scoreError) {
               console.error('Error saving score to Web3Context:', scoreError);
             }
           }
           
-          await handleGameOver(finalScore);
+          await handleGameOver(finalScore, sessionToken);
         }
         
         // Handle the rest of the message types
