@@ -705,92 +705,198 @@ function HorizontalStats() {
   // Add this effect at the top level with optimized queries
   useEffect(() => {
     async function fetchJumpRank() {
+      // If no address or supabase, can't fetch rank
       if (!address || !supabase || !isMountedRef.current) {
-        console.log("Cannot fetch jump rank:", {
-          address: !address ? "missing" : "ok",
-          supabase: !supabase ? "missing" : "ok",
-          mounted: !isMountedRef.current ? "unmounted" : "ok"
-        });
+        console.log("Cannot fetch jump rank - missing dependencies");
         return;
+      }
+      
+      // First immediately use cached rank if available
+      try {
+        const cacheKey = `jump_rank_${address.toLowerCase()}`;
+        const cachedRank = localStorage.getItem(cacheKey);
+        
+        if (cachedRank) {
+          const { rank, timestamp } = JSON.parse(cachedRank);
+          const cacheAge = Date.now() - timestamp;
+          
+          // Use cache if less than 5 minutes old
+          if (cacheAge < 300000) {
+            console.log("Using cached jump rank:", rank);
+            setJumpRank(rank);
+            
+            // If cache is very fresh (less than 30 seconds), don't refetch
+            if (cacheAge < 30000) {
+              return;
+            }
+            // Otherwise continue to fetch fresh data but at least we displayed something
+          }
+        }
+      } catch (error) {
+        // If error reading cache, continue with fresh fetch
+        console.warn("Error reading cached rank:", error);
       }
       
       // Skip frequent refetches
       const now = Date.now();
-      if (now - fetchStatusRef.current.lastFetch < 30000) { // Reduced from 60s to 30s for faster updates
+      if (now - fetchStatusRef.current.lastFetch < 15000) { // 15 seconds cache (reduced from 30s)
         console.log("Skipping jump rank fetch - too soon since last fetch");
         return;
       }
       
       try {
-        console.log("Fetching accurate jump rank from Supabase for address:", address.substring(0, 8));
+        console.log("Fetching jump rank from Supabase");
         
-        // Get all users with their jump counts sorted by count descending
-        const { data, error } = await supabase
+        // OPTIMIZED APPROACH: Get rank directly with a single SQL query
+        // This query computes the rank directly on the server side
+        const lowerCaseAddress = address.toLowerCase();
+        const { data, error } = await supabase.rpc('get_jump_rank', { 
+          user_address: lowerCaseAddress 
+        });
+        
+        // If RPC isn't available, try the fallback approach with a direct count
+        if (error && error.message && error.message.includes('function "get_jump_rank" does not exist')) {
+          console.log("RPC function not available, using direct rank calculation");
+          
+          // Get this user's jumps first
+          const { data: userJumpData } = await supabase
+            .from('jumps')
+            .select('count')
+            .eq('wallet_address', lowerCaseAddress)
+            .maybeSingle();
+            
+          const userJumps = userJumpData?.count || totalJumps || 0;
+          
+          // If user has no jumps, show as unranked
+          if (!userJumps || userJumps <= 0) {
+            setJumpRank("Unranked");
+            return;
+          }
+          
+          // Count how many users have more jumps than this user (faster than fetching all)
+          const { count: playersAbove, error: countError } = await supabase
+            .from('jumps')
+            .select('wallet_address', { count: 'exact', head: true })
+            .gt('count', userJumps);
+            
+          if (countError) {
+            console.error("Error getting rank:", countError);
+            return;
+          }
+          
+          // Calculate rank (offset by 1 since counting players ABOVE)
+          const rank = playersAbove + 1;
+          console.log(`Jump rank calculated: ${rank}`);
+          
+          if (rank <= 1000) {
+            setJumpRank(`#${rank}`);
+          } else {
+            setJumpRank("1000+");
+          }
+          
+          // Cache the result
+          try {
+            localStorage.setItem(`jump_rank_${lowerCaseAddress}`, JSON.stringify({
+              rank: rank <= 1000 ? `#${rank}` : "1000+",
+              timestamp: Date.now()
+            }));
+          } catch (e) {
+            console.warn("Error caching rank:", e);
+          }
+          
+          // Update last fetch time
+          fetchStatusRef.current.lastFetch = now;
+          return;
+        }
+        
+        // If we got data from RPC
+        if (data) {
+          const rank = data.rank;
+          console.log(`Jump rank from RPC: ${rank}`);
+          
+          if (rank <= 0) {
+            setJumpRank("Unranked");
+          } else if (rank <= 1000) {
+            setJumpRank(`#${rank}`);
+          } else {
+            setJumpRank("1000+");
+          }
+          
+          // Cache the result
+          try {
+            localStorage.setItem(`jump_rank_${lowerCaseAddress}`, JSON.stringify({
+              rank: rank <= 0 ? "Unranked" : (rank <= 1000 ? `#${rank}` : "1000+"),
+              timestamp: Date.now()
+            }));
+          } catch (e) {
+            console.warn("Error caching rank:", e);
+          }
+          
+          // Update last fetch time
+          fetchStatusRef.current.lastFetch = now;
+          return;
+        }
+        
+        // Fallback to the original comprehensive method if both other approaches fail
+        console.log("Falling back to comprehensive rank calculation method");
+        
+        // First get this user's jump count to ensure we have it
+        const { data: userJumpData, error: userJumpError } = await supabase
+          .from('jumps')
+          .select('count')
+          .eq('wallet_address', lowerCaseAddress)
+          .maybeSingle();
+        
+        if (userJumpError) {
+          console.error("Error fetching user's jump count:", userJumpError);
+        }
+        
+        // Get this user's current jumps count from the database or state
+        const userJumps = userJumpData ? parseInt(userJumpData.count) : totalJumps || 0;
+        
+        // If user has no jumps, they're unranked
+        if (userJumps <= 0) {
+          setJumpRank("Unranked");
+          return;
+        }
+        
+        // Get jump counts for players above this user's count - much faster query!
+        const { data: aboveData, error: aboveError } = await supabase
           .from('jumps')
           .select('wallet_address, count')
-          .order('count', { ascending: false })
-          .limit(1100); // Get enough to determine up to 1000+ rank
+          .gt('count', userJumps)
+          .order('count', { ascending: false });
           
-        if (error) {
-          console.error("Error fetching jump rankings:", error);
+        if (aboveError) {
+          console.error("Error fetching players above:", aboveError);
           return;
         }
         
-        if (!isMountedRef.current) return; // Check if still mounted
-        
-        console.log(`Retrieved ${data?.length || 0} jump records from Supabase`);
-        
-        if (!data || data.length === 0) {
-          console.log("No jump data found in the database");
-          setJumpRank("No Data");
-          return;
-        }
-        
-        // Process jumps to keep only the highest count per user (deduplication)
-        const userHighJumps = new Map(); // Map wallet_address -> highest jump count
-        
-        // First pass - determine highest jump count per wallet
-        data.forEach(item => {
-          if (!item.wallet_address) return; // Skip invalid entries
-          
-          const walletAddress = item.wallet_address.toLowerCase();
-          const currentHighJumps = userHighJumps.get(walletAddress) || 0;
-          
-          if (item.count > currentHighJumps) {
-            userHighJumps.set(walletAddress, item.count);
+        // Count unique wallets above
+        const uniqueWalletsAbove = new Set();
+        aboveData?.forEach(item => {
+          if (item.wallet_address) {
+            uniqueWalletsAbove.add(item.wallet_address.toLowerCase());
           }
         });
         
-        // Second pass - create deduplicated array with highest jump counts
-        const uniqueJumps = Array.from(userHighJumps.entries())
-          .map(([walletAddress, count]) => ({ wallet_address: walletAddress, count }))
-          .sort((a, b) => b.count - a.count); // Sort by count descending
+        const playersAbove = uniqueWalletsAbove.size;
+        const rank = playersAbove + 1; // Player's rank is count of players above + 1
         
-        // Find the user's position in the processed data
-        const lowerCaseAddress = address.toLowerCase();
-        const userPosition = uniqueJumps.findIndex(
-          entry => entry.wallet_address === lowerCaseAddress
-        );
-        
-        console.log(`User position in jump ranking: ${userPosition}, address: ${lowerCaseAddress}`);
-        
-        // If found, display appropriate rank
-        if (userPosition >= 0) {
-          const rank = userPosition + 1;
-          if (rank <= 1000) {
-            console.log(`Jump rank determined: #${rank} out of ${uniqueJumps.length} players`);
-            setJumpRank(`#${rank}`);
-          } else {
-            console.log(`Jump rank is beyond 1000: #${rank}`);
-            setJumpRank("1000+");
-          }
-        } else if (totalJumps > 0) {
-          // Player has jumps but not in results (should be rare)
-          console.log("Player has jumps but not found in results");
-          setJumpRank("1000+");
+        if (rank <= 1000) {
+          setJumpRank(`#${rank}`);
         } else {
-          console.log("Player has no jumps");
-          setJumpRank("Unranked");
+          setJumpRank("1000+");
+        }
+        
+        // Cache the result
+        try {
+          localStorage.setItem(`jump_rank_${lowerCaseAddress}`, JSON.stringify({
+            rank: rank <= 1000 ? `#${rank}` : "1000+",
+            timestamp: Date.now()
+          }));
+        } catch (e) {
+          console.warn("Error caching rank:", e);
         }
         
         // Update last fetch time
@@ -801,22 +907,47 @@ function HorizontalStats() {
       }
     }
     
-    // Initial fetch
+    // Initial fetch, but first try to use cached value for instant display
+    const cacheKey = `jump_rank_${address?.toLowerCase()}`;
+    try {
+      const cachedRank = localStorage.getItem(cacheKey);
+      if (cachedRank) {
+        const { rank } = JSON.parse(cachedRank);
+        // Immediately show cached value
+        setJumpRank(rank);
+      }
+    } catch (e) {
+      // Ignore cache errors
+    }
+    
+    // Then fetch fresh data
     fetchJumpRank();
     
     // Set up periodic refresh
-    const refreshInterval = setInterval(fetchJumpRank, 30000); // Check every 30 seconds
+    const refreshInterval = setInterval(fetchJumpRank, 60000); // Check every minute
     
     // Add a failsafe timeout to ensure we don't stay at "Calculating" forever
     const failsafeTimeout = setTimeout(() => {
       if (jumpRank === "Calculating") {
         console.log("Failsafe: Setting jumpRank after timeout");
-        setJumpRank(totalJumps > 0 ? "#--" : "Unranked");
+        
+        // Try to use cached value if available
+        try {
+          const cachedRank = localStorage.getItem(cacheKey);
+          if (cachedRank) {
+            const { rank } = JSON.parse(cachedRank);
+            setJumpRank(rank);
+          } else {
+            setJumpRank(totalJumps > 0 ? "..." : "Unranked");
+          }
+        } catch (e) {
+          setJumpRank(totalJumps > 0 ? "..." : "Unranked");
+        }
         
         // Force a new fetch after failsafe
         fetchJumpRank();
       }
-    }, 5000);
+    }, 3000); // Reduced from 5s to 3s for faster feedback
     
     // Cleanup function
     return () => {
@@ -1269,27 +1400,25 @@ function HorizontalStats() {
           <div className="stat-value">
             {leaderboard && Array.isArray(leaderboard) && address ? 
               (() => {
-                // Check if we have a valid, non-loading jump rank
-                if (jumpRank && jumpRank !== "..." && jumpRank !== "Calculating" && 
-                    jumpRank !== "#--" && jumpRank !== "#---" && jumpRank !== "Loading...") {
+                // Always prefer the calculated jumpRank from fetchJumpRank function
+                if (jumpRank && jumpRank !== "Calculating") {
                   return jumpRank;
                 }
                 
-                // Look for player in leaderboard by address
-                const index = leaderboard.findIndex(player => 
-                  player.address?.toLowerCase() === address?.toLowerCase()
-                );
-                
-                if (index >= 0) {
-                  // Player found in leaderboard
-                  return `#${index + 1}`;
-                } else if (totalJumps > 0) {
-                  // Player has jumps but not in top leaderboard
-                  return "#12";
-                } else {
-                  // No jumps recorded yet
-                  return "Unranked";
+                // Try to use cached value while loading
+                try {
+                  const cacheKey = `jump_rank_${address.toLowerCase()}`;
+                  const cachedRank = localStorage.getItem(cacheKey);
+                  if (cachedRank) {
+                    const { rank } = JSON.parse(cachedRank);
+                    return rank;
+                  }
+                } catch (e) {
+                  // Ignore cache errors
                 }
+                
+                // Show loading state if nothing else is available
+                return <span className="loading-rank">Loading...</span>;
               })() : 
               <span className="loading-rank">Loading...</span>
             }
@@ -1449,14 +1578,17 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       
       // Process all queued transactions
       processQueue: async function(walletClient, publicClient, address, supabase) {
-        if (this.isProcessing || this.jumps <= 0) return false;
+        // Check if we're already processing or if there's nothing to process
+        // Remove the jumps check to allow scores to be saved even without jumps
+        if (this.isProcessing) return false;
         
         this.isProcessing = true;
         console.log(`⚙️ Processing transaction queue: ${this.jumps} jumps, score: ${this.finalScore}`);
         
         try {
           // Create a unique transaction key
-          const txKey = `game_over_${this.gameId}_${address}_${this.finalScore}_${this.jumps}`;
+          const sessionId = this.gameId || Date.now().toString();
+          const txKey = `game_over_${sessionId}_${address}_${this.finalScore}_${this.jumps}`;
           
           // IMPORTANT CHANGE: Force allow transaction after revive
           if (window.__GLOBAL_TX_SYSTEM) {
@@ -1464,7 +1596,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             window.__GLOBAL_TX_SYSTEM.pendingLock = false;
             
             // Also clear any active transactions for this game ID
-            const gameIdPrefix = `game_over_${this.gameId}`;
+            const gameIdPrefix = `game_over_${sessionId}`;
             window.__GLOBAL_TX_SYSTEM.activeTransactions.forEach(key => {
               if (key.startsWith(gameIdPrefix)) {
                 console.log(`🔓 Clearing active transaction lock for ${key}`);
@@ -1475,112 +1607,150 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             console.log(`🔓 Transaction locks cleared for post-revive processing`);
           }
           
-          // Process the blockchain transaction
-          const jumpContractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
-          
-          console.log(`📤 Sending transaction for ${this.jumps} jumps to contract ${jumpContractAddress}`);
-          
-          const hash = await walletClient.writeContract({
-            address: jumpContractAddress,
-            abi: [
-              {
-                "inputs": [{"internalType": "uint256", "name": "_jumps", "type": "uint256"}],
-                "name": "recordJumps",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-              }
-            ],
-            functionName: 'recordJumps',
-            args: [BigInt(this.jumps)],
-            account: address,
-            gas: BigInt(200000),
-          });
-          
-          console.log(`📤 Transaction sent: ${hash}`);
-          
-          // Wait for confirmation
-          const receipt = await publicClient.waitForTransactionReceipt({ hash });
-          console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
-          
-          // ALWAYS update database with score, regardless of revive status
+          // ALWAYS update database with score, regardless of jump count or revive status
           if (supabase && this.finalScore > 0) {
             try {
-              console.log(`📊 Recording score ${this.finalScore} in database`);
+              // Ensure score is a valid number
+              const scoreValue = parseInt(this.finalScore);
+              console.log(`📊 Recording score ${scoreValue} in database`);
+              
               // First check if this wallet already has a score entry with higher score
-              const { data: existingScore } = await supabase
+              const { data: existingScore, error: queryError } = await supabase
                 .from('scores')
                 .select('score')
                 .eq('wallet_address', address.toLowerCase())
                 .order('score', { ascending: false })
                 .maybeSingle();
               
+              if (queryError) {
+                console.error('Error querying existing score:', queryError);
+              }
+              
               // Only insert if there's no existing score or new score is higher
-              if (!existingScore || this.finalScore > existingScore.score) {
-                console.log(`Saving new high score ${this.finalScore} (previous: ${existingScore?.score || 'none'})`);
+              if (!existingScore || scoreValue > existingScore.score) {
+                console.log(`Saving new high score ${scoreValue} (previous: ${existingScore?.score || 'none'})`);
+                
+                // Prepare the score object with required fields
+                const scoreObject = {
+                  wallet_address: address.toLowerCase(),
+                  score: scoreValue,
+                  created_at: new Date().toISOString()
+                };
+                
+                // Add optional fields only if they exist
+                if (sessionId) {
+                  scoreObject.game_id = sessionId;
+                }
+                
+                if (typeof window.__reviveUsedForGameId !== 'undefined') {
+                  scoreObject.revive_used = window.__reviveUsedForGameId === sessionId;
+                }
+                
+                // Log the complete score object before sending
+                console.log('Score object to insert:', JSON.stringify(scoreObject));
                 
                 const { error } = await supabase
                   .from('scores')
-                  .insert({
-                    wallet_address: address.toLowerCase(),
-                    score: this.finalScore,
-                    game_id: this.gameId,
-                    revive_used: window.__reviveUsedForGameId === this.gameId,
-                    created_at: new Date().toISOString()
-                  });
+                  .insert(scoreObject);
                 
                 if (error) {
                   console.error('Error recording score in database:', error);
+                  // Log detailed error information
+                  console.error('Error details:', {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code
+                  });
                 } else {
                   console.log(`✅ Score recorded successfully in database`);
                 }
               } else {
-                console.log(`Score ${this.finalScore} not saved - lower than existing high score ${existingScore.score}`);
+                console.log(`Score ${scoreValue} not saved - lower than existing high score ${existingScore.score}`);
               }
             } catch (dbError) {
               console.error('Error saving score to database:', dbError);
+              console.error('Error details:', {
+                message: dbError.message,
+                stack: dbError.stack
+              });
             }
           }
           
-          // Mark transaction as completed in global system
-          window.__GLOBAL_TX_SYSTEM.finishTransaction(txKey);
-          
-          // Also update jumps in database directly to ensure immediate UI feedback
-          if (supabase && address && this.jumps > 0) {
-            try {
-              console.log(`📊 Directly updating jump count in database by ${this.jumps} for address ${address.toLowerCase()}`);
-              
-              // Get current jump count
-              const { data: jumpData, error: jumpError } = await supabase
-                .from('jumps')
-                .select('count')
-                .eq('wallet_address', address.toLowerCase())
-                .maybeSingle();
-              
-              if (!jumpError) {
-                const currentCount = jumpData?.count || 0;
-                const newCount = currentCount + this.jumps;
-                
-                console.log(`📊 Updating jumps from ${currentCount} to ${newCount}`);
-                
-                // Update the jumps in Supabase
-                await supabase
-                  .from('jumps')
-                  .upsert({
-                    wallet_address: address.toLowerCase(),
-                    count: newCount
-                  }, { onConflict: 'wallet_address' });
-                
-                console.log(`📊 Successfully updated jumps in database to ${newCount}`);
-                
-                // Update UI immediately if possible
-                if (window.web3Context && window.web3Context.setTotalJumps) {
-                  window.web3Context.setTotalJumps(newCount);
+          // Only process blockchain transaction if there are jumps to record
+          if (this.jumps > 0) {
+            // Process the blockchain transaction
+            const jumpContractAddress = '0xc9fc1784df467a22f5edbcc20625a3cf87278547';
+            
+            console.log(`📤 Sending transaction for ${this.jumps} jumps to contract ${jumpContractAddress}`);
+            
+            const hash = await walletClient.writeContract({
+              address: jumpContractAddress,
+              abi: [
+                {
+                  "inputs": [{"internalType": "uint256", "name": "_jumps", "type": "uint256"}],
+                  "name": "recordJumps",
+                  "outputs": [],
+                  "stateMutability": "nonpayable",
+                  "type": "function"
                 }
+              ],
+              functionName: 'recordJumps',
+              args: [BigInt(this.jumps)],
+              account: address,
+              gas: BigInt(200000),
+            });
+            
+            console.log(`📤 Transaction sent: ${hash}`);
+            
+            // Wait for confirmation
+            const receipt = await publicClient.waitForTransactionReceipt({ hash });
+            console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+            
+            // Mark transaction as completed in global system
+            window.__GLOBAL_TX_SYSTEM.finishTransaction(txKey);
+            
+            // Also update jumps in database directly to ensure immediate UI feedback
+            if (supabase && address && this.jumps > 0) {
+              try {
+                console.log(`📊 Directly updating jump count in database by ${this.jumps} for address ${address.toLowerCase()}`);
+                
+                // Get current jump count
+                const { data: jumpData, error: jumpError } = await supabase
+                  .from('jumps')
+                  .select('count')
+                  .eq('wallet_address', address.toLowerCase())
+                  .maybeSingle();
+                
+                if (!jumpError) {
+                  const currentCount = jumpData?.count || 0;
+                  const newCount = currentCount + this.jumps;
+                  
+                  console.log(`📊 Updating jumps from ${currentCount} to ${newCount}`);
+                  
+                  // Update the jumps in Supabase
+                  await supabase
+                    .from('jumps')
+                    .upsert({
+                      wallet_address: address.toLowerCase(),
+                      count: newCount
+                    }, { onConflict: 'wallet_address' });
+                  
+                  console.log(`📊 Successfully updated jumps in database to ${newCount}`);
+                  
+                  // Update UI immediately if possible
+                  if (window.web3Context && window.web3Context.setTotalJumps) {
+                    window.web3Context.setTotalJumps(newCount);
+                  }
+                }
+              } catch (dbError) {
+                console.warn('Error updating jumps in database:', dbError);
               }
-            } catch (dbError) {
-              console.warn('Error updating jumps in database:', dbError);
             }
+          } else {
+            console.log(`Skipping blockchain transaction - no jumps to record`);
+            // Mark transaction as completed in global system even if no jumps
+            window.__GLOBAL_TX_SYSTEM.finishTransaction(txKey);
           }
           
           // Reset the queue
@@ -2596,36 +2766,64 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           // Reset revive purchased flag
           setRevivePurchased(false);
           
-          // Check if we should save as high score
-          const shouldSaveHighScore = event.data.shouldSaveHighScore || 
-                                    (event.data.data && event.data.data.shouldSaveHighScore);
-          
-          if (shouldSaveHighScore && score > 0) {
-            // Queue the score in the transaction system
-            if (window.__GAME_TX_QUEUE) {
-              window.__GAME_TX_QUEUE.queueScore(score, gameSessionId);
-              console.log(`📊 Queued score ${score} for processing after revive cancellation`);
-            }
-          }
-          
-          // Record jumps immediately if available
-          if (jumpCount > 0) {
-            try {
-              console.log(`🚫 Starting jump transaction for ${jumpCount} jumps after revive cancellation`);
-              setTransactionPending(true);
-              const success = await recordPlayerJumps(jumpCount, gameSessionId);
-              console.log(`🚫 Revive cancellation jump transaction ${success ? 'succeeded' : 'failed'}`);
-              
-              // After recording jumps, also process any queued score
-              if (window.__GAME_TX_QUEUE && window.__GAME_TX_QUEUE.finalScore > 0) {
+          try {
+            setTransactionPending(true);
+            
+            // IMPORTANT: Process score directly first for high score checking
+            if (score > 0) {
+              // Ensure the score is properly queued
+              if (window.__GAME_TX_QUEUE) {
+                // Reset the queue first to clear any previous state
+                window.__GAME_TX_QUEUE.reset();
+                // Set the score explicitly
+                window.__GAME_TX_QUEUE.finalScore = score;
+                window.__GAME_TX_QUEUE.gameId = gameSessionId;
+                
+                console.log(`🏆 Processing high score ${score} directly after revive cancellation`);
+                // Process the queue with the score
                 await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
+              } else {
+                // Fallback if queue doesn't exist - save score directly
+                console.log(`🏆 Saving high score ${score} directly (no queue available)`);
+                // Direct database save as fallback
+                if (supabase) {
+                  try {
+                    // Check current high score
+                    const { data: existingScore } = await supabase
+                      .from('scores')
+                      .select('score')
+                      .eq('wallet_address', address.toLowerCase())
+                      .order('score', { ascending: false })
+                      .maybeSingle();
+                      
+                    // Only save if higher than existing
+                    if (!existingScore || score > existingScore.score) {
+                      console.log(`Saving new high score ${score} (previous: ${existingScore?.score || 'none'})`);
+                      await supabase.from('scores').insert({
+                        wallet_address: address.toLowerCase(),
+                        score: score,
+                        game_id: gameSessionId,
+                        created_at: new Date().toISOString()
+                      });
+                    }
+                  } catch (err) {
+                    console.error('Error saving score directly:', err);
+                  }
+                }
               }
-            } catch (error) {
-              console.error('❌ Error recording jumps after revive cancellation:', error);
-            } finally {
-              setTransactionPending(false);
-              setShowPlayAgain(true);
             }
+            
+            // Then process jumps if needed
+            if (jumpCount > 0) {
+              console.log(`🚫 Starting jump transaction for ${jumpCount} jumps after revive cancellation`);
+              await recordPlayerJumps(jumpCount, gameSessionId);
+              console.log(`🚫 Revive cancellation jump transaction completed`);
+            }
+          } catch (error) {
+            console.error('❌ Error processing revive cancellation:', error);
+          } finally {
+            setTransactionPending(false);
+            setShowPlayAgain(true);
           }
         }
         
