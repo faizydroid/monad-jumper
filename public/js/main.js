@@ -282,6 +282,9 @@ window.addEventListener('load', () => {
                     }
                 }
             });
+            
+            // Generate a unique game session token
+            this.generateGameSessionToken();
         }
     
         initializeGame() {
@@ -551,12 +554,16 @@ window.addEventListener('load', () => {
                 score: this.score,
                 jumps: this.finalJumpCount,
                 gameId: this.gameId,
+                sessionToken: this.sessionToken, // Include the session token
                 deathReason: this.deathReason,
                 reviveCancelled: !!this.reviveCancelled,
                 hasUsedRevive: !!this.hasUsedRevive,
                 timestamp: Date.now(),
                 highScore: true // Always mark as potential high score to be checked by parent
             });
+            
+            // Invalidate the current token after use
+            this.sessionToken = null;
         }
 
         drawButton(button) {
@@ -2343,6 +2350,38 @@ window.addEventListener('load', () => {
             
             // Request animation frame to continue animation
             requestAnimationFrame(() => this.drawDirectPurchaseLoading(context));
+        }
+        
+        // Generate a secure one-time token for this game session
+        generateGameSessionToken() {
+            // Create a random string for the session token
+            const randomBytes = new Uint8Array(32);
+            window.crypto.getRandomValues(randomBytes);
+            this.sessionToken = Array.from(randomBytes)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+                
+            // Store in an HTTP-only cookie
+            this.storeSessionTokenInCookie(this.sessionToken);
+            
+            // Send the token to parent to be validated server-side
+            sendMessageToParent({
+                type: 'GAME_SESSION_TOKEN',
+                token: this.sessionToken
+            });
+        }
+        
+        // Store token in cookie
+        storeSessionTokenInCookie(token) {
+            try {
+                // Send to parent window to set as HTTP-only cookie
+                sendMessageToParent({
+                    type: 'SET_SESSION_COOKIE',
+                    token: token
+                });
+            } catch (error) {
+                console.error("Error storing session token");
+            }
         }
     }
     
