@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       open: true,
+      host: '0.0.0.0'
     },
     css: {
       preprocessorOptions: {
@@ -52,7 +53,7 @@ export default defineConfig(({ mode }) => {
       target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
       rollupOptions: {
         input: {
-          main: resolve(__dirname, 'index.html'),
+          main: resolve(__dirname, './index.html'),
         },
         output: {
           manualChunks: {
