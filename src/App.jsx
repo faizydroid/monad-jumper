@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+﻿import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
 import { Web3Provider, useWeb3 } from './contexts/Web3Context';
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount, useConnect, useDisconnect, useWalletClient, usePublicClient, useReadContract, useConfig, useWriteContract } from 'wagmi';
@@ -22,11 +22,12 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { createPublicClient, http } from 'viem';
 import MobileHomePage from './components/MobileHomePage';
-import characterImg from '/images/monad0.png'; // correct path with leading slash for public directory
+import characterImg from '/images/monad0.png'; 
 import { FaXTwitter, FaDiscord } from "react-icons/fa6";
 import { monadTestnet } from './config/chains';
-// Import the utility functions
-import { debounce, fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelpers.utils';
+import { fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelpers.utils';
+import characterABI from "./data/characterABI.json";
+import { debounce } from './utils/fetchHelpers.utils';
 
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
@@ -528,8 +529,14 @@ const NFTMintModal = ({ isOpen, onClose }) => {
     return (
       <SimpleModal isOpen={isOpen} onClose={onClose} title="Mint Successful!">
         <div className="mint-success-content" style={{textAlign: 'center'}}>
-          <div style={{fontSize: '64px', margin: '20px 0'}}>??</div>
-          <h2 style={{color: '#4CAF50', marginBottom: '20px'}}>NFT Minted Successfully!</h2>
+          <div style={{fontSize: '64px', margin: '20px 0'}}>🚀</div>
+          <h2 className="bangers-font" style={{
+            color: '#4CAF50', 
+            marginBottom: '20px',
+            fontSize: '32px',
+            textShadow: '2px 2px 0 #45A049, 3px 3px 5px rgba(0,0,0,0.3)',
+            letterSpacing: '1px'
+          }}>NFT Minted Successfully!</h2>
           <p>Your character is now ready to play!</p>
           
           <button 
@@ -537,18 +544,19 @@ const NFTMintModal = ({ isOpen, onClose }) => {
               onClose();
               window.location.reload();
             }} 
+            className="bangers-font"
             style={{
               background: 'linear-gradient(90deg, #4CAF50 0%, #45A049 100%)',
               border: 'none',
               padding: '15px 30px',
               borderRadius: '50px',
               color: 'white',
-              fontWeight: 'bold',
-              fontSize: '18px',
+              fontSize: '22px',
               margin: '30px 0 10px',
               cursor: 'pointer',
               boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.3s ease',
+              letterSpacing: '1px'
             }}
           >
             LETS F*CKING JUMP...
@@ -711,41 +719,11 @@ function HorizontalStats() {
         return;
       }
       
-      // First immediately use cached rank if available
-      try {
-        const cacheKey = `jump_rank_${address.toLowerCase()}`;
-        const cachedRank = localStorage.getItem(cacheKey);
-        
-        if (cachedRank) {
-          const { rank, timestamp } = JSON.parse(cachedRank);
-          const cacheAge = Date.now() - timestamp;
-          
-          // Use cache if less than 5 minutes old
-          if (cacheAge < 300000) {
-            console.log("Using cached jump rank:", rank);
-            setJumpRank(rank);
-            
-            // If cache is very fresh (less than 30 seconds), don't refetch
-            if (cacheAge < 30000) {
-              return;
-            }
-            // Otherwise continue to fetch fresh data but at least we displayed something
-          }
-        }
-      } catch (error) {
-        // If error reading cache, continue with fresh fetch
-        console.warn("Error reading cached rank:", error);
-      }
-      
-      // Skip frequent refetches
-      const now = Date.now();
-      if (now - fetchStatusRef.current.lastFetch < 15000) { // 15 seconds cache (reduced from 30s)
-        console.log("Skipping jump rank fetch - too soon since last fetch");
-        return;
-      }
+      // BYPASS CACHE - Always fetch fresh data from database
+      // Remove the localStorage cache check entirely
       
       try {
-        console.log("Fetching jump rank from Supabase");
+        console.log("Fetching fresh jump rank from Supabase");
         
         // OPTIMIZED APPROACH: Get rank directly with a single SQL query
         // This query computes the rank directly on the server side
@@ -794,18 +772,7 @@ function HorizontalStats() {
             setJumpRank("1000+");
           }
           
-          // Cache the result
-          try {
-            localStorage.setItem(`jump_rank_${lowerCaseAddress}`, JSON.stringify({
-              rank: rank <= 1000 ? `#${rank}` : "1000+",
-              timestamp: Date.now()
-            }));
-          } catch (e) {
-            console.warn("Error caching rank:", e);
-          }
-          
-          // Update last fetch time
-          fetchStatusRef.current.lastFetch = now;
+          // Don't cache the result - always use fresh data
           return;
         }
         
@@ -822,18 +789,7 @@ function HorizontalStats() {
             setJumpRank("1000+");
           }
           
-          // Cache the result
-          try {
-            localStorage.setItem(`jump_rank_${lowerCaseAddress}`, JSON.stringify({
-              rank: rank <= 0 ? "Unranked" : (rank <= 1000 ? `#${rank}` : "1000+"),
-              timestamp: Date.now()
-            }));
-          } catch (e) {
-            console.warn("Error caching rank:", e);
-          }
-          
-          // Update last fetch time
-          fetchStatusRef.current.lastFetch = now;
+          // Don't cache the result - always use fresh data
           return;
         }
         
@@ -889,71 +845,23 @@ function HorizontalStats() {
           setJumpRank("1000+");
         }
         
-        // Cache the result
-        try {
-          localStorage.setItem(`jump_rank_${lowerCaseAddress}`, JSON.stringify({
-            rank: rank <= 1000 ? `#${rank}` : "1000+",
-            timestamp: Date.now()
-          }));
-        } catch (e) {
-          console.warn("Error caching rank:", e);
-        }
-        
-        // Update last fetch time
-        fetchStatusRef.current.lastFetch = now;
+        // Don't cache the result - always use fresh data
       } catch (error) {
         console.error("Error calculating jump rank:", error);
         setJumpRank("Error");
       }
     }
     
-    // Initial fetch, but first try to use cached value for instant display
-    const cacheKey = `jump_rank_${address?.toLowerCase()}`;
-    try {
-      const cachedRank = localStorage.getItem(cacheKey);
-      if (cachedRank) {
-        const { rank } = JSON.parse(cachedRank);
-        // Immediately show cached value
-        setJumpRank(rank);
-      }
-    } catch (e) {
-      // Ignore cache errors
-    }
-    
-    // Then fetch fresh data
+    // Immediate fetch on mount and address change
     fetchJumpRank();
     
-    // Set up periodic refresh
-    const refreshInterval = setInterval(fetchJumpRank, 60000); // Check every minute
+    // Setup a refresh interval to keep the rank updated
+    const refreshInterval = setInterval(() => {
+      fetchJumpRank();
+    }, 15000); // Refresh every 15 seconds to keep data current
     
-    // Add a failsafe timeout to ensure we don't stay at "Calculating" forever
-    const failsafeTimeout = setTimeout(() => {
-      if (jumpRank === "Calculating") {
-        console.log("Failsafe: Setting jumpRank after timeout");
-        
-        // Try to use cached value if available
-        try {
-          const cachedRank = localStorage.getItem(cacheKey);
-          if (cachedRank) {
-            const { rank } = JSON.parse(cachedRank);
-            setJumpRank(rank);
-          } else {
-            setJumpRank(totalJumps > 0 ? "..." : "Unranked");
-          }
-        } catch (e) {
-          setJumpRank(totalJumps > 0 ? "..." : "Unranked");
-        }
-        
-        // Force a new fetch after failsafe
-        fetchJumpRank();
-      }
-    }, 3000); // Reduced from 5s to 3s for faster feedback
-    
-    // Cleanup function
     return () => {
-      isMountedRef.current = false;
       clearInterval(refreshInterval);
-      clearTimeout(failsafeTimeout);
     };
   }, [address, totalJumps, supabase]);
   
@@ -1405,19 +1313,7 @@ function HorizontalStats() {
                   return jumpRank;
                 }
                 
-                // Try to use cached value while loading
-                try {
-                  const cacheKey = `jump_rank_${address.toLowerCase()}`;
-                  const cachedRank = localStorage.getItem(cacheKey);
-                  if (cachedRank) {
-                    const { rank } = JSON.parse(cachedRank);
-                    return rank;
-                  }
-                } catch (e) {
-                  // Ignore cache errors
-                }
-                
-                // Show loading state if nothing else is available
+                // Otherwise show loading state
                 return <span className="loading-rank">Loading...</span>;
               })() : 
               <span className="loading-rank">Loading...</span>
@@ -1663,24 +1559,44 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   scoreObject.revive_used = window.__reviveUsedForGameId === sessionId;
                 }
                 
+                // Add the secure game session token if available
+                if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
+                  scoreObject.session_token = window.__SECURE_GAME_TOKEN.value;
+                  // Mark token as used
+                  window.__SECURE_GAME_TOKEN.used = true;
+                }
+                
                 // Log the complete score object before sending
                 console.log('Score object to insert:', JSON.stringify(scoreObject));
                 
-                const { error } = await supabase
-                  .from('scores')
-                  .insert(scoreObject);
-                
-                if (error) {
-                  console.error('Error recording score in database:', error);
-                  // Log detailed error information
-                  console.error('Error details:', {
-                    message: error.message,
-                    details: error.details,
-                    hint: error.hint,
-                    code: error.code
-                  });
-                } else {
-                  console.log(`✅ Score recorded successfully in database`);
+                try {
+                  // Basic insert without chaining additional operations
+                  const { data, error } = await supabase
+                    .from('scores')
+                    .insert(scoreObject);
+                  
+                  if (error) {
+                    console.error('Error recording score in database:', error);
+                    // Log detailed error information
+                    console.error('Error details:', {
+                      message: error.message,
+                      details: error.details,
+                      hint: error.hint,
+                      code: error.code
+                    });
+                  } else {
+                    console.log(`✅ Score recorded successfully in database`);
+                    
+                    // Clear the used token
+                    if (window.__SECURE_GAME_TOKEN) {
+                      window.__SECURE_GAME_TOKEN = null;
+                      
+                      // Also clear the cookie
+                      document.cookie = "gameSessionToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    }
+                  }
+                } catch (insertError) {
+                  console.error('Exception during score insert:', insertError);
                 }
               } else {
                 console.log(`Score ${scoreValue} not saved - lower than existing high score ${existingScore.score}`);
@@ -2527,17 +2443,84 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
 
   // Detect mobile view on component mount and window resize
   const detectMobile = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    // Step 1: Check existing window flag
+    if (window.__FORCE_MOBILE_VIEW__ === true) {
+      return true;
+    }
+    
+    // Step 2: Check URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('isMobile') === 'true') {
+      return true;
+    }
+    
+    // Step 3: Check storage
+    if (localStorage.getItem('isMobileDevice') === 'true') {
+      return true;
+    }
+    if (sessionStorage.getItem('isMobileDevice') === 'true') {
+      return true;
+    }
+    
+    // Step 4: Check for marker elements
+    if (document.getElementById('__mobile_view_active__')) {
+      return true;
+    }
+    if (document.getElementById('__force_mobile_view__')) {
+      return true;
+    }
+    
+    // Step 5: Check user agent and screen size
+    const userAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const smallScreen = window.innerWidth <= 768;
+    
+    if (userAgent || smallScreen) {
+      // Set flags to persist this detection
+      window.__FORCE_MOBILE_VIEW__ = true;
+      localStorage.setItem('isMobileDevice', 'true');
+      sessionStorage.setItem('isMobileDevice', 'true');
+      return true;
+    }
+    
+    return false;
   };
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobileView(window.innerWidth <= 768 || detectMobile());
+      const isMobile = detectMobile();
+      setIsMobileView(isMobile);
+      
+      if (isMobile) {
+        // Update URL to include mobile parameter without reload
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('isMobile') !== 'true') {
+          url.searchParams.set('isMobile', 'true');
+          window.history.replaceState({}, '', url.toString());
+        }
+        
+        // Update viewport for mobile
+        let viewport = document.querySelector('meta[name="viewport"]');
+        if (!viewport) {
+          viewport = document.createElement('meta');
+          viewport.name = 'viewport';
+          document.head.appendChild(viewport);
+        }
+        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      }
     };
     
+    // Run on mount
     checkMobile();
+    
+    // Run on resize or orientation change
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener('orientationchange', checkMobile);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', checkMobile);
+    };
   }, []);
 
   // Remove all duplicates and just keep this version
@@ -2744,6 +2727,38 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       if (!event.data) return;
       
       try {
+        // Handle session token messages
+        if (event.data.type === 'GAME_SESSION_TOKEN' || event.data.type === 'SET_SESSION_COOKIE') {
+          const token = event.data.token;
+          if (token) {
+            // Set HTTP-only cookie that can't be accessed via console
+            document.cookie = `gameSessionToken=${token}; path=/; SameSite=Strict; HttpOnly; Secure`;
+            
+            // Store in our secure session state
+            if (address) {
+              // Register token with server for validation
+              try {
+                await fetch('/api/register-session-token', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    address: address,
+                    token: token,
+                    gameId: gameId,
+                    timestamp: Date.now()
+                  }),
+                  credentials: 'include'
+                });
+                console.log('Game session token registered with server');
+              } catch (err) {
+                console.error('Error registering session token:', err);
+              }
+            }
+          }
+        }
+        
         // Process specific message types
         if (event.data.type === 'JUMP') {
           const jumpCount = event.data.jumps || 0;
@@ -2854,6 +2869,24 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                            window.__jumpCount || 
                            window.__JUMP_TRACKER?.jumps || 
                            0;
+                           
+          // Get the session token for validation
+          const sessionToken = event.data.sessionToken ||
+                              (event.data.data && event.data.data.sessionToken);
+                              
+          // Store the token for the API request
+          if (sessionToken) {
+            // Store the token securely in a closure that will be used only for the next API request
+            const secureTokenReference = {
+              value: sessionToken,
+              used: false,
+              timestamp: Date.now(),
+              gameId: gameId
+            };
+            
+            // Store in memory for immediate use with the upcoming API calls
+            window.__SECURE_GAME_TOKEN = secureTokenReference;
+          }
           
           console.log(`🔚 Game over with score ${finalScore} and ${jumpCount} jumps`);
           
@@ -3848,8 +3881,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           <>
         <BackgroundElements />
           <div className="home-container">
-              <h1 className="game-title">JUMPNADS</h1>
-            <p className="game-subtitle">Jump to the MOON! </p>
+              <h1 className="title bangers-font">JUMPNADS</h1>
+            <p className="subtitle">Jump to the MOON! </p>
           
             {/* Character for non-connected wallet state - centered */}
             <div style={{ 
@@ -3906,7 +3939,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         <BackgroundElements />
         
           <header>
-          <h1 className="title">JUMPNADS</h1>
+          <h1 className="title bangers-font">JUMPNADS</h1>
           <p className="subtitle">Jump to the MOON!</p>
           </header>
           
@@ -4182,6 +4215,105 @@ function App() {
   const [showMintModal, setShowMintModal] = useState(false);
   const { isConnected, address } = useAccount();
   
+  // Add state for mobile view detection
+  const [isMobileView, setIsMobileView] = useState(false);
+  
+  // Detect mobile on mount
+  useEffect(() => {
+    // Local debounce function implementation
+    const localDebounce = (func, wait) => {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    };
+
+    const detectMobile = () => {
+      // DESKTOP OVERRIDE - Check if URL explicitly requests desktop mode
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'desktop' || 
+          params.get('desktop') === 'true' || 
+          params.get('forceDesktop') === 'true') {
+        
+        console.log('DESKTOP MODE OVERRIDE DETECTED - forcefully clearing all mobile flags');
+        
+        // Force all mobile flags to be cleared
+        window.__FORCE_MOBILE_VIEW__ = false;
+        localStorage.removeItem('isMobileDevice');
+        sessionStorage.removeItem('isMobileDevice');
+        
+        // Remove any markers in the DOM
+        const mobileMarker = document.getElementById('__mobile_view_active__');
+        if (mobileMarker) mobileMarker.remove();
+        const forceMarker = document.getElementById('__force_mobile_view__');
+        if (forceMarker) forceMarker.remove();
+        
+        // Return false to ensure desktop view is used
+        return false;
+      }
+      
+      // RESPONSIVE DETECTION: First check actual device capabilities and screen size
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isSmallScreen = window.innerWidth <= 768;
+      
+      // If it's clearly a desktop device with large screen, always show desktop view
+      // regardless of stored flags (fixes the issue of desktop showing mobile view)
+      if (!isMobileDevice && !isSmallScreen && window.innerWidth > 1024) {
+        console.log('Detected desktop device with large screen - using desktop view');
+        
+        // Clear any incorrect mobile flags
+        window.__FORCE_MOBILE_VIEW__ = false;
+        localStorage.removeItem('isMobileDevice');
+        sessionStorage.removeItem('isMobileDevice');
+        
+        return false;
+      }
+      
+      // For smaller screens or mobile devices, apply mobile view by default
+      if (isMobileDevice || isSmallScreen) {
+        console.log('Detected mobile device or small screen - using mobile view');
+        return true;
+      }
+      
+      // As a fallback, check stored flags ONLY if device detection is ambiguous
+      if (window.__FORCE_MOBILE_VIEW__ === true) return true;
+      if (localStorage.getItem('isMobileDevice') === 'true') return true;
+      if (sessionStorage.getItem('isMobileDevice') === 'true') return true;
+      if (new URLSearchParams(window.location.search).get('isMobile') === 'true') return true;
+      if (document.getElementById('__mobile_view_active__')) return true;
+      if (document.getElementById('__force_mobile_view__')) return true;
+      
+      // Default to desktop view if nothing matched
+      return false;
+    };
+    
+    const isMobile = detectMobile();
+    console.log("💡 App.jsx - Mobile detection result:", isMobile);
+    setIsMobileView(isMobile);
+    
+    // Set up resize listener to handle orientation change and window resizing
+    const handleResize = localDebounce(() => {
+      const updatedIsMobile = detectMobile();
+      if (updatedIsMobile !== isMobileView) {
+        console.log("Screen size changed, updating view mode to:", updatedIsMobile ? "mobile" : "desktop");
+        setIsMobileView(updatedIsMobile);
+      }
+    }, 300);
+    
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, [isMobileView]);
+  
   // Use useReadContract instead of useContractRead for Wagmi v2
   const { 
     data: nftBalanceData,
@@ -4222,6 +4354,16 @@ function App() {
     }
   }, [address, isConnected, refetchNftBalance]);
 
+  // Handle play game action for mobile view
+  const handlePlayGame = useCallback(() => {
+    window.location.href = '#game';
+  }, []);
+  
+  // Handle mint action for mobile view
+  const handleMintNow = useCallback(() => {
+    setShowMintModal(true);
+  }, []);
+
   // Memoize components to prevent re-renders
   const gameComponent = useMemo(() => (
     <ErrorBoundary>
@@ -4233,6 +4375,32 @@ function App() {
     </ErrorBoundary>
   ), [hasMintedNft, isNftBalanceLoading]);
 
+  console.log("💡 App.jsx rendering - isMobileView:", isMobileView);
+
+  // If we're in mobile view, render the MobileHomePage
+  if (isMobileView) {
+    console.log("💡 Rendering MobileHomePage");
+    return (
+      <Web3Provider>
+        <MobileHomePage
+          characterImg="/images/monad0.png"
+          onPlay={handlePlayGame}
+          onMint={handleMintNow}
+          hasMintedNft={hasMintedNft}
+          isNftLoading={isNftBalanceLoading}
+        />
+        
+        {showMintModal && (
+          <NFTMintModal 
+            isOpen={true} 
+            onClose={()=>setShowMintModal(false)} 
+          />
+        )}
+      </Web3Provider>
+    );
+  }
+
+  // Otherwise, render the normal desktop view
   return (
     <Web3Provider>
       {isConnected && <Navbar />}
@@ -4249,8 +4417,6 @@ function App() {
           onClose={()=>setShowMintModal(false)} 
         />
       )}
-
-    
     </Web3Provider>
   );
 }
