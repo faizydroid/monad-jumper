@@ -145,15 +145,16 @@ export default function AdminDashboard() {
             console.error("Error fetching jumps:", jumpsError);
           } else if (jumpsData && jumpsData.length > 0) {
             console.log(`Found ${jumpsData.length} jump records`);
-            // Sum up all jump counts
-            totalJumps = jumpsData.reduce((sum, record) => sum + (record.count || 0), 0);
+            // Sum up all jump counts with safer null checks
+            totalJumps = jumpsData.reduce((sum, record) => sum + (record?.count || 0), 0);
             console.log("Total jumps from jumps table:", totalJumps);
           } else {
             console.log("No jump records found in jumps table");
             
             // Fallback: Try to get jumps from user data as before
-            if (userData.length > 0) {
+            if (userData && userData.length > 0) {
               userData.forEach(player => {
+                if (!player) return; // Skip if player is undefined
                 if (typeof player.jumps === 'number') totalJumps += player.jumps;
                 else if (typeof player.jump_count === 'number') totalJumps += player.jump_count;
                 else if (typeof player.jumpCount === 'number') totalJumps += player.jumpCount;
@@ -388,12 +389,12 @@ export default function AdminDashboard() {
             .from('jumps')
             .select('count');
           
-          // Sum up jump counts for each time period
-          hourlyJumps = hourJumps ? hourJumps.reduce((sum, record) => sum + (record.count || 0), 0) : 0;
-          dailyJumps = dayJumps ? dayJumps.reduce((sum, record) => sum + (record.count || 0), 0) : 0;
-          weeklyJumps = weekJumps ? weekJumps.reduce((sum, record) => sum + (record.count || 0), 0) : 0;
-          monthlyJumps = monthJumps ? monthJumps.reduce((sum, record) => sum + (record.count || 0), 0) : 0;
-          allTimeJumps = allJumps ? allJumps.reduce((sum, record) => sum + (record.count || 0), 0) : 0;
+          // Sum up jump counts for each time period with safer null checks
+          hourlyJumps = hourJumps && Array.isArray(hourJumps) ? hourJumps.reduce((sum, record) => sum + (record?.count || 0), 0) : 0;
+          dailyJumps = dayJumps && Array.isArray(dayJumps) ? dayJumps.reduce((sum, record) => sum + (record?.count || 0), 0) : 0;
+          weeklyJumps = weekJumps && Array.isArray(weekJumps) ? weekJumps.reduce((sum, record) => sum + (record?.count || 0), 0) : 0;
+          monthlyJumps = monthJumps && Array.isArray(monthJumps) ? monthJumps.reduce((sum, record) => sum + (record?.count || 0), 0) : 0;
+          allTimeJumps = allJumps && Array.isArray(allJumps) ? allJumps.reduce((sum, record) => sum + (record?.count || 0), 0) : 0;
         }
       }
       
@@ -432,13 +433,20 @@ export default function AdminDashboard() {
 
       if (jumpError) throw jumpError;
 
-      // Calculate total transactions
-      const totalJumps = jumpData.reduce((sum, record) => sum + record.count, 0);
-      console.log('📊 Total jumps found:', totalJumps);
-      
-      setTotalTransactions(totalJumps);
+      // Calculate total transactions - add null check for jumpData
+      if (!jumpData) {
+        console.log('No jump data found, defaulting to 0 total transactions');
+        setTotalTransactions(0);
+      } else {
+        // Safely reduce with null check
+        const totalJumps = jumpData.reduce((sum, record) => sum + (record?.count || 0), 0);
+        console.log('📊 Total jumps found:', totalJumps);
+        setTotalTransactions(totalJumps);
+      }
     } catch (error) {
       console.error('Error fetching transaction stats:', error);
+      // Don't crash if there's an error, just set to 0
+      setTotalTransactions(0);
     } finally {
       setIsLoading(false);
     }
@@ -727,7 +735,7 @@ export default function AdminDashboard() {
           userData,
           jumpHistory: jumpHistory.length, 
           gameHistory: gameHistory.length,
-          totalJumps: jumpHistory.reduce((sum, record) => sum + (record.count || 0), 0),
+          totalJumps: jumpHistory.reduce((sum, record) => sum + (record?.count || 0), 0),
           gamesPlayed,
           highScore
         });
@@ -736,10 +744,12 @@ export default function AdminDashboard() {
           ...userData,
           jumpHistory,
           gameHistory,
-          totalJumps: jumpHistory.reduce((sum, record) => sum + (record.count || 0), 0),
-          totalGames: gameHistory.length || gamesPlayed || 0,
-          high_score: highScore || userData.high_score || 0,
-          games_played: gamesPlayed || gameHistory.length || 0
+          totalJumps: jumpHistory && Array.isArray(jumpHistory) ? 
+                     jumpHistory.reduce((sum, record) => sum + (record?.count || 0), 0) : 0,
+          totalGames: gameHistory && Array.isArray(gameHistory) ? gameHistory.length : 
+                     (gamesPlayed || 0),
+          high_score: highScore || userData?.high_score || 0,
+          games_played: gamesPlayed || (gameHistory && Array.isArray(gameHistory) ? gameHistory.length : 0)
         });
       } else {
         console.log('User not found');
