@@ -2,19 +2,12 @@ const ethers = require('ethers');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const dotenv = require('dotenv');
-const fetch = require('node-fetch');
-
-// Load environment variables from .env file
-dotenv.config();
-console.log('SUPABASE_URL is set:', !!process.env.SUPABASE_URL);
-console.log('SUPABASE_SERVICE_KEY is set:', !!process.env.SUPABASE_SERVICE_KEY);
 
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: ['http://localhost:3004', 'http://localhost:3000', 'https://doodle-jump-monad.vercel.app'],
+  origin: true,
   credentials: true
 }));
 
@@ -132,67 +125,73 @@ app.post('/api/validate-session-token', async (req, res) => {
   });
 });
 
-// Create a route to securely proxy score updates to Supabase
-app.post('/api/secure/scores', async (req, res) => {
-  // Get token from headers or cookies
-  const token = req.headers['x-game-session-token'] || req.cookies.gameSessionToken;
-  
-  if (!token) {
-    return res.status(403).json({ error: 'No valid session token provided', valid: false });
-  }
-  
-  // Check if token exists in our store
-  const tokenData = sessionTokens.get(token);
-  
-  if (!tokenData) {
-    return res.status(403).json({ error: 'Invalid token', valid: false });
-  }
-  
-  // Check if token has been used
-  if (tokenData.used) {
-    return res.status(403).json({ error: 'Token already used', valid: false });
-  }
-  
-  // Extract data from request body
-  const { wallet_address, score, game_id } = req.body;
-  
-  if (!wallet_address || !score) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  
-  // Check if token is for the same address
-  if (tokenData.address !== wallet_address.toLowerCase()) {
-    return res.status(403).json({ error: 'Token does not match address', valid: false });
-  }
-  
+// Add a secure score submission endpoint
+app.post('/api/secure-submit-score', async (req, res) => {
   try {
-    // Forward to Supabase using environment variables (never expose in client)
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+    // Get the token from request headers
+    const token = req.headers['x-game-session-token'];
+    const { wallet_address, score, game_id } = req.body;
     
-    if (!supabaseUrl || !supabaseKey) {
-      return res.status(500).json({ error: 'Server configuration error' });
+    // Validate required parameters
+    if (!token || !wallet_address || !score || !game_id) {
+      return res.status(400).json({ 
+        error: 'Missing required fields', 
+        valid: false 
+      });
     }
     
-    const response = await fetch(`${supabaseUrl}/rest/v1/scores`, {
+    // Check if token exists in our store
+    const tokenData = sessionTokens.get(token);
+    
+    if (!tokenData) {
+      return res.status(403).json({ 
+        error: 'Invalid token', 
+        valid: false 
+      });
+    }
+    
+    // Check if token is for the same address
+    if (tokenData.address !== wallet_address.toLowerCase()) {
+      return res.status(403).json({ 
+        error: 'Token does not match address', 
+        valid: false 
+      });
+    }
+    
+    // Check if token has been used
+    if (tokenData.used) {
+      return res.status(403).json({ 
+        error: 'Token already used', 
+        valid: false 
+      });
+    }
+    
+    // The backend makes the request to Supabase using environment variables
+    // This prevents exposing API keys to the client
+    const response = await fetch(`${process.env.SUPABASE_URL}/rest/v1/scores`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`
+        'apikey': process.env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+        'Prefer': 'return=minimal'
       },
       body: JSON.stringify({
         wallet_address: wallet_address.toLowerCase(),
         score: score,
         created_at: new Date().toISOString(),
-        game_id: game_id || tokenData.gameId
+        game_id: game_id
       })
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Error from Supabase:', errorData);
-      return res.status(response.status).json({ error: 'Failed to save score' });
+      const errorText = await response.text();
+      console.error(`Error submitting score: ${response.status}`, errorText);
+      return res.status(response.status).json({ 
+        error: 'Error submitting score to database', 
+        details: errorText, 
+        valid: false 
+      });
     }
     
     // Mark token as used
@@ -201,115 +200,112 @@ app.post('/api/secure/scores', async (req, res) => {
     // Clear the cookie
     res.clearCookie('gameSessionToken');
     
-    return res.status(200).json({ success: true });
+    // Return success
+    return res.json({ 
+      valid: true, 
+      address: tokenData.address,
+      gameId: tokenData.gameId,
+      message: 'Score submitted successfully'
+    });
   } catch (error) {
-    console.error('Error saving score:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Error in secure score submission:', error);
+    return res.status(500).json({ 
+      error: 'Server error processing score submission',
+      valid: false
+    });
   }
 });
 
-// Create a route to securely proxy jumps updates to Supabase
-app.post('/api/secure/jumps', async (req, res) => {
-  // Get token from headers or cookies
-  const token = req.headers['x-game-session-token'] || req.cookies.gameSessionToken;
-  
-  if (!token) {
-    return res.status(403).json({ error: 'No valid session token provided', valid: false });
-  }
-  
-  // Check if token exists in our store
-  const tokenData = sessionTokens.get(token);
-  
-  if (!tokenData) {
-    return res.status(403).json({ error: 'Invalid token', valid: false });
-  }
-  
-  // Check if token has been used
-  if (tokenData.used) {
-    return res.status(403).json({ error: 'Token already used', valid: false });
-  }
-  
-  // Extract data from request body
-  const { wallet_address, count, game_id } = req.body;
-  
-  if (!wallet_address || !count) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  
-  // Check if token is for the same address
-  if (tokenData.address !== wallet_address.toLowerCase()) {
-    return res.status(403).json({ error: 'Token does not match address', valid: false });
-  }
-  
+// Add a secure jumps submission endpoint
+app.post('/api/secure-submit-jumps', async (req, res) => {
   try {
-    // Forward to Supabase using environment variables (never expose in client)
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+    // Get the token from request headers
+    const token = req.headers['x-game-session-token'];
+    const { wallet_address, count } = req.body;
     
-    if (!supabaseUrl || !supabaseKey) {
-      return res.status(500).json({ error: 'Server configuration error' });
+    // Validate required parameters
+    if (!token || !wallet_address || !count) {
+      return res.status(400).json({ 
+        error: 'Missing required fields', 
+        valid: false 
+      });
     }
     
-    // First get current count if it exists
-    const getResponse = await fetch(
-      `${supabaseUrl}/rest/v1/jumps?wallet_address=eq.${encodeURIComponent(wallet_address.toLowerCase())}&select=count`, 
+    // Check if token exists in our store
+    const tokenData = sessionTokens.get(token);
+    
+    if (!tokenData) {
+      return res.status(403).json({ 
+        error: 'Invalid token', 
+        valid: false 
+      });
+    }
+    
+    // Check if token is for the same address
+    if (tokenData.address !== wallet_address.toLowerCase()) {
+      return res.status(403).json({ 
+        error: 'Token does not match address', 
+        valid: false 
+      });
+    }
+    
+    // Check if token has been used
+    if (tokenData.used) {
+      return res.status(403).json({ 
+        error: 'Token already used', 
+        valid: false 
+      });
+    }
+    
+    // First get the current jump count
+    const currentResponse = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/jumps?wallet_address=eq.${wallet_address.toLowerCase()}&select=count`,
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`
+          'apikey': process.env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`
         }
       }
     );
     
+    let currentCount = 0;
     let method = 'POST';
-    let url = `${supabaseUrl}/rest/v1/jumps`;
-    let body;
+    let url = `${process.env.SUPABASE_URL}/rest/v1/jumps`;
     
-    if (getResponse.ok) {
-      const existingData = await getResponse.json();
-      
-      if (existingData && existingData.length > 0) {
-        // Record exists, update it
-        const currentCount = existingData[0].count || 0;
-        const newCount = currentCount + parseInt(count);
-        
+    if (currentResponse.ok) {
+      const currentData = await currentResponse.json();
+      if (currentData && currentData.length > 0) {
+        currentCount = currentData[0].count || 0;
         method = 'PATCH';
-        url = `${supabaseUrl}/rest/v1/jumps?wallet_address=eq.${encodeURIComponent(wallet_address.toLowerCase())}`;
-        body = JSON.stringify({
-          count: newCount,
-        });
-      } else {
-        // No record, create new one
-        body = JSON.stringify({
-          wallet_address: wallet_address.toLowerCase(),
-          count: parseInt(count)
-        });
+        url = `${process.env.SUPABASE_URL}/rest/v1/jumps?wallet_address=eq.${wallet_address.toLowerCase()}`;
       }
-    } else {
-      // Error in get request, attempt insert as fallback
-      body = JSON.stringify({
-        wallet_address: wallet_address.toLowerCase(),
-        count: parseInt(count)
-      });
     }
     
+    // The backend makes the request to Supabase using environment variables
     const response = await fetch(url, {
       method: method,
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': process.env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
         'Prefer': 'return=minimal'
       },
-      body: body
+      body: JSON.stringify({
+        wallet_address: wallet_address.toLowerCase(),
+        count: currentCount + count
+      })
     });
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Error from Supabase:', errorText);
-      return res.status(response.status).json({ error: 'Failed to save jumps' });
+      console.error(`Error submitting jumps: ${response.status}`, errorText);
+      return res.status(response.status).json({ 
+        error: 'Error submitting jumps to database', 
+        details: errorText, 
+        valid: false 
+      });
     }
     
     // Mark token as used
@@ -318,10 +314,19 @@ app.post('/api/secure/jumps', async (req, res) => {
     // Clear the cookie
     res.clearCookie('gameSessionToken');
     
-    return res.status(200).json({ success: true });
+    // Return success
+    return res.json({ 
+      valid: true, 
+      address: tokenData.address,
+      gameId: tokenData.gameId,
+      message: 'Jumps submitted successfully'
+    });
   } catch (error) {
-    console.error('Error saving jumps:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Error in secure jumps submission:', error);
+    return res.status(500).json({ 
+      error: 'Server error processing jumps submission',
+      valid: false
+    });
   }
 });
 

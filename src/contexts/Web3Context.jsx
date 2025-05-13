@@ -341,32 +341,32 @@ export function Web3Provider({ children }) {
         return true;
       }
       
-      // Use session token for secure submission
-      const token = window.__SECURE_GAME_TOKEN?.value;
-      const headers = {
-        'Content-Type': 'application/json'
+      // Create jump data object
+      const jumpData = {
+        wallet_address: walletAddress.toLowerCase(),
+        count: jumpCount
       };
       
-      // Add token to headers if available
-      if (token) {
-        headers['x-game-session-token'] = token;
-      }
-      
-      // Use secure backend proxy endpoint instead of direct Supabase access
-      const response = await fetch('/api/secure/jumps', {
+      // Instead of direct Supabase call, use our secure backend API
+      const response = await fetch('/api/secure-submit-jumps', {
         method: 'POST',
-        headers: headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-game-session-token': window.__SECURE_GAME_TOKEN ? window.__SECURE_GAME_TOKEN.value : ''
+        },
         credentials: 'include',
-        body: JSON.stringify({
-          wallet_address: walletAddress.toLowerCase(),
-          count: jumpCount,
-          game_id: sessionId
-        })
+        body: JSON.stringify(jumpData)
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error recording jump:", errorData);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error recording jumps in database:', errorData);
+        console.error('Error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData.error,
+          details: errorData.details
+        });
         return false;
       }
       

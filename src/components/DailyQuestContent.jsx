@@ -347,57 +347,34 @@ const DailyQuestContent = ({ onClose }) => {
       
       // 4. Try to update jumps table first - this is the critical part
       try {
-        // Update user's total jumps in Supabase
-        const { data: existingJumps, error: jumpsFetchError } = await supabase
-          .from('jumps')
-          .select('count')
-          .eq('wallet_address', address.toLowerCase())
-          .maybeSingle();
-          
-        if (jumpsFetchError) {
-          console.error("Error fetching existing jumps:", jumpsFetchError);
-        }
-        
-        // Calculate new total
-        let newTotal = updatedTotal;
-        if (existingJumps && existingJumps.count !== null) {
-          newTotal = parseInt(existingJumps.count) + jumpsToAdd;
-        }
-        
-        // Get the session token if available
-        const token = window.__SECURE_GAME_TOKEN?.value;
-        const headers = {
-          'Content-Type': 'application/json'
+        // Create the jump data object
+        const jumpData = {
+          wallet_address: address.toLowerCase(),
+          count: jumpsToAdd
         };
         
-        // Add token to headers if available
-        if (token) {
-          headers['x-game-session-token'] = token;
-        }
-        
-        // Use secure backend proxy endpoint
-        const sessionId = `daily_quest_${Date.now()}`;
-        const response = await fetch('/api/secure/jumps', {
+        // Instead of direct Supabase call, use secure backend API
+        const response = await fetch('/api/secure-submit-jumps', {
           method: 'POST',
-          headers: headers,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-game-session-token': window.__SECURE_GAME_TOKEN ? window.__SECURE_GAME_TOKEN.value : ''
+          },
           credentials: 'include',
-          body: JSON.stringify({
-            wallet_address: address.toLowerCase(),
-            count: jumpsToAdd,
-            game_id: sessionId
-          })
+          body: JSON.stringify(jumpData)
         });
         
         if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Error updating jumps:", errorData);
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Error recording jumps in database:', errorData);
+          console.error('Error details:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData.error,
+            details: errorData.details
+          });
         } else {
-          console.log(`Updated jump count to: ${newTotal}`);
-        }
-        
-        // Mark token as used
-        if (window.__SECURE_GAME_TOKEN) {
-          window.__SECURE_GAME_TOKEN.used = true;
+          console.log(`Successfully updated jumps in database with ${jumpsToAdd} new jumps`);
         }
         
         // Call fetchPlayerStats to update the UI
