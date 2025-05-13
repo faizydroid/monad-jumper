@@ -42,95 +42,14 @@ const validateGameSession = async (req, supabase) => {
   }
 };
 
-// Configure Supabase client to use session validation
+// Modified to work with the secure Supabase client wrapper
 export const setupSessionValidation = (supabaseClient) => {
   // Log that we're setting up session validation
   console.log("Setting up session validation for Supabase client");
   
-  try {
-    // The original approach using realtime.setAuth is not correct
-    // Instead, we'll keep a reference to the client and its methods
-    const originalFrom = supabaseClient.from.bind(supabaseClient);
-    
-    // Override the 'from' method to inject our validation logic
-    supabaseClient.from = (table) => {
-      const builder = originalFrom(table);
-      
-      // Store original insert method
-      const originalInsert = builder.insert.bind(builder);
-      
-      // Store original update method for jumps table
-      const originalUpdate = builder.update.bind(builder);
-      
-      // Store original upsert method for jumps table
-      const originalUpsert = builder.upsert.bind(builder);
-      
-      // Create a function to handle token validation for all operations
-      const addSessionTokenToOptions = (data, options = {}) => {
-        console.log(`Intercepted ${table} operation:`, data);
-        
-        try {
-          // Ensure options.headers exists
-          options.headers = options.headers || {};
-          
-          // Check for session token in window global
-          if (window.__SECURE_GAME_TOKEN?.value && !window.__SECURE_GAME_TOKEN.used) {
-            // Add token to request headers
-            options.headers['x-game-session-token'] = window.__SECURE_GAME_TOKEN.value;
-            console.log(`Added session token to ${table} request headers`);
-            
-            // Mark as used after adding to headers
-            window.__SECURE_GAME_TOKEN.used = true;
-          }
-          // Also check for session token in data object
-          else if (data.session_token) {
-            // Add token to request headers
-            options.headers['x-game-session-token'] = data.session_token;
-            console.log(`Added session token from data to ${table} request headers`);
-            
-            // Remove from the data to avoid storing it in the database
-            if (Array.isArray(data)) {
-              data.forEach(item => delete item.session_token);
-            } else {
-              delete data.session_token;
-            }
-          }
-          
-          return options;
-        } catch (error) {
-          console.error(`Error in session validation middleware for ${table}:`, error);
-          return options;
-        }
-      };
-      
-      // Override insert method for protected tables
-      if (table === 'scores' || table === 'jumps') {
-        builder.insert = function(data, options = {}) {
-          options = addSessionTokenToOptions(data, options);
-          return originalInsert(data, options);
-        };
-        
-        // Also protect update operations for jumps table
-        builder.update = function(data, options = {}) {
-          options = addSessionTokenToOptions(data, options);
-          return originalUpdate(data, options);
-        };
-        
-        // Also protect upsert operations for jumps table
-        builder.upsert = function(data, options = {}) {
-          options = addSessionTokenToOptions(data, options);
-          return originalUpsert(data, options);
-        };
-      }
-      
-      return builder;
-    };
-    
-    return supabaseClient;
-  } catch (error) {
-    console.error('Failed to set up session validation middleware:', error);
-    return supabaseClient; // Return original client as fallback
-  }
+  // The Supabase client is now wrapped with security in supabaseClient.js
+  // This function is kept for compatibility with existing code
+  return supabaseClient;
 };
 
 export default {

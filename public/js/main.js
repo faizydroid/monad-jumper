@@ -73,6 +73,45 @@ document.addEventListener('keydown', function(e) {
   document.head.appendChild(link);
 })();
 
+// Security: Add fetch interceptor to prevent direct API calls to Supabase
+(function() {
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options = {}) {
+        // Check if this is a direct Supabase API request
+        if (typeof url === 'string' && 
+            (url.includes('supabase.co/rest') || 
+             url.includes('nzifipuunzaneaxdxqjm'))) {
+            
+            console.error('🛑 SECURITY: Blocked unauthorized direct Supabase API access');
+            return Promise.reject(new Error('Direct API access is not allowed'));
+        }
+        
+        // Proceed with original fetch for allowed requests
+        return originalFetch.apply(this, arguments);
+    };
+})();
+
+// Security: Add XMLHttpRequest interceptor to prevent direct API calls to Supabase
+(function() {
+    // Intercept XMLHttpRequest to prevent direct API access
+    const originalXhrOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+        // Check if this is a direct Supabase API request
+        if (typeof url === 'string' && 
+            (url.includes('supabase.co/rest') || 
+             url.includes('nzifipuunzaneaxdxqjm'))) {
+            
+            console.error('🛑 SECURITY: Blocked unauthorized direct Supabase API access via XMLHttpRequest');
+            
+            // Redirect to a blocked endpoint
+            return originalXhrOpen.call(this, method, '/api/blocked', ...args);
+        }
+        
+        // Proceed with original open for legitimate requests
+        return originalXhrOpen.call(this, method, url, ...args);
+    };
+})();
+
 window.addEventListener('load', () => {
     // Initialize global variables
     window.gameInitialized = false;
@@ -118,19 +157,8 @@ window.addEventListener('load', () => {
 
     class Game {
         constructor(width, height) {
-            this.width = width;
-            this.height = height;
-            
-            // Generate a unique game session token
-            this.generateGameSessionToken();
-            
-            // Store initial jump count
-            window.__jumpCount = 0;
-            window.totalJumps = 0;
-            
-            // Create a separate token specifically for jump count validation
-            this.generateJumpCountToken();
-            
+            this.width = width
+            this.height = height
             this.canvas = canvas
             this.vy = 0
             this.gameOver = false
@@ -1572,8 +1600,7 @@ window.addEventListener('load', () => {
         recordJumpTransaction() {
             const jumpData = {
                 timestamp: Date.now(),
-                jumpNumber: ++window.__jumpCount,
-                token: this.jumpCountToken // Include the token for validation
+                jumpNumber: ++window.__jumpCount
             };
             
             this.pendingJumps.push(jumpData);
@@ -1584,14 +1611,13 @@ window.addEventListener('load', () => {
             // Notify parent of the jump for UI updates using safe function
             // Optimization: Only send message every 5 jumps to reduce overhead
             if (window.__jumpCount % 5 === 0 || window.__jumpCount <= 3) {
-                sendMessageToParent({
-                    type: 'JUMP_PERFORMED',
-                    data: {
-                        jumpCount: window.__jumpCount,
-                        timestamp: jumpData.timestamp,
-                        token: this.jumpCountToken // Include the token
-                    }
-                });
+            sendMessageToParent({
+                type: 'JUMP_PERFORMED',
+                data: {
+                    jumpCount: window.__jumpCount,
+                    timestamp: jumpData.timestamp
+                }
+            });
             }
         }
 
@@ -2377,48 +2403,23 @@ window.addEventListener('load', () => {
             // Store in an HTTP-only cookie
             this.storeSessionTokenInCookie(this.sessionToken);
             
-            // Send to parent to register with server
+            // Send the token to parent to be validated server-side
             sendMessageToParent({
                 type: 'GAME_SESSION_TOKEN',
-                token: this.sessionToken,
-                gameId: this.gameId,
-                timestamp: Date.now()
+                token: this.sessionToken
             });
-            
-            console.log('Generated new game session token');
         }
         
-        // Generate a separate token for jump count validation
-        generateJumpCountToken() {
-            // Create a random string for the jump count token
-            const randomBytes = new Uint8Array(32);
-            window.crypto.getRandomValues(randomBytes);
-            this.jumpCountToken = Array.from(randomBytes)
-                .map(b => b.toString(16).padStart(2, '0'))
-                .join('');
-                
-            // Send to parent to register with server
-            sendMessageToParent({
-                type: 'JUMP_COUNT_TOKEN',
-                token: this.jumpCountToken,
-                gameId: this.gameId,
-                timestamp: Date.now()
-            });
-            
-            console.log('Generated new jump count token');
-        }
-                
-        // Store token in cookie for additional security
+        // Store token in cookie
         storeSessionTokenInCookie(token) {
             try {
-                // Try to save token in parent window securely
+                // Send to parent window to set as HTTP-only cookie
                 sendMessageToParent({
                     type: 'SET_SESSION_COOKIE',
-                    token: token,
-                    gameId: this.gameId
+                    token: token
                 });
-            } catch (e) {
-                console.error('Failed to store token in cookie:', e);
+            } catch (error) {
+                console.error("Error storing session token");
             }
         }
     }
@@ -2661,16 +2662,11 @@ try {
     
     console.log(`💾 SENDING JUMP SAVE (ID: ${saveId}): ${jumps} jumps`);
     
-    // Get the jump count token from the game instance if available
-    const gameInstance = getGame();
-    const jumpToken = gameInstance?.jumpCountToken;
-    
-    // Send message to React app with the unique save ID and token
+    // Send message to React app with the unique save ID
     sendMessageToParent({
       type: 'SAVE_JUMPS',
       jumps: jumps,
-      saveId: saveId,
-      token: jumpToken // Include the token for validation
+      saveId: saveId
     });
     
     // Set a flag in localStorage to further prevent duplicates
@@ -3542,4 +3538,80 @@ function updateTestStatus(message) {
         // If ethers is already loaded, add the test UI directly
         setTimeout(addContractTestUI, 500);
     }
+})();
+
+// Add security monitoring code that executes immediately at page load
+(function securityMonitor() {
+    // Protect Supabase API by overriding fetch
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options = {}) {
+        // Check if this is a Supabase request
+        if (typeof url === 'string' && 
+            (url.includes('supabase') || 
+             url.includes('nzifipuunzaneaxdxqjm'))) {
+            
+            // Only allow specific paths
+            const allowedPaths = [
+                '/api/proxy/supabase',
+                '/api/validate-session-token',
+                '/api/register-session-token'
+            ];
+            
+            // Check if this is an allowed path
+            const isAllowedPath = allowedPaths.some(path => url.includes(path));
+            
+            // Block direct API access attempts
+            if (!isAllowedPath) {
+                console.error('🛑 SECURITY: Blocked unauthorized direct Supabase API access:', url);
+                
+                // Log suspicious activity
+                try {
+                    // Report attempt without blocking game
+                    navigator.sendBeacon('/api/security/report', JSON.stringify({
+                        type: 'unauthorized_api_access',
+                        url: url,
+                        timestamp: Date.now()
+                    }));
+                } catch (e) {
+                    // Silently fail if beacon fails
+                }
+                
+                // Return failed promise
+                return Promise.reject(new Error('Unauthorized API access attempt detected and blocked'));
+            }
+        }
+        
+        // Proceed with original fetch for allowed requests
+        return originalFetch.apply(this, arguments);
+    };
+    
+    // Also monitor XMLHttpRequest to prevent direct API access
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+        // Check if this is a Supabase request
+        if (typeof url === 'string' && 
+            (url.includes('supabase') || 
+             url.includes('nzifipuunzaneaxdxqjm')) &&
+            !url.includes('/api/proxy/')) {
+            
+            console.error('🛑 SECURITY: Blocked unauthorized direct Supabase API access via XHR:', url);
+            
+            // Report attempt
+            try {
+                navigator.sendBeacon('/api/security/report', JSON.stringify({
+                    type: 'unauthorized_xhr_access',
+                    url: url,
+                    timestamp: Date.now()
+                }));
+            } catch (e) {
+                // Silently fail if beacon fails
+            }
+            
+            // Block the request by pointing it to a non-existent endpoint
+            url = '/api/blocked';
+        }
+        
+        // Call original open with potentially modified url
+        return originalOpen.call(this, method, url, ...rest);
+    };
 })();
