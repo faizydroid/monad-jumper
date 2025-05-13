@@ -138,7 +138,8 @@ export class Player {
         }
 
         // Shooting logic with fixed time intervals factoring deltaTime
-        if (inputHandler.keys.includes(' ') && this.bulletTimer > this.bulletInterval){
+        if ((inputHandler.keys.includes(' ') || inputHandler.keys.includes('w') || inputHandler.keys.includes('W')) && 
+            this.bulletTimer > this.bulletInterval) {
             this.shootTop();
             this.bulletTimer = 0;
         } else {

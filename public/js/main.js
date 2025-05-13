@@ -1537,7 +1537,9 @@ window.addEventListener('load', () => {
                 // Create game controls guide
                 const controlsGuide = document.createElement('div');
                 controlsGuide.id = 'controlsGuide';
-                controlsGuide.innerHTML = '<img src="/images/arrow.png" alt="Left/Right Arrows" style="height: 30px; vertical-align: middle; margin-right: 10px;"> MOVE | <img src="/images/spacebar.png" alt="Spacebar" style="height: 30px; vertical-align: middle; margin: 0 10px;"> SHOOT!';
+                controlsGuide.innerHTML = 
+                    '<img src="/images/arrow.png" alt="Left/Right Arrows" style="height: 30px; vertical-align: middle; margin-right: 10px;"> MOVE (or A/D) | ' + 
+                    '<img src="/images/spacebar.png" alt="Spacebar" style="height: 30px; vertical-align: middle; margin: 0 10px;"> SHOOT (or W)';
                 controlsGuide.style.fontFamily = '"Bangers", cursive';
                 controlsGuide.style.fontSize = '18px';
                 controlsGuide.style.color = 'white';
@@ -1844,6 +1846,21 @@ window.addEventListener('load', () => {
             rightBtn.style.padding = '0';
             rightBtn.style.lineHeight = '1';
             
+            // Create shoot button
+            const shootBtn = document.createElement('button');
+            shootBtn.id = 'shoot-btn';
+            shootBtn.innerText = '🔫';
+            shootBtn.style.width = '70px';
+            shootBtn.style.height = '70px';
+            shootBtn.style.fontSize = '30px';
+            shootBtn.style.backgroundColor = 'rgba(255,215,0,0.7)'; // Gold color
+            shootBtn.style.color = 'white';
+            shootBtn.style.border = 'none';
+            shootBtn.style.borderRadius = '50%';
+            shootBtn.style.padding = '0';
+            shootBtn.style.lineHeight = '1';
+            shootBtn.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+            
             // Add event listeners for buttons
             leftBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
@@ -1865,9 +1882,29 @@ window.addEventListener('load', () => {
                 if (this.player) this.player.stopMoving();
             }, { passive: false });
             
-            // Add buttons to container
-            controlsContainer.appendChild(leftBtn);
-            controlsContainer.appendChild(rightBtn);
+            // Add shoot button event listener
+            shootBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (this.player && this.player.bullets.length < 3) {
+                    this.player.shootTop();
+                    
+                    // Play bullet sound if available
+                    if (window.audioManager) {
+                        window.audioManager.play('bullet', 0.5);
+                    }
+                }
+            }, { passive: false });
+            
+            // Create a movement controls container (left side)
+            const moveControlsContainer = document.createElement('div');
+            moveControlsContainer.style.display = 'flex';
+            moveControlsContainer.style.gap = '20px';
+            moveControlsContainer.appendChild(leftBtn);
+            moveControlsContainer.appendChild(rightBtn);
+            
+            // Add movement controls to left side, shoot button to right side
+            controlsContainer.appendChild(moveControlsContainer);
+            controlsContainer.appendChild(shootBtn);
             
             // Add container to body
             document.body.appendChild(controlsContainer);
