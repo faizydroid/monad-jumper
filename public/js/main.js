@@ -1553,6 +1553,16 @@ window.addEventListener('load', () => {
                 controlsGuide.style.gap = '10px';
                 controlsGuide.style.letterSpacing = '1px';
                 
+                // Add controls visual guide image
+                const controlsImage = document.createElement('img');
+                controlsImage.src = '/images/guide.png';
+                controlsImage.alt = 'Keyboard Controls Guide';
+                controlsImage.style.maxWidth = '250px';
+                controlsImage.style.margin = '15px auto';
+                controlsImage.style.display = 'block';
+                controlsImage.style.opacity = '0';
+                controlsImage.style.transition = 'opacity 0.8s ease';
+                
                 playButton.style.display = 'none'; // Initially hidden
                 playButton.style.opacity = '0';
                 playButton.style.fontSize = '32px';
@@ -1599,6 +1609,7 @@ window.addEventListener('load', () => {
                 
                 startScreen.appendChild(playButton);
                 startScreen.appendChild(controlsGuide); // Add guide below button
+                startScreen.appendChild(controlsImage); // Add image below guide
                 
                 // Add click handler
                 playButton.onclick = () => {
@@ -1637,6 +1648,10 @@ window.addEventListener('load', () => {
                         controlsGuide.style.display = 'block';
                         controlsGuide.style.transition = 'opacity 0.8s ease';
                         controlsGuide.style.opacity = '1';
+                        
+                        // Show keyboard controls image
+                        controlsImage.style.display = 'block';
+                        controlsImage.style.opacity = '1';
                         
                         // Add a bouncy entrance effect
                         playButton.style.transform = 'scale(0.8)';
