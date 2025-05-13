@@ -1661,15 +1661,28 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   
                   console.log(`📊 Updating jumps from ${currentCount} to ${newCount}`);
                   
+                  // Create jump data with session token if available
+                  const jumpUpdateData = {
+                    wallet_address: address.toLowerCase(),
+                    count: newCount
+                  };
+                  
+                  // Use the secure game token for validation if available
+                  if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
+                    jumpUpdateData.session_token = window.__SECURE_GAME_TOKEN.value;
+                  }
+                  
                   // Update the jumps in Supabase
                   await supabase
                     .from('jumps')
-                    .upsert({
-                      wallet_address: address.toLowerCase(),
-                      count: newCount
-                    }, { onConflict: 'wallet_address' });
+                    .upsert(jumpUpdateData, { onConflict: 'wallet_address' });
                   
                   console.log(`📊 Successfully updated jumps in database to ${newCount}`);
+                  
+                  // Mark token as used after the operation
+                  if (window.__SECURE_GAME_TOKEN) {
+                    window.__SECURE_GAME_TOKEN.used = true;
+                  }
                   
                   // Update UI immediately if possible
                   if (window.web3Context && window.web3Context.setTotalJumps) {
@@ -1762,14 +1775,27 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             const currentCount = jumpData?.count || 0;
             const newCount = currentCount + jumpCount;
             
+            // Create a jump data object with the session token if available
+            const jumpUpdateData = {
+              wallet_address: address.toLowerCase(),
+              count: newCount
+            };
+            
+            // Include session token if available
+            if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
+              jumpUpdateData.session_token = window.__SECURE_GAME_TOKEN.value;
+            }
+            
             await supabase
               .from('jumps')
-              .upsert({
-                wallet_address: address.toLowerCase(),
-                count: newCount
-              }, { onConflict: 'wallet_address' });
+              .upsert(jumpUpdateData, { onConflict: 'wallet_address' });
             
             console.log(`📊 Updated jumps in database: ${currentCount} → ${newCount}`);
+            
+            // Mark token as used after operation
+            if (window.__SECURE_GAME_TOKEN) {
+              window.__SECURE_GAME_TOKEN.used = true;
+            }
           }
         } catch (dbError) {
           console.error('Error saving jumps to database:', dbError);
@@ -2759,46 +2785,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           }
         }
         
-        // Handle jump count token messages
-        if (event.data.type === 'JUMP_COUNT_TOKEN') {
-          const token = event.data.token;
-          if (token) {
-            // Set HTTP-only cookie that can't be accessed via console
-            document.cookie = `jumpCountToken=${token}; path=/; SameSite=Strict; HttpOnly; Secure`;
-            
-            // Store in our secure session state
-            if (address) {
-              // Register token with server for validation
-              try {
-                await fetch('/api/register-jump-token', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    address: address,
-                    token: token,
-                    gameId: gameId,
-                    timestamp: Date.now()
-                  }),
-                  credentials: 'include'
-                });
-                console.log('Jump count token registered with server');
-                
-                // Store the token securely in a closure that will be used only for the next jump API request
-                window.__SECURE_JUMP_TOKEN = {
-                  value: token,
-                  used: false,
-                  timestamp: Date.now(),
-                  gameId: gameId
-                };
-              } catch (err) {
-                console.error('Error registering jump count token:', err);
-              }
-            }
-          }
-        }
-        
         // Process specific message types
         if (event.data.type === 'JUMP') {
           const jumpCount = event.data.jumps || 0;
@@ -2814,64 +2800,91 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           }
         }
         
-        // Save jumps with token validation
-        if (event.data.type === 'SAVE_JUMPS') {
-          const jumps = event.data.jumps || 0;
-          const saveId = event.data.saveId;
-          const token = event.data.token || (window.__SECURE_JUMP_TOKEN?.value);
+        if (event.data.type === 'REVIVE_CANCELLED') {
+          console.log('🚫 Revive cancelled with full data:', event.data);
           
-          if (jumps > 0 && saveId && address && token) {
-            console.log(`💾 Received SAVE_JUMPS with ${jumps} jumps, ID: ${saveId}`);
+          // Get jump count from various possible sources
+          const jumpCount = event.data.jumps || 
+                           (event.data.data && event.data.data.jumps) || 
+                           window.__jumpCount || 
+                           iframeRef.current.contentWindow.__jumpCount || 
+                           0;
+          
+          const gameSessionId = event.data.gameId || 
+                               (event.data.data && event.data.data.gameId) || 
+                               gameId;
+          
+          // Get score from event data
+          const score = event.data.score || 
+                       (event.data.data && event.data.data.score) || 
+                       0;
+          
+          console.log(`🚫 Processing cancelled revive with ${jumpCount} jumps for game ${gameSessionId}, score: ${score}`);
+          
+          // Reset revive purchased flag
+          setRevivePurchased(false);
+          
+          try {
+            setTransactionPending(true);
             
-            // First, validate the token
-            let tokenValid = false;
-            try {
-              const validation = await fetch('/api/validate-jump-token', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-jump-count-token': token
-                },
-                body: JSON.stringify({
-                  address: address,
-                  jumpCount: jumps
-                }),
-                credentials: 'include'
-              });
-              
-              const validationResult = await validation.json();
-              tokenValid = validationResult.valid;
-              
-              if (!tokenValid) {
-                console.error('Jump token validation failed:', validationResult.error);
-                return;
+            // IMPORTANT: Process score directly first for high score checking
+            if (score > 0) {
+              // Ensure the score is properly queued
+              if (window.__GAME_TX_QUEUE) {
+                // Reset the queue first to clear any previous state
+                window.__GAME_TX_QUEUE.reset();
+                // Set the score explicitly
+                window.__GAME_TX_QUEUE.finalScore = score;
+                window.__GAME_TX_QUEUE.gameId = gameSessionId;
+                
+                console.log(`🏆 Processing high score ${score} directly after revive cancellation`);
+                // Process the queue with the score
+                await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
+              } else {
+                // Fallback if queue doesn't exist - save score directly
+                console.log(`🏆 Saving high score ${score} directly (no queue available)`);
+                // Direct database save as fallback
+                if (supabase) {
+                  try {
+                    // Check current high score
+                    const { data: existingScore } = await supabase
+                      .from('scores')
+                      .select('score')
+                      .eq('wallet_address', address.toLowerCase())
+                      .order('score', { ascending: false })
+                      .maybeSingle();
+                      
+                    // Only save if higher than existing
+                    if (!existingScore || score > existingScore.score) {
+                      console.log(`Saving new high score ${score} (previous: ${existingScore?.score || 'none'})`);
+                      await supabase.from('scores').insert({
+                        wallet_address: address.toLowerCase(),
+                        score: score,
+                        game_id: gameSessionId,
+                        created_at: new Date().toISOString()
+                      });
+                    }
+                  } catch (err) {
+                    console.error('Error saving score directly:', err);
+                  }
+                }
               }
-              
-              // Mark token as used
-              if (window.__SECURE_JUMP_TOKEN) {
-                window.__SECURE_JUMP_TOKEN.used = true;
-              }
-              
-              // Now actually save the jumps
-              if (web3Context && web3Context.recordBundledJumps) {
-                web3Context.recordBundledJumps(jumps, gameId);
-              }
-              
-              // Use queue as fallback
-              if (window.__txQueue) {
-                window.__txQueue.addJumps(jumps, gameId);
-                window.__txQueue.processQueue();
-              }
-              
-            } catch (error) {
-              console.error('Error validating jump token:', error);
             }
-          } else {
-            console.warn('Invalid SAVE_JUMPS message, missing required data');
+            
+            // Then process jumps if needed
+            if (jumpCount > 0) {
+              console.log(`🚫 Starting jump transaction for ${jumpCount} jumps after revive cancellation`);
+              await recordPlayerJumps(jumpCount, gameSessionId);
+              console.log(`🚫 Revive cancellation jump transaction completed`);
+            }
+          } catch (error) {
+            console.error('❌ Error processing revive cancellation:', error);
+          } finally {
+            setTransactionPending(false);
+            setShowPlayAgain(true);
           }
         }
         
-        // Handle gameOver and record score/jumps
         if (event.data.type === 'gameOver' || event.data.type === 'GAME_OVER') {
           const finalScore = event.data.score || 
                             (event.data.data && event.data.data.finalScore) || 

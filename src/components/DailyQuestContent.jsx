@@ -364,11 +364,22 @@ const DailyQuestContent = ({ onClose }) => {
           newTotal = parseInt(existingJumps.count) + jumpsToAdd;
         }
         
+        // Create the jump data object
+        const jumpData = {
+          wallet_address: address.toLowerCase(),
+          count: newTotal || jumpsToAdd
+        };
+        
+        // Add the session token if available for API validation
+        if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
+          jumpData.session_token = window.__SECURE_GAME_TOKEN.value;
+        }
+        
         // If record exists, update it
         if (existingJumps) {
           const { error: updateError } = await supabase
             .from('jumps')
-            .update({ count: newTotal })
+            .update(jumpData)
             .eq('wallet_address', address.toLowerCase());
             
           if (updateError) {
@@ -381,16 +392,18 @@ const DailyQuestContent = ({ onClose }) => {
         else {
           const { error: insertError } = await supabase
             .from('jumps')
-            .insert({
-              wallet_address: address.toLowerCase(),
-              count: jumpsToAdd
-            });
+            .insert(jumpData);
             
           if (insertError) {
             console.error("Error inserting jumps:", insertError);
           } else {
             console.log(`Inserted new jump record with count: ${jumpsToAdd}`);
           }
+        }
+        
+        // Mark token as used
+        if (window.__SECURE_GAME_TOKEN) {
+          window.__SECURE_GAME_TOKEN.used = true;
         }
         
         // Call fetchPlayerStats to update the UI
@@ -751,7 +764,7 @@ const DailyQuestContent = ({ onClose }) => {
       </button>
       
       {/* Daily Claim title centered above calendar */}
-      <h2 className="section-title daily-claim-title">Daily Claim</h2>
+      <h2 className="section-title daily-claim-title bangers-font">Daily Claim</h2>
       
       <div className="main-content-wrapper">
         {/* Calendar UI */}

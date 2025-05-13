@@ -59,29 +59,67 @@ export const setupSessionValidation = (supabaseClient) => {
       // Store original insert method
       const originalInsert = builder.insert.bind(builder);
       
-      // Override insert method for 'scores' table only
-      if (table === 'scores') {
-        builder.insert = function(data, options = {}) {
-          console.log('Intercepted scores insert:', data);
+      // Store original update method for jumps table
+      const originalUpdate = builder.update.bind(builder);
+      
+      // Store original upsert method for jumps table
+      const originalUpsert = builder.upsert.bind(builder);
+      
+      // Create a function to handle token validation for all operations
+      const addSessionTokenToOptions = (data, options = {}) => {
+        console.log(`Intercepted ${table} operation:`, data);
+        
+        try {
+          // Ensure options.headers exists
+          options.headers = options.headers || {};
           
-          try {
-            // Ensure options.headers exists
-            options.headers = options.headers || {};
+          // Check for session token in window global
+          if (window.__SECURE_GAME_TOKEN?.value && !window.__SECURE_GAME_TOKEN.used) {
+            // Add token to request headers
+            options.headers['x-game-session-token'] = window.__SECURE_GAME_TOKEN.value;
+            console.log(`Added session token to ${table} request headers`);
             
-            // Check for session token in data
-            if (data.session_token) {
-              // Add token to request headers
-              options.headers['x-game-session-token'] = data.session_token;
-              console.log('Added session token to request headers');
-            }
-            
-            // Call original insert with our modified options
-            return originalInsert(data, options);
-          } catch (error) {
-            console.error('Error in session validation middleware:', error);
-            // Fall back to original behavior
-            return originalInsert(data);
+            // Mark as used after adding to headers
+            window.__SECURE_GAME_TOKEN.used = true;
           }
+          // Also check for session token in data object
+          else if (data.session_token) {
+            // Add token to request headers
+            options.headers['x-game-session-token'] = data.session_token;
+            console.log(`Added session token from data to ${table} request headers`);
+            
+            // Remove from the data to avoid storing it in the database
+            if (Array.isArray(data)) {
+              data.forEach(item => delete item.session_token);
+            } else {
+              delete data.session_token;
+            }
+          }
+          
+          return options;
+        } catch (error) {
+          console.error(`Error in session validation middleware for ${table}:`, error);
+          return options;
+        }
+      };
+      
+      // Override insert method for protected tables
+      if (table === 'scores' || table === 'jumps') {
+        builder.insert = function(data, options = {}) {
+          options = addSessionTokenToOptions(data, options);
+          return originalInsert(data, options);
+        };
+        
+        // Also protect update operations for jumps table
+        builder.update = function(data, options = {}) {
+          options = addSessionTokenToOptions(data, options);
+          return originalUpdate(data, options);
+        };
+        
+        // Also protect upsert operations for jumps table
+        builder.upsert = function(data, options = {}) {
+          options = addSessionTokenToOptions(data, options);
+          return originalUpsert(data, options);
         };
       }
       
