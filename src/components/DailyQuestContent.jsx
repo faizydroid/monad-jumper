@@ -364,41 +364,35 @@ const DailyQuestContent = ({ onClose }) => {
           newTotal = parseInt(existingJumps.count) + jumpsToAdd;
         }
         
-        // Create the jump data object
-        const jumpData = {
-          wallet_address: address.toLowerCase(),
-          count: newTotal || jumpsToAdd
+        // Get the session token if available
+        const token = window.__SECURE_GAME_TOKEN?.value;
+        const headers = {
+          'Content-Type': 'application/json'
         };
         
-        // Add the session token if available for API validation
-        if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
-          jumpData.session_token = window.__SECURE_GAME_TOKEN.value;
+        // Add token to headers if available
+        if (token) {
+          headers['x-game-session-token'] = token;
         }
         
-        // If record exists, update it
-        if (existingJumps) {
-          const { error: updateError } = await supabase
-            .from('jumps')
-            .update(jumpData)
-            .eq('wallet_address', address.toLowerCase());
-            
-          if (updateError) {
-            console.error("Error updating jumps:", updateError);
-          } else {
-            console.log(`Updated jump count to: ${newTotal}`);
-          }
-        } 
-        // If no record, insert new one
-        else {
-          const { error: insertError } = await supabase
-            .from('jumps')
-            .insert(jumpData);
-            
-          if (insertError) {
-            console.error("Error inserting jumps:", insertError);
-          } else {
-            console.log(`Inserted new jump record with count: ${jumpsToAdd}`);
-          }
+        // Use secure backend proxy endpoint
+        const sessionId = `daily_quest_${Date.now()}`;
+        const response = await fetch('/api/secure/jumps', {
+          method: 'POST',
+          headers: headers,
+          credentials: 'include',
+          body: JSON.stringify({
+            wallet_address: address.toLowerCase(),
+            count: jumpsToAdd,
+            game_id: sessionId
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("Error updating jumps:", errorData);
+        } else {
+          console.log(`Updated jump count to: ${newTotal}`);
         }
         
         // Mark token as used

@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { setupSessionValidation } from '../middleware/sessionValidation';
 
 // Check if the environment variables are defined
 const supabaseUrl = import.meta.env.VITE_REACT_APP_SUPABASE_URL;
@@ -12,9 +11,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   });
 }
 
-console.log('Initializing Supabase client...');
+console.log('Initializing Supabase client with anon key only...');
 
-// Create the Supabase client
+// Create the Supabase client with anon key (restricted permissions)
 const supabaseClient = createClient(
   supabaseUrl,
   supabaseAnonKey,
@@ -30,12 +29,9 @@ const supabaseClient = createClient(
   }
 );
 
-// For debugging, add a flag to see if this file gets imported
-window.__SUPABASE_CLIENT_INITIALIZED = true;
+// For debugging, add a flag to indicate this is the anon key client
+supabaseClient.isAnonKeyClient = true;
 
-// Apply session validation middleware
-console.log('Applying session validation middleware...');
-export const supabase = setupSessionValidation(supabaseClient);
+export const supabase = supabaseClient;
 
-// Export the original client for testing/debugging
-export const originalClient = supabaseClient; 
+export default supabase; 

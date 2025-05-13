@@ -1559,31 +1559,32 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   scoreObject.revive_used = window.__reviveUsedForGameId === sessionId;
                 }
                 
-                // Add the secure game session token if available
-                if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
-                  scoreObject.session_token = window.__SECURE_GAME_TOKEN.value;
-                  // Mark token as used
-                  window.__SECURE_GAME_TOKEN.used = true;
-                }
-                
                 // Log the complete score object before sending
                 console.log('Score object to insert:', JSON.stringify(scoreObject));
                 
                 try {
-                  // Basic insert without chaining additional operations
-                  const { data, error } = await supabase
-                    .from('scores')
-                    .insert(scoreObject);
+                  // Get the session token if available
+                  const token = window.__SECURE_GAME_TOKEN?.value;
+                  const headers = {
+                    'Content-Type': 'application/json'
+                  };
                   
-                  if (error) {
-                    console.error('Error recording score in database:', error);
-                    // Log detailed error information
-                    console.error('Error details:', {
-                      message: error.message,
-                      details: error.details,
-                      hint: error.hint,
-                      code: error.code
-                    });
+                  // Add token to headers if available
+                  if (token) {
+                    headers['x-game-session-token'] = token;
+                  }
+                  
+                  // Use secure backend proxy endpoint instead of direct Supabase access
+                  const response = await fetch('/api/secure/scores', {
+                    method: 'POST',
+                    headers: headers,
+                    credentials: 'include',
+                    body: JSON.stringify(scoreObject)
+                  });
+                  
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Error recording score in database:', errorData);
                   } else {
                     console.log(`✅ Score recorded successfully in database`);
                     
@@ -1661,23 +1662,36 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   
                   console.log(`📊 Updating jumps from ${currentCount} to ${newCount}`);
                   
-                  // Create jump data with session token if available
-                  const jumpUpdateData = {
-                    wallet_address: address.toLowerCase(),
-                    count: newCount
+                  // Use the secure endpoint for updating jumps
+                  const token = window.__SECURE_GAME_TOKEN?.value;
+                  const headers = {
+                    'Content-Type': 'application/json'
                   };
                   
-                  // Use the secure game token for validation if available
-                  if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
-                    jumpUpdateData.session_token = window.__SECURE_GAME_TOKEN.value;
+                  // Add token to headers if available
+                  if (token) {
+                    headers['x-game-session-token'] = token;
                   }
                   
-                  // Update the jumps in Supabase
-                  await supabase
-                    .from('jumps')
-                    .upsert(jumpUpdateData, { onConflict: 'wallet_address' });
+                  // Use secure backend proxy endpoint
+                  const sessionId = `queue_${Date.now()}`;
+                  const response = await fetch('/api/secure/jumps', {
+                    method: 'POST',
+                    headers: headers,
+                    credentials: 'include',
+                    body: JSON.stringify({
+                      wallet_address: address.toLowerCase(),
+                      count: this.jumps,
+                      game_id: sessionId
+                    })
+                  });
                   
-                  console.log(`📊 Successfully updated jumps in database to ${newCount}`);
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("Error updating jumps:", errorData);
+                  } else {
+                    console.log(`📊 Successfully updated jumps in database to ${newCount}`);
+                  }
                   
                   // Mark token as used after the operation
                   if (window.__SECURE_GAME_TOKEN) {
@@ -1775,22 +1789,36 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             const currentCount = jumpData?.count || 0;
             const newCount = currentCount + jumpCount;
             
-            // Create a jump data object with the session token if available
-            const jumpUpdateData = {
-              wallet_address: address.toLowerCase(),
-              count: newCount
+            // Use the secure endpoint for updating jumps
+            const token = window.__SECURE_GAME_TOKEN?.value;
+            const headers = {
+              'Content-Type': 'application/json'
             };
             
-            // Include session token if available
-            if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
-              jumpUpdateData.session_token = window.__SECURE_GAME_TOKEN.value;
+            // Add token to headers if available
+            if (token) {
+              headers['x-game-session-token'] = token;
             }
             
-            await supabase
-              .from('jumps')
-              .upsert(jumpUpdateData, { onConflict: 'wallet_address' });
+            // Use secure backend proxy endpoint
+            const sessionId = `blockchain_tx_${Date.now()}`;
+            const response = await fetch('/api/secure/jumps', {
+              method: 'POST',
+              headers: headers,
+              credentials: 'include',
+              body: JSON.stringify({
+                wallet_address: address.toLowerCase(),
+                count: jumpCount,
+                game_id: sessionId
+              })
+            });
             
-            console.log(`📊 Updated jumps in database: ${currentCount} → ${newCount}`);
+            if (!response.ok) {
+              const errorData = await response.json();
+              console.error("Error updating jumps:", errorData);
+            } else {
+              console.log(`📊 Updated jumps in database: ${currentCount} → ${newCount}`);
+            }
             
             // Mark token as used after operation
             if (window.__SECURE_GAME_TOKEN) {
