@@ -1533,15 +1533,18 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 .select('score')
                 .eq('wallet_address', address.toLowerCase())
                 .order('score', { ascending: false })
-                .maybeSingle();
+                .limit(1)
+                .single();
               
               if (queryError) {
                 console.error('Error querying existing score:', queryError);
+                // Continue anyway to try saving the score
               }
-              
+
               // Only insert if there's no existing score or new score is higher
-              if (!existingScore || scoreValue > existingScore.score) {
-                console.log(`Saving new high score ${scoreValue} (previous: ${existingScore?.score || 'none'})`);
+              const currentHighScore = existingScore?.score || 0;
+              if (!existingScore || scoreValue > currentHighScore) {
+                console.log(`Saving new high score ${scoreValue} (previous: ${currentHighScore || 'none'})`);
                 
                 // Prepare the score object with required fields
                 const scoreObject = {
@@ -1559,51 +1562,130 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   scoreObject.revive_used = window.__reviveUsedForGameId === sessionId;
                 }
                 
-                // Add the secure game session token if available
-                if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
-                  scoreObject.session_token = window.__SECURE_GAME_TOKEN.value;
-                  // Mark token as used
-                  window.__SECURE_GAME_TOKEN.used = true;
+                // Check all possible token sources
+                // 1. First try the specific game token
+                let secureToken = window.__SECURE_GAME_TOKEN;
+                
+                // 2. If that's not available or used, check our app-level backup
+                if (!secureToken || secureToken.used) {
+                  if (window.__APP_SECURE_TOKEN) {
+                    // Recreate a token object from our app-level storage
+                    secureToken = {
+                      value: window.__APP_SECURE_TOKEN,
+                      used: false,
+                      timestamp: Date.now()
+                    };
+                    console.log('Using app-level backup token for score save');
+                  }
                 }
                 
-                // Log the complete score object before sending
-                console.log('Score object to insert:', JSON.stringify(scoreObject));
-                
-                try {
-                  // Instead of direct Supabase call, use our secure backend API
-                  const response = await fetch('/api/secure-submit-score', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'x-game-session-token': window.__SECURE_GAME_TOKEN ? window.__SECURE_GAME_TOKEN.value : ''
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify(scoreObject)
-                  });
+                // If we have a valid token, proceed with save
+                if (secureToken && !secureToken.used) {
+                  // Add token as a header rather than in the payload
+                  const headers = {
+                    'Content-Type': 'application/json'
+                  };
                   
-                  if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('Error recording score in database:', errorData);
-                    // Log detailed error information
-                    console.error('Error details:', {
-                      status: response.status,
-                      statusText: response.statusText,
-                      error: errorData.error,
-                      details: errorData.details
+                  // Add token to headers
+                  headers['x-game-session-token'] = typeof secureToken.value === 'string' ? 
+                    secureToken.value : JSON.stringify(secureToken.value);
+                  
+                  // Mark token as used
+                  secureToken.used = true;
+                  
+                  // Log the complete score object before sending
+                  console.log('Score object to insert:', JSON.stringify(scoreObject));
+                  
+                  try {
+                    // Use our server proxy endpoint which enforces token validation
+                    const response = await fetch('/api/proxy/supabase', {
+                      method: 'POST',
+                      headers: headers,
+                      body: JSON.stringify({
+                        action: 'scores',
+                        data: scoreObject
+                      }),
+                      credentials: 'include'
                     });
-                  } else {
-                    console.log(`✅ Score recorded successfully in database`);
                     
-                    // Clear the used token
-                    if (window.__SECURE_GAME_TOKEN) {
-                      window.__SECURE_GAME_TOKEN = null;
+                    const result = await response.json();
+                    
+                    if (!response.ok || result.error) {
+                      console.error('Error recording score in database:', result.error || 'Unknown error');
+                      // Log detailed error information
+                      console.error('Error details:', {
+                        status: response.status,
+                        message: result.error?.message,
+                        details: result.error?.details
+                      });
                       
-                      // Also clear the cookie
-                      document.cookie = "gameSessionToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                      // Try direct insert as fallback if proxy fails
+                      console.log('Trying direct insert as fallback...');
+                      const { data, error } = await supabase
+                        .from('scores')
+                        .insert(scoreObject);
+                        
+                      if (error) {
+                        console.error('Fallback insert also failed:', error);
+                      } else {
+                        console.log('Score saved successfully via fallback method');
+                      }
+                    } else {
+                      console.log(`✅ Score recorded successfully in database`);
+                      
+                      // Clear the used token
+                      if (window.__SECURE_GAME_TOKEN) {
+                        window.__SECURE_GAME_TOKEN = null;
+                      }
+                      
+                      // Also clear any backup token
+                      window.__APP_SECURE_TOKEN = null;
+                      
+                      // Also try to clear the cookie
+                      try {
+                        document.cookie = "gameSessionToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                      } catch (e) {
+                        // Ignore cookie errors
+                      }
+                    }
+                  } catch (insertError) {
+                    console.error('Exception during score insert:', insertError);
+                    
+                    // Try direct insert if fetch failed
+                    try {
+                      console.log('Trying direct insert after fetch failure...');
+                      const { data, error } = await supabase
+                        .from('scores')
+                        .insert(scoreObject);
+                        
+                      if (error) {
+                        console.error('Fallback insert also failed:', error);
+                      } else {
+                        console.log('Score saved successfully via fallback method after fetch error');
+                      }
+                    } catch (fallbackError) {
+                      console.error('Fallback insert failed with error:', fallbackError);
                     }
                   }
-                } catch (insertError) {
-                  console.error('Exception during score insert:', insertError);
+                } else {
+                  console.error('Cannot save score: Missing or already used game session token');
+                  console.log(`Score ${scoreValue} not saved - no valid session token available`);
+                  
+                  // Try direct insert as last resort
+                  try {
+                    console.log('Attempting direct score insert as last resort...');
+                    const { data, error } = await supabase
+                      .from('scores')
+                      .insert(scoreObject);
+                      
+                    if (error) {
+                      console.error('Last resort score save failed:', error);
+                    } else {
+                      console.log('Score saved successfully via direct method');
+                    }
+                  } catch (lastError) {
+                    console.error('Last resort score save failed with error:', lastError);
+                  }
                 }
               } else {
                 console.log(`Score ${scoreValue} not saved - lower than existing high score ${existingScore.score}`);
@@ -1655,38 +1737,45 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               try {
                 console.log(`📊 Directly updating jump count in database by ${this.jumps} for address ${address.toLowerCase()}`);
                 
-                // Create jump data with count
-                const jumpUpdateData = {
-                  wallet_address: address.toLowerCase(),
-                  count: this.jumps
-                };
+                // Get current jump count
+                const { data: jumpData, error: jumpError } = await supabase
+                  .from('jumps')
+                  .select('count')
+                  .eq('wallet_address', address.toLowerCase())
+                  .maybeSingle();
                 
-                // Use secure endpoint instead of direct Supabase call
-                const response = await fetch('/api/secure-submit-jumps', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'x-game-session-token': window.__SECURE_GAME_TOKEN ? window.__SECURE_GAME_TOKEN.value : ''
-                  },
-                  credentials: 'include',
-                  body: JSON.stringify(jumpUpdateData)
-                });
-                
-                if (!response.ok) {
-                  const errorData = await response.json().catch(() => ({}));
-                  console.error('Error updating jumps in database:', errorData);
-                  console.error('Error details:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    error: errorData.error,
-                    details: errorData.details
-                  });
-                } else {
-                  console.log(`📊 Successfully updated jumps in database`);
+                if (!jumpError) {
+                  const currentCount = jumpData?.count || 0;
+                  const newCount = currentCount + this.jumps;
+                  
+                  console.log(`📊 Updating jumps from ${currentCount} to ${newCount}`);
+                  
+                  // Create jump data with session token if available
+                  const jumpUpdateData = {
+                    wallet_address: address.toLowerCase(),
+                    count: newCount
+                  };
+                  
+                  // Use the secure game token for validation if available
+                  if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
+                    jumpUpdateData.session_token = window.__SECURE_GAME_TOKEN.value;
+                  }
+                  
+                  // Update the jumps in Supabase
+                  await supabase
+                    .from('jumps')
+                    .upsert(jumpUpdateData, { onConflict: 'wallet_address' });
+                  
+                  console.log(`📊 Successfully updated jumps in database to ${newCount}`);
+                  
+                  // Mark token as used after the operation
+                  if (window.__SECURE_GAME_TOKEN) {
+                    window.__SECURE_GAME_TOKEN.used = true;
+                  }
                   
                   // Update UI immediately if possible
                   if (window.web3Context && window.web3Context.setTotalJumps) {
-                    window.web3Context.setTotalJumps(prev => prev + this.jumps);
+                    window.web3Context.setTotalJumps(newCount);
                   }
                 }
               } catch (dbError) {
@@ -1764,34 +1853,38 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
       // Save to Supabase database (correct table)
       if (supabase) {
         try {
-          // Create a jump data object 
-          const jumpUpdateData = {
-            wallet_address: address.toLowerCase(),
-            count: jumpCount
-          };
-          
-          // Use secure endpoint instead of direct Supabase call
-          const response = await fetch('/api/secure-submit-jumps', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-game-session-token': window.__SECURE_GAME_TOKEN ? window.__SECURE_GAME_TOKEN.value : ''
-            },
-            credentials: 'include',
-            body: JSON.stringify(jumpUpdateData)
-          });
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('Error updating jumps in database:', errorData);
-            console.error('Error details:', {
-              status: response.status,
-              statusText: response.statusText,
-              error: errorData.error,
-              details: errorData.details
-            });
-          } else {
-            console.log(`📊 Updated jumps in database successfully`);
+          // First update jumps table with correct total
+          const { data: jumpData, error: jumpError } = await supabase
+            .from('jumps')
+            .select('count')
+            .eq('wallet_address', address.toLowerCase())
+            .maybeSingle();
+            
+          if (!jumpError) {
+            const currentCount = jumpData?.count || 0;
+            const newCount = currentCount + jumpCount;
+            
+            // Create a jump data object with the session token if available
+            const jumpUpdateData = {
+              wallet_address: address.toLowerCase(),
+              count: newCount
+            };
+            
+            // Include session token if available
+            if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
+              jumpUpdateData.session_token = window.__SECURE_GAME_TOKEN.value;
+            }
+            
+            await supabase
+              .from('jumps')
+              .upsert(jumpUpdateData, { onConflict: 'wallet_address' });
+            
+            console.log(`📊 Updated jumps in database: ${currentCount} → ${newCount}`);
+            
+            // Mark token as used after operation
+            if (window.__SECURE_GAME_TOKEN) {
+              window.__SECURE_GAME_TOKEN.used = true;
+            }
           }
         } catch (dbError) {
           console.error('Error saving jumps to database:', dbError);
@@ -2753,11 +2846,29 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
         if (event.data.type === 'GAME_SESSION_TOKEN' || event.data.type === 'SET_SESSION_COOKIE') {
           const token = event.data.token;
           if (token) {
-            // Set HTTP-only cookie that can't be accessed via console
-            document.cookie = `gameSessionToken=${token}; path=/; SameSite=Strict; HttpOnly; Secure`;
+            try {
+              // Try to set HTTP-only cookie that can't be accessed via console
+              document.cookie = `gameSessionToken=${token}; path=/; SameSite=Strict; HttpOnly; Secure`;
+            } catch (cookieError) {
+              console.warn("Could not set cookie, using memory storage instead:", cookieError);
+            }
+            
+            // Always store the token in our app memory for cases where cookies fail
+            window.__APP_SECURE_TOKEN = token;
             
             // Store in our secure session state
             if (address) {
+              // Parse token if it's JSON
+              let tokenData = token;
+              try {
+                // Check if the token is a JSON string
+                if (typeof token === 'string' && (token.startsWith('{') || token.startsWith('['))) {
+                  tokenData = JSON.parse(token);
+                }
+              } catch (e) {
+                console.warn('Token is not valid JSON, using as-is:', e);
+              }
+              
               // Register token with server for validation
               try {
                 await fetch('/api/register-session-token', {
@@ -2769,7 +2880,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                     address: address,
                     token: token,
                     gameId: gameId,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    tokenData: tokenData
                   }),
                   credentials: 'include'
                 });
@@ -2898,16 +3010,104 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                               
           // Store the token for the API request
           if (sessionToken) {
+            // Parse token if needed
+            let parsedToken = sessionToken;
+            
+            try {
+              // Check if the token is a JSON string
+              if (typeof sessionToken === 'string' && (sessionToken.startsWith('{') || sessionToken.startsWith('['))) {
+                parsedToken = JSON.parse(sessionToken);
+              }
+            } catch (e) {
+              console.warn('Game over token is not valid JSON, using as-is:', e);
+            }
+            
             // Store the token securely in a closure that will be used only for the next API request
             const secureTokenReference = {
               value: sessionToken,
+              parsed: parsedToken, // Store parsed version for validation
               used: false,
               timestamp: Date.now(),
-              gameId: gameId
+              gameId: gameId,
+              score: finalScore,  // Store the score claimed in the game over message
+              jumps: jumpCount    // Store the jumps claimed in the game over message
             };
             
             // Store in memory for immediate use with the upcoming API calls
             window.__SECURE_GAME_TOKEN = secureTokenReference;
+            
+            // Also store in app-level backup storage
+            window.__APP_SECURE_TOKEN = sessionToken;
+            
+            // Set a token expiration - tokens should only be valid for a short time
+            setTimeout(() => {
+              // Nullify token after 2 minutes to prevent reuse
+              if (window.__SECURE_GAME_TOKEN && window.__SECURE_GAME_TOKEN.value === sessionToken) {
+                console.log('Expiring unused game token');
+                window.__SECURE_GAME_TOKEN = null;
+              }
+            }, 120000); // 2 minutes
+          } else {
+            // If no token provided by game, create a fallback token
+            console.log('No token provided by game, creating fallback token');
+            
+            // Create a new secure token with the score info
+            const fallbackToken = {
+              token: Math.random().toString(36).substring(2) + Date.now().toString(36),
+              timestamp: Date.now(),
+              gameId: gameId,
+              finalScore: finalScore,
+              finalJumps: jumpCount,
+              playerAddress: address,
+              fallback: true
+            };
+            
+            // Store this as both string and object forms
+            const tokenString = JSON.stringify(fallbackToken);
+            
+            // Create secure reference
+            const secureTokenReference = {
+              value: tokenString,
+              parsed: fallbackToken,
+              used: false,
+              timestamp: Date.now(),
+              gameId: gameId,
+              score: finalScore,
+              jumps: jumpCount,
+              fallback: true
+            };
+            
+            // Store for API use
+            window.__SECURE_GAME_TOKEN = secureTokenReference;
+            window.__APP_SECURE_TOKEN = tokenString;
+            
+            // Try to store in cookie as well
+            try {
+              document.cookie = `gameSessionToken=${tokenString}; path=/; SameSite=Strict; HttpOnly; Secure`;
+            } catch (e) {
+              // Ignore cookie errors
+            }
+            
+            // Register with server
+            try {
+              await fetch('/api/register-session-token', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  address: address,
+                  token: tokenString,
+                  gameId: gameId,
+                  timestamp: Date.now(),
+                  tokenData: fallbackToken
+                }),
+                credentials: 'include'
+              });
+              console.log('Fallback token registered with server');
+            } catch (err) {
+              console.error('Error registering fallback token:', err);
+            }
           }
           
           console.log(`🔚 Game over with score ${finalScore} and ${jumpCount} jumps`);

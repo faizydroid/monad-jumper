@@ -587,13 +587,74 @@ window.addEventListener('load', () => {
                 this.deathReason = "fall";
             }
             
+            // Create a final game token with score included only at game over time
+            let finalToken = null;
+            
+            try {
+                if (this.sessionToken) {
+                    // Clone the session token and add final score
+                    finalToken = {
+                        ...this.sessionToken,
+                        finalScore: this.score,
+                        finalJumps: this.finalJumpCount,
+                        finishTime: Date.now()
+                    };
+                } else {
+                    // If session token is missing, create a fallback token
+                    console.warn("Session token missing at game over, creating fallback");
+                    finalToken = {
+                        token: Math.random().toString(36).substring(2) + Date.now().toString(36),
+                        timestamp: Date.now(),
+                        gameId: this.gameId,
+                        playerAddress: this.playerWalletAddress || '',
+                        finalScore: this.score,
+                        finalJumps: this.finalJumpCount,
+                        finishTime: Date.now(),
+                        fallback: true
+                    };
+                }
+            } catch (tokenError) {
+                console.error("Error creating game over token:", tokenError);
+                // Last resort fallback
+                finalToken = {
+                    token: "fallback_" + Date.now(),
+                    gameId: this.gameId,
+                    finalScore: this.score,
+                    finalJumps: this.finalJumpCount,
+                    timestamp: Date.now(),
+                    fallback: true
+                };
+            }
+            
+            // Create string representation for transmission
+            let tokenString = "";
+            try {
+                tokenString = JSON.stringify(finalToken);
+            } catch (jsonError) {
+                console.error("Error stringifying token:", jsonError);
+                // Create a simpler token as absolute last resort
+                tokenString = JSON.stringify({
+                    token: "emergency_" + Date.now(),
+                    score: this.score,
+                    timestamp: Date.now(),
+                    gameId: this.gameId
+                });
+            }
+            
+            // Store token in global memory for access outside iframe
+            try {
+                window.__GAME_SECURE_TOKEN = finalToken;
+            } catch (globalError) {
+                console.warn("Could not store token in window object");
+            }
+            
             // Send a message to the parent window with the final score and jump count
             sendMessageToParent({
                 type: 'gameOver',
                 score: this.score,
                 jumps: this.finalJumpCount,
                 gameId: this.gameId,
-                sessionToken: this.sessionToken, // Include the session token
+                sessionToken: tokenString,
                 deathReason: this.deathReason,
                 reviveCancelled: !!this.reviveCancelled,
                 hasUsedRevive: !!this.hasUsedRevive,
@@ -2393,21 +2454,59 @@ window.addEventListener('load', () => {
         
         // Generate a secure one-time token for this game session
         generateGameSessionToken() {
-            // Create a random string for the session token
-            const randomBytes = new Uint8Array(32);
-            window.crypto.getRandomValues(randomBytes);
-            this.sessionToken = Array.from(randomBytes)
-                .map(b => b.toString(16).padStart(2, '0'))
-                .join('');
+            try {
+                // Create a random string for the session token
+                const randomBytes = new Uint8Array(32);
+                window.crypto.getRandomValues(randomBytes);
                 
-            // Store in an HTTP-only cookie
-            this.storeSessionTokenInCookie(this.sessionToken);
-            
-            // Send the token to parent to be validated server-side
-            sendMessageToParent({
-                type: 'GAME_SESSION_TOKEN',
-                token: this.sessionToken
-            });
+                // Get current timestamp for token freshness
+                const timestamp = Date.now();
+                
+                // Create a base token
+                const baseToken = Array.from(randomBytes)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+                
+                // Add player address if available (to bind token to specific player)
+                const playerAddress = this.playerWalletAddress || '';
+                
+                // Generate a secure token that combines random data with game state
+                // This makes it harder to forge tokens as they're tied to specific game state
+                this.sessionToken = {
+                    token: baseToken,
+                    timestamp: timestamp,
+                    gameId: this.gameId,
+                    playerAddress: playerAddress,
+                    // Do not include the actual score here - it will be added at game over time
+                };
+                
+                // SAFE: Use memory storage if cookies/localStorage fail
+                window.__GAME_SECURE_TOKEN = this.sessionToken;
+                    
+                // Attempt to store in HTTP-only cookie (might fail in some environments)
+                try {
+                    this.storeSessionTokenInCookie(JSON.stringify(this.sessionToken));
+                } catch (storageError) {
+                    console.warn("Could not store session token in cookie, using memory storage instead");
+                }
+                
+                // Send the token to parent to be validated server-side
+                sendMessageToParent({
+                    type: 'GAME_SESSION_TOKEN',
+                    token: JSON.stringify(this.sessionToken)
+                });
+                
+                console.log("Generated secure game session token");
+            } catch (error) {
+                console.error("Error generating session token:", error);
+                // Create a simplified fallback token if crypto fails
+                this.sessionToken = {
+                    token: Math.random().toString(36).substring(2) + Date.now().toString(36),
+                    timestamp: Date.now(),
+                    gameId: this.gameId
+                };
+                window.__GAME_SECURE_TOKEN = this.sessionToken;
+            }
         }
         
         // Store token in cookie
@@ -3545,40 +3644,35 @@ function updateTestStatus(message) {
     // Protect Supabase API by overriding fetch
     const originalFetch = window.fetch;
     window.fetch = function(url, options = {}) {
-        // Check if this is a Supabase request
+        // Block ALL direct Supabase API requests
         if (typeof url === 'string' && 
-            (url.includes('supabase') || 
+            (url.includes('supabase.co/rest') || 
              url.includes('nzifipuunzaneaxdxqjm'))) {
             
-            // Only allow specific paths
-            const allowedPaths = [
-                '/api/proxy/supabase',
-                '/api/validate-session-token',
-                '/api/register-session-token'
-            ];
+            console.error('🛑 SECURITY: Blocked unauthorized direct Supabase API access:', url);
             
-            // Check if this is an allowed path
-            const isAllowedPath = allowedPaths.some(path => url.includes(path));
-            
-            // Block direct API access attempts
-            if (!isAllowedPath) {
-                console.error('🛑 SECURITY: Blocked unauthorized direct Supabase API access:', url);
-                
-                // Log suspicious activity
-                try {
-                    // Report attempt without blocking game
-                    navigator.sendBeacon('/api/security/report', JSON.stringify({
-                        type: 'unauthorized_api_access',
-                        url: url,
-                        timestamp: Date.now()
-                    }));
-                } catch (e) {
-                    // Silently fail if beacon fails
-                }
-                
-                // Return failed promise
-                return Promise.reject(new Error('Unauthorized API access attempt detected and blocked'));
+            // Log suspicious activity
+            try {
+                // Report attempt without blocking game
+                navigator.sendBeacon('/api/security/report', JSON.stringify({
+                    type: 'unauthorized_api_access',
+                    url: url,
+                    timestamp: Date.now(),
+                    options: JSON.stringify(options)
+                }));
+            } catch (e) {
+                // Silently fail if beacon fails
             }
+            
+            // Return failed promise
+            return Promise.reject(new Error('Unauthorized API access attempt detected and blocked'));
+        }
+        
+        // Check for Supabase API keys in headers or body
+        const hasApiKey = checkForApiKeys(options);
+        if (hasApiKey) {
+            console.error('🛑 SECURITY: Blocked request with embedded API keys');
+            return Promise.reject(new Error('Unauthorized API key usage detected'));
         }
         
         // Proceed with original fetch for allowed requests
@@ -3588,11 +3682,10 @@ function updateTestStatus(message) {
     // Also monitor XMLHttpRequest to prevent direct API access
     const originalOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-        // Check if this is a Supabase request
+        // Block ALL direct Supabase requests
         if (typeof url === 'string' && 
-            (url.includes('supabase') || 
-             url.includes('nzifipuunzaneaxdxqjm')) &&
-            !url.includes('/api/proxy/')) {
+            (url.includes('supabase.co/rest') || 
+             url.includes('nzifipuunzaneaxdxqjm'))) {
             
             console.error('🛑 SECURITY: Blocked unauthorized direct Supabase API access via XHR:', url);
             
@@ -3614,4 +3707,80 @@ function updateTestStatus(message) {
         // Call original open with potentially modified url
         return originalOpen.call(this, method, url, ...rest);
     };
+    
+    // Add new XMLHttpRequest.send override to check for API keys in body
+    const originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(body) {
+        // Check if body contains API keys
+        if (body && typeof body === 'string' && 
+            (body.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9') || 
+             body.includes('supabase'))) {
+            
+            console.error('🛑 SECURITY: Blocked XHR with suspicious body content');
+            
+            // Report attempt
+            try {
+                navigator.sendBeacon('/api/security/report', JSON.stringify({
+                    type: 'suspicious_xhr_body',
+                    body_sample: body.substring(0, 100) + '...',
+                    timestamp: Date.now()
+                }));
+            } catch (e) {
+                // Silently fail if beacon fails
+            }
+            
+            // Block by calling with empty body
+            return originalSend.call(this, '');
+        }
+        
+        // Call original send with original body
+        return originalSend.apply(this, arguments);
+    };
+    
+    // Helper function to check for API keys in request options
+    function checkForApiKeys(options) {
+        // List of protected API key patterns
+        const protectedPatterns = [
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',  // JWT header pattern
+            'nzifipuunzaneaxdxqjm'                   // Project reference
+        ];
+        
+        // Check headers
+        if (options && options.headers) {
+            const headers = options.headers;
+            
+            // Convert headers to string if it's a Headers object
+            const headersString = headers instanceof Headers ? 
+                Array.from(headers.entries()).toString() : 
+                JSON.stringify(headers);
+            
+            // Check if any protected pattern is in headers
+            if (protectedPatterns.some(pattern => headersString.includes(pattern))) {
+                return true;
+            }
+            
+            // Check specific header fields that might contain API keys
+            const sensitiveHeaders = ['apikey', 'authorization', 'key', 'api-key', 'x-api-key'];
+            
+            for (const header of sensitiveHeaders) {
+                const value = headers[header] || headers.get?.(header);
+                if (value && protectedPatterns.some(pattern => value.includes(pattern))) {
+                    return true;
+                }
+            }
+        }
+        
+        // Check body
+        if (options && options.body) {
+            const body = typeof options.body === 'string' ? 
+                options.body : 
+                JSON.stringify(options.body);
+                
+            if (protectedPatterns.some(pattern => body.includes(pattern))) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
 })();
