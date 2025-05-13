@@ -95,7 +95,7 @@ document.addEventListener('keydown', function(e) {
 (function() {
     // Intercept XMLHttpRequest to prevent direct API access
     const originalXhrOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+    XMLHttpRequest.prototype.open = function(method, url, async = true, username = null, password = null) {
         // Check if this is a direct Supabase API request
         if (typeof url === 'string' && 
             (url.includes('supabase.co/rest') || 
@@ -104,11 +104,11 @@ document.addEventListener('keydown', function(e) {
             console.error('🛑 SECURITY: Blocked unauthorized direct Supabase API access via XMLHttpRequest');
             
             // Redirect to a blocked endpoint
-            return originalXhrOpen.call(this, method, '/api/blocked', ...args);
+            return originalXhrOpen.call(this, method, '/api/blocked', async, username, password);
         }
         
         // Proceed with original open for legitimate requests
-        return originalXhrOpen.call(this, method, url, ...args);
+        return originalXhrOpen.call(this, method, url, async, username, password);
     };
 })();
 
