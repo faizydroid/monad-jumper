@@ -208,7 +208,7 @@ export function Web3Provider({ children }) {
 
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
-  
+
   // Make key functions available globally for direct access
   // This allows external components to update state without going through context
   if (typeof window !== 'undefined') {
@@ -314,18 +314,18 @@ export function Web3Provider({ children }) {
         console.log(`Updating high score in recordScore: ${prevScore} → ${newHighScore}`);
         return newHighScore;
       });
-      
+        
       // Then save to database
       await saveScore(address, score);
-      return true;
-    } catch (error) {
+          return true;
+        } catch (error) {
       console.error('Error recording score:', error);
-      return false;
-    }
+          return false;
+        }
   }, [isConnected, address, saveScore]);
 
   // Update the saveJumpsToSupabase function to skip updating total_jumps
-  const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionId) => {
+  const saveJumpsToSupabase = useCallback(async (walletAddress, jumpCount, sessionId, jumpToken) => {
     if (!walletAddress || !jumpCount || jumpCount <= 0) {
       console.log("Invalid jump data for Supabase");
       return false;
@@ -339,6 +339,40 @@ export function Web3Provider({ children }) {
       if (localStorage.getItem(sessionKey)) {
         console.log(`Session ${sessionId} already saved to Supabase, skipping`);
         return true;
+      }
+      
+      // If we have a jump token, we should validate it first
+      if (jumpToken) {
+        try {
+          // Validate the token with the server
+          const response = await fetch('/api/validate-jump-token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-jump-count-token': jumpToken
+            },
+            body: JSON.stringify({
+              address: walletAddress.toLowerCase(),
+              jumpCount: jumpCount
+            }),
+            credentials: 'include'
+          });
+          
+          const validationResult = await response.json();
+          
+          if (!validationResult.valid) {
+            console.error('Jump token validation failed:', validationResult.error);
+            return false;
+          }
+          
+          // If token validation was successful, continue with the update
+          console.log('Jump token validation successful, proceeding with database update');
+        } catch (validationError) {
+          console.error('Error validating jump token:', validationError);
+          // We'll still try to update if validation fails, but log the error
+        }
+      } else {
+        console.warn('No jump token provided for validation');
       }
       
       // First check if there's an existing record for this wallet
@@ -408,14 +442,22 @@ export function Web3Provider({ children }) {
     }
     
     try {
-      // First save to Supabase database
+      // Get the secure jump token if available
+      const jumpToken = window.__SECURE_JUMP_TOKEN?.value;
+      
+      // First save to Supabase database with token validation
       const account = address;
       if (account) {
-        await saveJumpsToSupabase(account, jumpCount, gameSessionId);
+        await saveJumpsToSupabase(account, jumpCount, gameSessionId, jumpToken);
       }
       
       // Update local total jumps count
       setTotalJumps(prev => (prev || 0) + jumpCount);
+      
+      // If we have a token, mark it as used
+      if (window.__SECURE_JUMP_TOKEN && !window.__SECURE_JUMP_TOKEN.used) {
+        window.__SECURE_JUMP_TOKEN.used = true;
+      }
       
       // Check if our global transaction system exists and if this transaction is already processed
       if (window.__GLOBAL_TX_SYSTEM) {

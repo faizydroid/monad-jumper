@@ -118,75 +118,28 @@ window.addEventListener('load', () => {
 
     class Game {
         constructor(width, height) {
-            this.width = width
-            this.height = height
+            this.width = width;
+            this.height = height;
+            
+            // Generate a unique game session token
+            this.generateGameSessionToken();
+            
+            // Store initial jump count
+            window.__jumpCount = 0;
+            window.totalJumps = 0;
+            
+            // Create a separate token specifically for jump count validation
+            this.generateJumpCountToken();
+            
             this.canvas = canvas
-            
-            // Anti-Cheat: Use closures to hide values from console inspection
-            let _privateScore = 0;
-            let _privateJumps = 0;
-            let _privateVy = 0;
-            
-            // Define getters and setters to protect data
-            Object.defineProperty(this, 'score', {
-                get: function() { 
-                    return _privateScore; 
-                },
-                set: function(value) {
-                    // Validate score changes - only allow small increments
-                    if (value > _privateScore + 100 && _privateScore > 0) {
-                        console.warn('Suspicious score change detected');
-                        // Allow only reasonable increment
-                        _privateScore += 5;
-                    } else {
-                        _privateScore = value;
-                    }
-                }
-            });
-            
-            Object.defineProperty(this, 'vy', {
-                get: function() { return _privateVy; },
-                set: function(value) { _privateVy = value; }
-            });
-            
-            // Define a jump counter with protection
-            this._recordJump = function() {
-                _privateJumps++;
-                // Update the global counter but don't allow direct access
-                if (typeof window.__jumpCount !== 'undefined') {
-                    if (_privateJumps - window.__jumpCount <= 2) {
-                        window.__jumpCount = _privateJumps;
-                    }
-                }
-            };
-            
-            // Allow reading jumps count safely
-            this.getJumps = function() {
-                return _privateJumps;
-            };
-            
-            // Anti-debugging
-            setInterval(() => {
-                const startTime = performance.now();
-                debugger; // This will trigger only if dev tools are open
-                const endTime = performance.now();
-                
-                // If debugger statement was hit (dev tools open)
-                if (endTime - startTime > 100) {
-                    console.clear();
-                    console.warn("Anti-cheat warning: Debugging detected");
-                }
-            }, 3000);
-            
-            // ... existing code ...
-            
+            this.vy = 0
             this.gameOver = false
             this.gameStart = false
             this.deathReason = null  // Add property to track cause of death
             this.platforms = []
             this.enemies = []
             this.level = 0
-            // this.score = 0 - Now handled by getter/setter
+            this.score = 0
             this.enemyChance = 0
             this.enemyMaxChance = 50
             this.object_vx = 3
@@ -196,27 +149,153 @@ window.addEventListener('load', () => {
             this.blue_white_platform_chance = 0
             this.blue_white_platform_max_chance = 85
             this.gameId = Date.now().toString(); // Add unique game ID for tracking revive state
+            this.gameOverButtons = {
+                tryAgain: {
+                    x: canvas.width / 2 - 60, // Center the larger image
+                    y: canvas.height / 2 + 180, // Move further down
+                    width: 120, // Increase size
+                    height: 120, // Increase size
+                    text: 'Try Again'
+                }
+            };
+            this.hasUsedRevive = false; // Flag to track if player has used a revive in the current game
+            this.showingReviveMenu = false; // Flag to track if revive menu is being shown
+            this.reviveTransactionPending = false; // Flag to track if revive transaction is in progress
+            this.reviveCountdown = 0; // Countdown timer for revive
+            this.reviveContractAddress = "0xe56a5d27bd9d27fcdf6beaab97a5faa8fcb53cf9"; // Revive contract address
+
+            // Initialize click handler in constructor
+            canvas.addEventListener('click', (event) => this.handleGameOverClick(event));
+            this.animationId = null;
+            this.loading = false;
+            this.loadingProgress = 0;
+
+            this.debugPanel = new DebugPanel(this);
+            this.isGameOver = false;
+
+            // Add transaction tracking
+            this.pendingJumps = [];
+            this.jumpTimestamps = [];
+            window.__jumpCount = 0;
             
-            // ... Rest of constructor remains the same ...
+            console.log("🎮 Game initialized with transaction tracking");
+
+            // Initialize game state
+            this.initializeGame();
+
+            // Always initialize the jump counter when a new game starts
+            window.totalJumps = 0;
+            console.log("Game created - Jump counter reset to 0");
+
+            // Add mobile controls initialization
+            this.isMobile = this.detectMobile();
+            this.gyroEnabled = false;
+            this.gyroData = { beta: 0 }; // For storing device tilt data
+            
+            // Initialize mobile controls if on mobile device
+            if (this.isMobile) {
+                this.initMobileControls();
+            }
+
+            // Load reload button image
+            this.reloadImage = new Image();
+            this.reloadImage.src = '/images/reload.png';
+            this.reloadImage.onload = () => {
+                console.log('Reload button image loaded successfully');
+            };
+
+            // Add object pools for performance optimization
+            this.enemyPool = [];
+            this.maxPoolSize = 20;
+            
+            // Add frame throttling for less powerful devices
+            this.lastFrameTime = 0;
+            this.targetFPS = 60;
+            this.frameInterval = 1000 / this.targetFPS;
+            
+            // Pre-calculate reused values
+            this.halfWidth = this.width / 2;
+            this.halfHeight = this.height / 2;
+            
+            // Add off-screen culling boundaries
+            this.cullMargin = 100; // Objects 100px off screen will be ignored for rendering
+
+            // Add property to store player wallet address
+            this.playerWalletAddress = '';  // Will be populated from parent window
+            
+            // Listen for wallet address update
+            window.addEventListener('message', (event) => {
+                if (event.data?.type === 'WALLET_ADDRESS') {
+                    this.playerWalletAddress = event.data.address;
+                    
+                    // When we get a wallet address and a game is already in progress, 
+                    // request revive reset to ensure player can use revive in this game
+                    if (this.gameStart && !this.gameOver) {
+                        this.requestAutomaticReviveReset();
+                    }
+                }
+                
+                // Listen for revive reset confirmation
+                if (event.data?.type === 'REVIVE_RESET_RESULT') {
+                    if (event.data.success) {
+                        // Revive was reset successfully
+                        this.hasUsedRevive = false;
+                        
+                        // Update reset status display if showing
+                        if (this.resetAttempted) {
+                            this.resetSuccess = true;
+                            
+                            // Redraw the screen if we're showing the error screen
+                            if (this.showingReviveErrorScreen) {
+                                const ctx = this.canvas.getContext('2d');
+                                this.drawReviveErrorScreen(ctx);
+                            }
+                        }
+                        
+                        // If we were showing an error about needing admin reset, close it
+                        if (this.showingReviveErrorScreen && this.needsAdminReset) {
+                            this.showingReviveErrorScreen = false;
+                            this.needsAdminReset = false;
+                            
+                            // Check if we were in game over state
+                            if (this.isGameOver) {
+                                // Show revive menu again since status has been reset
+                                this.showingReviveMenu = true;
+                                this.gameOver = false;
+                            }
+                        }
+                    }
+                }
+                
+                // Handle revive status check response
+                if (event.data?.type === 'REVIVE_STATUS_RESULT') {
+                    // If showing the error screen, update our UI
+                    if (this.showingReviveErrorScreen && this.resetAttempted) {
+                        this.resetSuccess = !event.data.hasUsedRevive;
+                        
+                        // If reset was successful, enable the revive option again
+                        if (this.resetSuccess && this.isGameOver) {
+                            setTimeout(() => {
+                                this.showingReviveErrorScreen = false;
+                                this.needsAdminReset = false;
+                                this.showingReviveMenu = true;
+                                this.gameOver = false;
+                                
+                                // Redraw the game
+                                const ctx = this.canvas.getContext('2d');
+                                this.draw(ctx);
+                            }, 2000); // Give player time to see success message
+                        } else {
+                            // Just update the UI with the result
+                            const ctx = this.canvas.getContext('2d');
+                            this.drawReviveErrorScreen(ctx);
+                        }
+                    }
+                }
+            });
             
             // Generate a unique game session token
             this.generateGameSessionToken();
-        }
-        
-        // Update the jump method to use the protected jump counter
-        jump() {
-            if (this.gameStart && !this.gameOver) {
-                this.vy = -20;
-                this._recordJump(); // Use protected method instead of direct access
-                
-                // Play jump sound
-                if (window.audioManager) {
-                    window.audioManager.play('jump', 0.3);
-                }
-                
-                // Record jump for blockchain if connected to wallet
-                this.recordJumpTransaction();
-            }
         }
     
         initializeGame() {
@@ -463,74 +542,39 @@ window.addEventListener('load', () => {
             }
         }
 
-        // Add secure score sending method to the Game class
-        sendScoreWithValidation() {
-            if (!this.gameOver) return; // Only send final scores
-            
-            // Calculate a checksum based on game data that's hard to fake
-            const getSecureChecksum = () => {
-                // Mix multiple game state values to create a checksum
-                const jumps = this.getJumps();
-                const platforms = this.platforms.length;
-                const seed = this.gameId;
-                
-                // Create a hash-like value that combines game state
-                let hash = 0;
-                const str = `${jumps}-${this.score}-${platforms}-${seed}`;
-                for (let i = 0; i < str.length; i++) {
-                    const char = str.charCodeAt(i);
-                    hash = ((hash << 5) - hash) + char;
-                    hash = hash & hash; // Convert to 32bit integer
-                }
-                return hash.toString(16);
-            };
-            
-            // Bundle score with validity proof
-            const scorePacket = {
-                type: 'GAME_OVER',
-                score: this.score,
-                jumps: this.getJumps(),
-                gameId: this.gameId,
-                timestamp: Date.now(),
-                sessionToken: this.sessionToken,
-                checksum: getSecureChecksum(),
-                gameData: {
-                    platformCount: this.platforms.length,
-                    difficulty: this.level,
-                    screenWidth: this.width,
-                    screenHeight: this.height
-                }
-            };
-            
-            // Send to parent
-            sendMessageToParent(scorePacket);
-            
-            // Invalidate the game and session token
-            this.sessionToken = null; // Prevent reuse
-            
-            return scorePacket;
-        }
-        
-        // Update game over method to use secure score sending
         gameOver() {
-            if (this.gameOver) return; // Prevent multiple calls
+            // Make sure we only process this once
+            if (this.isGameOver) return;
             
             this.gameOver = true;
             this.isGameOver = true;
             
-            // Securely send score
-            this.sendScoreWithValidation();
+            // Get the final jump count from either the window counter or local counter
+            this.finalJumpCount = window.__jumpCount || window.totalJumps || 0;
             
-            // Display game over screen
-            const ctx = this.canvas.getContext('2d');
-            this.drawGameOverScreen();
+            console.log(`Game over with ${this.finalJumpCount} jumps and score: ${this.score}`);
             
-            // Rest of gameOver method remains the same...
-            
-            // Play game over sound
-            if (window.audioManager) {
-                window.audioManager.play('gameOver', 0.5);
+            // Track the death reason if not already set (default to fall)
+            if (!this.deathReason) {
+                this.deathReason = "fall";
             }
+            
+            // Send a message to the parent window with the final score and jump count
+            sendMessageToParent({
+                type: 'gameOver',
+                score: this.score,
+                jumps: this.finalJumpCount,
+                gameId: this.gameId,
+                sessionToken: this.sessionToken, // Include the session token
+                deathReason: this.deathReason,
+                reviveCancelled: !!this.reviveCancelled,
+                hasUsedRevive: !!this.hasUsedRevive,
+                timestamp: Date.now(),
+                highScore: true // Always mark as potential high score to be checked by parent
+            });
+            
+            // Invalidate the current token after use
+            this.sessionToken = null;
         }
 
         drawButton(button) {
@@ -1528,7 +1572,8 @@ window.addEventListener('load', () => {
         recordJumpTransaction() {
             const jumpData = {
                 timestamp: Date.now(),
-                jumpNumber: ++window.__jumpCount
+                jumpNumber: ++window.__jumpCount,
+                token: this.jumpCountToken // Include the token for validation
             };
             
             this.pendingJumps.push(jumpData);
@@ -1539,13 +1584,30 @@ window.addEventListener('load', () => {
             // Notify parent of the jump for UI updates using safe function
             // Optimization: Only send message every 5 jumps to reduce overhead
             if (window.__jumpCount % 5 === 0 || window.__jumpCount <= 3) {
-            sendMessageToParent({
-                type: 'JUMP_PERFORMED',
-                data: {
-                    jumpCount: window.__jumpCount,
-                    timestamp: jumpData.timestamp
-                }
-            });
+                sendMessageToParent({
+                    type: 'JUMP_PERFORMED',
+                    data: {
+                        jumpCount: window.__jumpCount,
+                        timestamp: jumpData.timestamp,
+                        token: this.jumpCountToken // Include the token
+                    }
+                });
+            }
+        }
+
+        jump() {
+            if (this.canJump) {
+                // Existing jump code...
+                
+                // Track jump
+                window.__jumpCount = (window.__jumpCount || 0) + 1;
+                console.log('🦘 Jump recorded:', window.__jumpCount);
+                
+                // Notify parent of jump using safe function
+                sendMessageToParent({
+                    type: 'JUMP_PERFORMED',
+                    jumpCount: window.__jumpCount
+                });
             }
         }
 
@@ -2315,23 +2377,48 @@ window.addEventListener('load', () => {
             // Store in an HTTP-only cookie
             this.storeSessionTokenInCookie(this.sessionToken);
             
-            // Send the token to parent to be validated server-side
+            // Send to parent to register with server
             sendMessageToParent({
                 type: 'GAME_SESSION_TOKEN',
-                token: this.sessionToken
+                token: this.sessionToken,
+                gameId: this.gameId,
+                timestamp: Date.now()
             });
+            
+            console.log('Generated new game session token');
         }
         
-        // Store token in cookie
+        // Generate a separate token for jump count validation
+        generateJumpCountToken() {
+            // Create a random string for the jump count token
+            const randomBytes = new Uint8Array(32);
+            window.crypto.getRandomValues(randomBytes);
+            this.jumpCountToken = Array.from(randomBytes)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+                
+            // Send to parent to register with server
+            sendMessageToParent({
+                type: 'JUMP_COUNT_TOKEN',
+                token: this.jumpCountToken,
+                gameId: this.gameId,
+                timestamp: Date.now()
+            });
+            
+            console.log('Generated new jump count token');
+        }
+                
+        // Store token in cookie for additional security
         storeSessionTokenInCookie(token) {
             try {
-                // Send to parent window to set as HTTP-only cookie
+                // Try to save token in parent window securely
                 sendMessageToParent({
                     type: 'SET_SESSION_COOKIE',
-                    token: token
+                    token: token,
+                    gameId: this.gameId
                 });
-            } catch (error) {
-                console.error("Error storing session token");
+            } catch (e) {
+                console.error('Failed to store token in cookie:', e);
             }
         }
     }
@@ -2574,11 +2661,16 @@ try {
     
     console.log(`💾 SENDING JUMP SAVE (ID: ${saveId}): ${jumps} jumps`);
     
-    // Send message to React app with the unique save ID
+    // Get the jump count token from the game instance if available
+    const gameInstance = getGame();
+    const jumpToken = gameInstance?.jumpCountToken;
+    
+    // Send message to React app with the unique save ID and token
     sendMessageToParent({
       type: 'SAVE_JUMPS',
       jumps: jumps,
-      saveId: saveId
+      saveId: saveId,
+      token: jumpToken // Include the token for validation
     });
     
     // Set a flag in localStorage to further prevent duplicates

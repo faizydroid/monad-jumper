@@ -20,14 +20,25 @@ console.log(`Using wallet address: ${wallet.address} for game signatures`);
 // In-memory store for session tokens (in production, use Redis or similar)
 const sessionTokens = new Map();
 
+// Separate store for jump count tokens
+const jumpTokens = new Map();
+
 // Middleware to clean up expired tokens (older than 10 minutes)
 function cleanupExpiredTokens() {
   const now = Date.now();
   const expiryTime = 10 * 60 * 1000; // 10 minutes
   
+  // Clean up score tokens
   for (const [token, data] of sessionTokens.entries()) {
     if (now - data.timestamp > expiryTime) {
       sessionTokens.delete(token);
+    }
+  }
+  
+  // Clean up jump tokens
+  for (const [token, data] of jumpTokens.entries()) {
+    if (now - data.timestamp > expiryTime) {
+      jumpTokens.delete(token);
     }
   }
 }
@@ -70,6 +81,35 @@ app.post('/api/register-session-token', async (req, res) => {
   
   // Set as HTTP-only cookie too
   res.cookie('gameSessionToken', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 10 * 60 * 1000 // 10 minutes
+  });
+  
+  res.json({ success: true });
+});
+
+// Register a new jump count token
+app.post('/api/register-jump-token', async (req, res) => {
+  const { address, token, gameId, timestamp } = req.body;
+  
+  if (!address || !token || !gameId) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  
+  // Store the token with address association
+  jumpTokens.set(token, {
+    address: address.toLowerCase(),
+    gameId,
+    timestamp: timestamp || Date.now(),
+    used: false
+  });
+  
+  console.log(`Registered jump count token for ${address} and game ${gameId}`);
+  
+  // Set as HTTP-only cookie
+  res.cookie('jumpCountToken', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
@@ -125,6 +165,52 @@ app.post('/api/validate-session-token', async (req, res) => {
   });
 });
 
+// Validate a jump count token
+app.post('/api/validate-jump-token', async (req, res) => {
+  const { token, address, jumpCount } = req.body;
+  
+  // Get token from headers if not in body
+  const headerToken = req.headers['x-jump-count-token'];
+  const tokenToValidate = token || headerToken;
+  
+  // Also try to get from cookies
+  const cookieToken = req.cookies.jumpCountToken;
+  
+  if (!tokenToValidate && !cookieToken) {
+    return res.status(400).json({ error: 'No jump token provided', valid: false });
+  }
+  
+  // Check if token exists in our store
+  const tokenData = jumpTokens.get(tokenToValidate || cookieToken);
+  
+  if (!tokenData) {
+    return res.status(403).json({ error: 'Invalid jump token', valid: false });
+  }
+  
+  // Check if token is for the same address
+  if (address && tokenData.address !== address.toLowerCase()) {
+    return res.status(403).json({ error: 'Jump token does not match address', valid: false });
+  }
+  
+  // Check if token has been used
+  if (tokenData.used) {
+    return res.status(403).json({ error: 'Jump token already used', valid: false });
+  }
+  
+  // Mark token as used
+  tokenData.used = true;
+  
+  // Clear the cookie
+  res.clearCookie('jumpCountToken');
+  
+  // Return success
+  return res.json({ 
+    valid: true, 
+    address: tokenData.address,
+    gameId: tokenData.gameId
+  });
+});
+
 // Start the server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
@@ -137,7 +223,8 @@ app.get('/api/test', (req, res) => {
     status: 'ok',
     message: 'Server is running',
     tokens: {
-      count: sessionTokens.size,
+      scoreTokens: sessionTokens.size,
+      jumpTokens: jumpTokens.size,
       newest: sessionTokens.size > 0 ? 
         Array.from(sessionTokens.entries())[sessionTokens.size - 1][1].timestamp : null
     }
