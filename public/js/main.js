@@ -3733,7 +3733,7 @@ function updateTestStatus(message) {
     
     // Also monitor XMLHttpRequest to prevent direct API access
     const originalOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    XMLHttpRequest.prototype.open = function(method, url, async = true, username = null, password = null) {
         // Block ALL direct Supabase requests
         if (typeof url === 'string' && 
             (url.includes('supabase.co/rest') || 
@@ -3757,7 +3757,7 @@ function updateTestStatus(message) {
         }
         
         // Call original open with potentially modified url
-        return originalOpen.call(this, method, url, ...rest);
+        return originalOpen.call(this, method, url, async, username, password);
     };
     
     // Add new XMLHttpRequest.send override to check for API keys in body
