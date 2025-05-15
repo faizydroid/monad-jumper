@@ -1,5 +1,16 @@
 // Utility functions for data fetching
 
+// Check if we're in production environment
+const isProduction = typeof window !== 'undefined' && 
+                     window.location.hostname !== 'localhost' && 
+                     !window.location.hostname.includes('127.0.0.1') &&
+                     !window.location.hostname.includes('192.168.');
+
+// Safe logging function that doesn't log in production
+const safeLog = isProduction ? 
+  function() {} : 
+  function(...args) { console.debug(...args); };
+
 // Add error filtering for fetch requests related to session tokens
 const originalFetch = window.fetch;
 
@@ -7,34 +18,13 @@ const originalFetch = window.fetch;
 const skipErrorPatterns = [
   'register-session-token',
   'supabase',
-  '404',
-  'get_jump_rank',
-  'rpc'
+  '404'
 ];
 
 // Override fetch to silently fail for certain endpoints
 window.fetch = async function(...args) {
   try {
     const url = args[0].toString();
-    
-    // Special handling for RPC calls
-    if (url.includes('/rpc/')) {
-      try {
-        const response = await originalFetch.apply(this, args);
-        return response;
-      } catch (err) {
-        // Silently suppress RPC errors
-        console.debug(`Silenced RPC error for: ${url}`);
-        return new Response(JSON.stringify({ 
-          error: { message: 'RPC function not found', code: 'silent-handled' },
-          data: null,
-          silenced: true 
-        }), { 
-          status: 200, 
-          headers: { 'Content-Type': 'application/json' } 
-        });
-      }
-    }
     
     // Check if url contains any patterns we want to silence
     const shouldSilenceFail = skipErrorPatterns.some(pattern => url.includes(pattern));
@@ -43,7 +33,7 @@ window.fetch = async function(...args) {
     
     // For the patterns we want to silence, don't throw errors on 404s
     if (shouldSilenceFail && !response.ok) {
-      console.debug(`Silenced fetch error for: ${url}`);
+      safeLog(`Silenced fetch error for: ${url}`);
       return new Response(JSON.stringify({ silenced: true }), { 
         status: 200, 
         headers: { 'Content-Type': 'application/json' } 
@@ -59,7 +49,7 @@ window.fetch = async function(...args) {
     );
     
     if (shouldSilence) {
-      console.debug(`Silenced fetch error: ${errorString}`);
+      safeLog(`Silenced fetch error: ${errorString}`);
       return new Response(JSON.stringify({ silenced: true }), { 
         status: 200, 
         headers: { 'Content-Type': 'application/json' } 

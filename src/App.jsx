@@ -253,39 +253,53 @@ if (typeof window !== 'undefined') {
   }, 15 * 60 * 1000); // Clean every 15 minutes
   
   // Limited console logging for production
-  if (import.meta.env.PROD) {
-    // Disable all console logging in production except errors
-    const originalConsoleLog = console.log;
-    console.log = function(...args) {
-      // Only log errors and warnings in production
-      if (args[0] && typeof args[0] === 'string' && 
-          (args[0].includes('error') || 
-           args[0].includes('Error') || 
-           args[0].includes('failed') ||
-           args[0].includes('Failed'))) {
-        originalConsoleLog.apply(console, args);
-      }
-      // Skip all other logs
-    };
-  } else {
-    // In development, still log but limit transaction logging
-    const originalConsoleLog = console.log;
-    console.log = function(...args) {
-      if (args[0] && typeof args[0] === 'string' && 
-          (args[0].includes('transaction') || 
-           args[0].includes('jumps') || 
-           args[0].includes('TX'))) {
-        const timestampArgs = Array.from(arguments);
-        if (timestampArgs.length > 0) {
-          timestampArgs.unshift(`🔎 ${new Date().toISOString().slice(11, 19)}`);
-          originalConsoleLog.apply(console, timestampArgs);
-      } else {
+  if (typeof window !== 'undefined') {
+    // Check if we're in production environment
+    const isProduction = window.location.hostname !== 'localhost' && 
+                          !window.location.hostname.includes('127.0.0.1') &&
+                          !window.location.hostname.includes('192.168.');
+    
+    if (isProduction) {
+      // In production, completely disable all console logging
+      const noop = function() {};
+      console.log = noop;
+      console.warn = noop;
+      console.info = noop;
+      console.debug = noop;
+      
+      // Only keep error logging for critical errors
+      const originalConsoleError = console.error;
+      console.error = function(...args) {
+        // Check if it's a critical error worth logging
+        const errorString = String(args);
+        const isCritical = errorString.includes('critical') || 
+                           errorString.includes('fatal') || 
+                           errorString.includes('uncaught');
+        
+        if (isCritical) {
+          originalConsoleError.apply(console, args);
+        }
+      };
+    } else {
+      // In development, still log but limit transaction logging
+      const originalConsoleLog = console.log;
+      console.log = function(...args) {
+        if (args[0] && typeof args[0] === 'string' && 
+            (args[0].includes('transaction') || 
+             args[0].includes('jumps') || 
+             args[0].includes('TX'))) {
+          const timestampArgs = Array.from(arguments);
+          if (timestampArgs.length > 0) {
+            timestampArgs.unshift(`🔎 ${new Date().toISOString().slice(11, 19)}`);
+            originalConsoleLog.apply(console, timestampArgs);
+        } else {
+            originalConsoleLog.apply(console, arguments);
+          }
+        } else {
           originalConsoleLog.apply(console, arguments);
         }
-      } else {
-        originalConsoleLog.apply(console, arguments);
-      }
-    };
+      };
+    }
   }
 }
 
@@ -791,78 +805,119 @@ function HorizontalStats() {
       try {
         console.log("Fetching fresh jump rank from Supabase");
         
-        // First check if the RPC function exists without causing console errors
-        try {
-          // OPTIMIZED APPROACH: Get rank directly with a single SQL query
-          // This query computes the rank directly on the server side
-          const lowerCaseAddress = address.toLowerCase();
+        // OPTIMIZED APPROACH: Get rank directly with a single SQL query
+        // This query computes the rank directly on the server side
+        const lowerCaseAddress = address.toLowerCase();
+        const { data, error } = await supabase.rpc('get_jump_rank', { 
+          user_address: lowerCaseAddress 
+        });
+        
+        // If RPC isn't available, try the fallback approach with a direct count
+        if (error && error.message && error.message.includes('function "get_jump_rank" does not exist')) {
+          console.log("RPC function not available, using direct rank calculation");
           
-          // Try with a simple, controlled request first
-          const testResponse = await fetch(`${import.meta.env.VITE_REACT_APP_SUPABASE_URL}/rest/v1/rpc/get_jump_rank`, {
-            method: 'HEAD',
-            headers: {
-              'apikey': import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY
-            }
-          });
-          
-          // If function exists, use it
-          if (testResponse.ok) {
-            const { data } = await supabase.rpc('get_jump_rank', { 
-              user_address: lowerCaseAddress 
-            });
+          // Get this user's jumps first
+          const { data: userJumpData } = await supabase
+            .from('jumps')
+            .select('count')
+            .eq('wallet_address', lowerCaseAddress)
+            .maybeSingle();
             
-            if (data) {
-              const rank = data.rank;
-              console.log(`Jump rank from RPC: ${rank}`);
-              
-              if (rank <= 0) {
-                setJumpRank("Unranked");
-              } else if (rank <= 1000) {
-                setJumpRank(`#${rank}`);
-              } else {
-                setJumpRank("1000+");
-              }
-              return;
-            }
-          } else {
-            // If head request failed, function doesn't exist - skip to fallback
-            throw new Error("RPC function not available");
+          const userJumps = userJumpData?.count || totalJumps || 0;
+          
+          // If user has no jumps, show as unranked
+          if (!userJumps || userJumps <= 0) {
+            setJumpRank("Unranked");
+            return;
           }
-        } catch (rpcError) {
-          // Silently ignore RPC errors and use fallback method
-          console.debug("Using fallback jump rank calculation");
+          
+          // Count how many users have more jumps than this user (faster than fetching all)
+          const { count: playersAbove, error: countError } = await supabase
+            .from('jumps')
+            .select('wallet_address', { count: 'exact', head: true })
+            .gt('count', userJumps);
+            
+          if (countError) {
+            console.error("Error getting rank:", countError);
+            return;
+          }
+          
+          // Calculate rank (offset by 1 since counting players ABOVE)
+          const rank = playersAbove + 1;
+          console.log(`Jump rank calculated: ${rank}`);
+          
+          if (rank <= 1000) {
+            setJumpRank(`#${rank}`);
+          } else {
+            setJumpRank("1000+");
+          }
+          
+          // Don't cache the result - always use fresh data
+          return;
         }
         
-        // FALLBACK: Manual rank calculation
-        // Get this user's jumps first
-        const { data: userJumpData } = await supabase
+        // If we got data from RPC
+        if (data) {
+          const rank = data.rank;
+          console.log(`Jump rank from RPC: ${rank}`);
+          
+          if (rank <= 0) {
+            setJumpRank("Unranked");
+          } else if (rank <= 1000) {
+            setJumpRank(`#${rank}`);
+          } else {
+            setJumpRank("1000+");
+          }
+          
+          // Don't cache the result - always use fresh data
+          return;
+        }
+        
+        // Fallback to the original comprehensive method if both other approaches fail
+        console.log("Falling back to comprehensive rank calculation method");
+        
+        // First get this user's jump count to ensure we have it
+        const { data: userJumpData, error: userJumpError } = await supabase
           .from('jumps')
           .select('count')
           .eq('wallet_address', lowerCaseAddress)
           .maybeSingle();
-          
-        const userJumps = userJumpData?.count || totalJumps || 0;
         
-        // If user has no jumps, show as unranked
-        if (!userJumps || userJumps <= 0) {
+        if (userJumpError) {
+          console.error("Error fetching user's jump count:", userJumpError);
+        }
+        
+        // Get this user's current jumps count from the database or state
+        const userJumps = userJumpData ? parseInt(userJumpData.count) : totalJumps || 0;
+        
+        // If user has no jumps, they're unranked
+        if (userJumps <= 0) {
           setJumpRank("Unranked");
           return;
         }
         
-        // Count how many users have more jumps than this user (faster than fetching all)
-        const { count: playersAbove, error: countError } = await supabase
+        // Get jump counts for players above this user's count - much faster query!
+        const { data: aboveData, error: aboveError } = await supabase
           .from('jumps')
-          .select('wallet_address', { count: 'exact', head: true })
-          .gt('count', userJumps);
+          .select('wallet_address, count')
+          .gt('count', userJumps)
+          .order('count', { ascending: false });
           
-        if (countError) {
-          console.error("Error getting rank:", countError);
+        if (aboveError) {
+          console.error("Error fetching players above:", aboveError);
           return;
         }
         
-        // Calculate rank (offset by 1 since counting players ABOVE)
-        const rank = playersAbove + 1;
-        console.log(`Jump rank calculated: ${rank}`);
+        // Count unique wallets above
+        const uniqueWalletsAbove = new Set();
+        aboveData?.forEach(item => {
+          if (item.wallet_address) {
+            uniqueWalletsAbove.add(item.wallet_address.toLowerCase());
+          }
+        });
+        
+        const playersAbove = uniqueWalletsAbove.size;
+        const rank = playersAbove + 1; // Player's rank is count of players above + 1
         
         if (rank <= 1000) {
           setJumpRank(`#${rank}`);
@@ -872,12 +927,8 @@ function HorizontalStats() {
         
         // Don't cache the result - always use fresh data
       } catch (error) {
-        console.debug("Error calculating jump rank - using fallback method");
-        
-        // Last resort fallback - just show unranked
-        if (!jumpRank || jumpRank === "Calculating") {
-          setJumpRank("Unranked");
-        }
+        console.error("Error calculating jump rank:", error);
+        setJumpRank("Error");
       }
     }
     

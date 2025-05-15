@@ -1,97 +1,146 @@
+// Import and initialize the logger right at the top
+import logger, { overrideConsole } from './utils/logger';
+
+// Immediately override console for the entire application
+overrideConsole();
+
 // Filter out irrelevant console errors
 (function() {
-  const originalConsoleError = console.error;
-  const originalConsoleLog = console.log;
-  const originalConsoleWarn = console.warn;
+  // Check if we're in production environment
+  const isProduction = window.location.hostname !== 'localhost' && 
+                      !window.location.hostname.includes('127.0.0.1') &&
+                      !window.location.hostname.includes('192.168.');
   
-  // Patterns to filter out from console
-  const errorPatternsToFilter = [
-    'Access to storage is not allowed from this context',
-    'register-session-token',
-    'polkadot',
-    'contentscript.js',
-    '[ReconnectablePort]',
-    'Not Found',
-    'Disconnected from',
-    'https://rpifipuunzaneaxdxgrjm.supabase',
-    'https://nzifipuunzaneaxdxqjm.supabase',
-    '404',
-    'initial_G1U71rd.js',
-    'get_jump_rank'
-  ];
+  // Store original console methods
+  const originalConsole = {
+    log: console.log,
+    error: console.error,
+    warn: console.warn,
+    info: console.info,
+    debug: console.debug
+  };
   
-  // Override fetch to catch RPC errors before they log
-  const originalFetch = window.fetch;
-  window.fetch = async function(...args) {
-    try {
-      const url = String(args[0]);
+  if (isProduction) {
+    // In production, disable all console outputs except critical errors
+    console.log = function() {};
+    console.info = function() {};
+    console.debug = function() {};
+    
+    // Only show critical errors in production
+    console.error = function(...args) {
+      const errorString = String(args);
       
-      // Check if this is an RPC call that might fail
-      if (url.includes('supabase') && url.includes('/rpc/')) {
-        try {
-          const response = await originalFetch.apply(this, args);
-          return response;
-        } catch (err) {
-          // Silently handle RPC errors
-          console.debug('Suppressed fetch error for RPC call:', url);
-          return new Response(JSON.stringify({ error: { message: 'Suppressed error' } }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
+      // Check if it's a critical error worth logging
+      const isCritical = errorString.toLowerCase().includes('critical') ||
+                         errorString.toLowerCase().includes('fatal') ||
+                         errorString.toLowerCase().includes('uncaught');
+      
+      if (isCritical) {
+        originalConsole.error.apply(console, args);
       }
+    };
+    
+    // Only show critical warnings in production
+    console.warn = function(...args) {
+      const warnString = String(args);
       
-      return originalFetch.apply(this, args);
-    } catch (e) {
-      return originalFetch.apply(this, args);
-    }
-  };
+      // Check if it's a critical warning worth logging
+      const isCritical = warnString.toLowerCase().includes('critical') ||
+                         warnString.toLowerCase().includes('fatal');
+      
+      if (isCritical) {
+        originalConsole.warn.apply(console, args);
+      }
+    };
+    
+    // Silence unhandled exceptions in production
+    window.addEventListener('error', function(event) {
+      event.preventDefault();
+      return true;
+    }, true);
+    
+    // Silence unhandled promise rejections
+    window.addEventListener('unhandledrejection', function(event) {
+      event.preventDefault();
+      return true;
+    }, true);
+    
+    console.log = function() {}; // Double override for safety
+  } else {
+    // In development, still filter irrelevant errors
+    const errorPatternsToFilter = [
+      'Access to storage is not allowed from this context',
+      'register-session-token',
+      'polkadot',
+      'contentscript.js',
+      '[ReconnectablePort]',
+      'Not Found',
+      'Disconnected from',
+      'https://rpifipuunzaneaxdxgrjm.supabase',
+      '404',
+      'initial_G1U71rd.js'
+    ];
+    
+    // Override console.error for development
+    console.error = function(...args) {
+      const errorString = String(args).toLowerCase();
+      
+      // Check if error message contains any of the patterns we want to filter
+      const shouldFilter = errorPatternsToFilter.some(pattern => 
+        errorString.toLowerCase().includes(pattern.toLowerCase())
+      );
+      
+      if (!shouldFilter) {
+        originalConsole.error.apply(console, args);
+      }
+    };
+    
+    // Also filter some logs that might contain these patterns
+    console.log = function(...args) {
+      const logString = String(args).toLowerCase();
+      
+      const shouldFilter = errorPatternsToFilter.some(pattern => 
+        logString.toLowerCase().includes(pattern.toLowerCase())
+      );
+      
+      if (!shouldFilter) {
+        originalConsole.log.apply(console, args);
+      }
+    };
+    
+    // Filter warnings too
+    console.warn = function(...args) {
+      const warnString = String(args).toLowerCase();
+      
+      const shouldFilter = errorPatternsToFilter.some(pattern => 
+        warnString.toLowerCase().includes(pattern.toLowerCase())
+      );
+      
+      if (!shouldFilter) {
+        originalConsole.warn.apply(console, args);
+      }
+    };
+  }
   
-  // Override console.error
-  console.error = function(...args) {
-    const errorString = String(args).toLowerCase();
-    
-    // Check if error message contains any of the patterns we want to filter
-    const shouldFilter = errorPatternsToFilter.some(pattern => 
-      errorString.toLowerCase().includes(pattern.toLowerCase())
-    );
-    
-    if (!shouldFilter) {
-      originalConsoleError.apply(console, args);
-    }
-  };
-  
-  // Also filter some logs that might contain these patterns
-  console.log = function(...args) {
-    const logString = String(args).toLowerCase();
-    
-    const shouldFilter = errorPatternsToFilter.some(pattern => 
-      logString.toLowerCase().includes(pattern.toLowerCase())
-    );
-    
-    if (!shouldFilter) {
-      originalConsoleLog.apply(console, args);
-    }
-  };
-  
-  // Filter warnings too
-  console.warn = function(...args) {
-    const warnString = String(args).toLowerCase();
-    
-    const shouldFilter = errorPatternsToFilter.some(pattern => 
-      warnString.toLowerCase().includes(pattern.toLowerCase())
-    );
-    
-    if (!shouldFilter) {
-      originalConsoleWarn.apply(console, args);
-    }
-  };
-  
-  // Add a global error handler to catch and filter uncaught errors
+  // Add global error handlers regardless of environment
   window.addEventListener('error', function(event) {
     const errorString = (event.message || '') + (event.error ? event.error.stack || '' : '');
     
-    const shouldFilter = errorPatternsToFilter.some(pattern => 
+    // In production, suppress all errors
+    if (isProduction) {
+      event.preventDefault();
+      event.stopPropagation();
+      return false;
+    }
+    
+    // In development, only filter certain patterns
+    const shouldFilter = [
+      'polkadot', 
+      'contentscript', 
+      'chrome.runtime', 
+      'extension',
+      'Access to storage'
+    ].some(pattern => 
       errorString.toLowerCase().includes(pattern.toLowerCase())
     );
     
@@ -104,9 +153,23 @@
   
   // Add a handler for unhandled promise rejections
   window.addEventListener('unhandledrejection', function(event) {
+    // In production, suppress all unhandled rejections
+    if (isProduction) {
+      event.preventDefault();
+      event.stopPropagation();
+      return false;
+    }
+    
+    // In development, only filter certain patterns
     const errorString = String(event.reason || '');
     
-    const shouldFilter = errorPatternsToFilter.some(pattern => 
+    const shouldFilter = [
+      'polkadot', 
+      'contentscript', 
+      'chrome.runtime', 
+      'extension',
+      'Access to storage'
+    ].some(pattern => 
       errorString.toLowerCase().includes(pattern.toLowerCase())
     );
     
