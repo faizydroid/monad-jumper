@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
-import { useWeb3 } from '../contexts/Web3Context';
 import Navbar from './Navbar';
 import Leaderboard from './Leaderboard';
-import { usePlayerStats } from '../hooks/usePlayerStats';
+import HorizontalStats from './HorizontalStats';
+import usePlayerStats from '../hooks/usePlayerStats';
 
 // Custom ConnectButton wrapper to force mobile view after connection
 const MobileConnectButton = (props) => {
@@ -73,17 +73,65 @@ const MobileHomePage = ({
   onPlay, 
   onMint,
   hasMintedNft,
-  isNftLoading 
+  isNftLoading,
+  leaderboard,
+  address
 }) => {
-  const { isConnected, address } = useAccount();
-  const { playerHighScore, totalJumps, username, leaderboard } = useWeb3();
+  const { isConnected } = useAccount();
   const [showNavbar, setShowNavbar] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [isTrueMobileDevice, setIsTrueMobileDevice] = useState(false);
   
-  // Use the shared player stats hook instead of local state and DOM extraction
-  const { jumpRank, scoreRank, totalGames, isLoading } = usePlayerStats();
+  // Get player stats directly from the hook
+  const {
+    playerHighScore,
+    totalJumps,
+    gamesPlayed,
+    gameSessionsCount,
+    jumpRank,
+    scoreRank
+  } = usePlayerStats();
+  
+  // Use the higher value between gamesPlayed and gameSessionsCount
+  const totalGames = gameSessionsCount > gamesPlayed ? gameSessionsCount : gamesPlayed;
+  
+  // Get player rank from leaderboard - same implementation as in App.jsx
+  const getPlayerRank = () => {
+    // First check the cached rank
+    if (scoreRank) {
+      return scoreRank;
+    }
+    
+    if (!address || !leaderboard || leaderboard.length === 0) return "N/A";
+    
+    // As a fallback, use the top 10 leaderboard
+    const playerAddress = address.toLowerCase();
+    const playerIndex = leaderboard.findIndex(entry => entry.address.toLowerCase() === playerAddress);
+    
+    // If player is in top 10
+    if (playerIndex >= 0) {
+      return `#${playerIndex + 1}`;
+    }
+    
+    // If player is not in top 10 but has a score, use loading indicator
+    if (playerHighScore > 0) {
+      return "...";
+    }
+    
+    return "N/A";
+  };
 
+  // Log when stats update in mobile view
+  useEffect(() => {
+    console.log('MOBILE STATS:', { 
+      playerHighScore, 
+      totalJumps, 
+      jumpRank, 
+      scoreRank, 
+      totalGames 
+    });
+  }, [playerHighScore, totalJumps, jumpRank, scoreRank, totalGames]);
+  
   // Set mobile flags on component mount
   useEffect(() => {
     // Check if URL has desktop mode parameter
@@ -96,8 +144,8 @@ const MobileHomePage = ({
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isSmallScreen = window.innerWidth <= 768;
     
-    // Set state for true mobile devices
-    setIsTrueMobileDevice(isMobileDevice || (isSmallScreen && window.innerWidth <= 600));
+    // ALWAYS set to false to disable the coming soon overlay
+    setIsTrueMobileDevice(true);
     
     // Don't set mobile flags if this is clearly a desktop device with large screen
     if (!isMobileDevice && !isSmallScreen && window.innerWidth > 1024) {
@@ -159,10 +207,39 @@ const MobileHomePage = ({
     }
   }, []);
 
-  // Get total games played count
-  const getTotalGames = () => {
-    return totalGames;
-  };
+  // Add adaptive viewport meta tag update
+  useEffect(() => {
+    // Find or create viewport meta tag for proper mobile scaling
+    let viewport = document.querySelector('meta[name="viewport"]');
+    if (!viewport) {
+      viewport = document.createElement('meta');
+      viewport.name = 'viewport';
+      document.head.appendChild(viewport);
+    }
+    
+    // Set viewport content based on device height to ensure appropriate scaling
+    const height = window.innerHeight;
+    if (height < 600) {
+      // For very small screens
+      viewport.content = 'width=device-width, initial-scale=0.9, maximum-scale=0.9, user-scalable=no';
+    } else {
+      // For normal size screens
+      viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    }
+    
+    // Handle resize events
+    const handleResize = () => {
+      const height = window.innerHeight;
+      if (height < 600) {
+        viewport.content = 'width=device-width, initial-scale=0.9, maximum-scale=0.9, user-scalable=no';
+      } else {
+        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <div className="mobile-container" style={{
@@ -170,18 +247,20 @@ const MobileHomePage = ({
       backgroundSize: 'cover',
       backgroundPosition: 'center center',
       backgroundRepeat: 'no-repeat',
-      minHeight: '100vh',
+      height: '100vh',
+      maxHeight: '100vh',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      padding: '20px',
+      justifyContent: 'space-between',
+      padding: '10px',
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* Coming Soon Overlay - Only show on true mobile devices */}
+      {/* Coming Soon Overlay */}
       {isTrueMobileDevice && (
         <div style={{
-          position: 'fixed',
+          position: 'absolute',
           top: 0,
           left: 0,
           width: '100%',
@@ -189,36 +268,56 @@ const MobileHomePage = ({
           backgroundColor: 'rgba(0, 0, 0, 0.8)',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
           alignItems: 'center',
+          justifyContent: 'center',
           zIndex: 9999,
-          backdropFilter: 'blur(6px)'
+          backdropFilter: 'blur(5px)'
         }}>
-          <h1 className="bangers-font" style={{
-            fontSize: '4rem',
+          <h1 style={{
             color: 'white',
-            textShadow: '0 0 20px rgba(255, 255, 255, 0.5), 0 0 30px rgba(255, 255, 255, 0.3)',
-            margin: '0 0 20px 0',
+            fontSize: '3rem',
+            fontFamily: '"Bangers", cursive',
             textAlign: 'center',
-            letterSpacing: '3px'
-          }}>COMING SOON</h1>
+            marginBottom: '20px',
+            textShadow: '0 0 10px rgba(255, 107, 107, 0.8)',
+            letterSpacing: '2px'
+          }}>
+            COMING SOON
+          </h1>
           <p style={{
             color: 'white',
             fontSize: '1.2rem',
-            maxWidth: '80%',
             textAlign: 'center',
-            margin: '0 0 30px 0',
-            lineHeight: '1.5'
-          }}>Mobile version is under development</p>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '50%',
-            border: '5px solid rgba(255,255,255,0.3)',
-            borderTopColor: 'white',
-            animation: 'spin 1s linear infinite',
-            margin: '10px 0'
-          }}></div>
+            maxWidth: '80%',
+            lineHeight: '1.5',
+            textShadow: '0 0 5px rgba(0, 0, 0, 0.8)'
+          }}>
+            Mobile version in development.<br/>
+            Please play on desktop for now.
+          </p>
+          <button 
+            onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.set('mode', 'desktop');
+              window.location.href = url.toString();
+            }}
+            style={{
+              marginTop: '30px',
+              padding: '12px 24px',
+              background: 'linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50px',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
+              textTransform: 'uppercase',
+              letterSpacing: '1px'
+            }}
+          >
+            Go to Desktop Version
+          </button>
         </div>
       )}
       
@@ -233,57 +332,47 @@ const MobileHomePage = ({
         <button className="menu-button" 
           onClick={() => setShowNavbar(true)}
           style={{
-            background: 'none',
+            background: 'rgba(255, 255, 255, 0.25)',
             border: 'none',
+            borderRadius: '12px',
             padding: '10px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(4px)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
           }}
         >
-          <div style={{
-            width: '30px',
-            height: '4px',
-            background: 'black',
-            marginBottom: '6px'
-          }}></div>
-          <div style={{
-            width: '30px',
-            height: '4px',
-            background: 'black',
-            marginBottom: '6px'
-          }}></div>
-          <div style={{
-            width: '30px',
-            height: '4px',
-            background: 'black'
-          }}></div>
+          <img src="/icon/menu.png" alt="Menu" width="30" height="30" />
         </button>
         
         <button className="leaderboard-button" 
           onClick={() => setShowLeaderboard(true)}
           style={{
-            background: 'none',
+            background: 'rgba(255, 255, 255, 0.25)',
             border: 'none',
+            borderRadius: '12px',
             padding: '10px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(4px)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
           }}
         >
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M5 5V19H19V5H5Z" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M12 8L14 12H10L12 8Z" fill="black"/>
-            <path d="M9 15H7V17H9V15Z" fill="black"/>
-            <path d="M13 13H11V17H13V13Z" fill="black"/>
-            <path d="M17 11H15V17H17V11Z" fill="black"/>
-          </svg>
+          <img src="/icon/leaderboard.png" alt="Leaderboard" width="30" height="30" />
         </button>
       </div>
       
       {/* Game title - using desktop style */}
       <div className="mobile-logo" style={{
-        margin: '10px 0 20px',
+        margin: '5px 0 10px',
         textAlign: 'center'
       }}>
         <h1 className="mobile-game-title bangers-font" style={{
-          fontSize: '5rem',
+          fontSize: '4.5rem',
           color: 'white',
           textTransform: 'uppercase',
           margin: 0,
@@ -291,9 +380,9 @@ const MobileHomePage = ({
           textShadow: undefined
         }}>JUMPNADS</h1>
         <p className="bangers-font" style={{
-          fontSize: '1.2rem',
+          fontSize: '1rem',
           color: 'white',
-          margin: '5px 0 0',
+          margin: '0 0 0',
           textShadow: '0 2px 4px rgba(0,0,0,0.5)'
         }}>Jump to the MOON!</p>
       </div>
@@ -301,7 +390,7 @@ const MobileHomePage = ({
       {/* Character image with better jumping animation */}
       <div className="character-container" style={{
         position: 'relative',
-        marginBottom: '20px'
+        marginBottom: '10px'
       }}>
         <div style={{
           animation: 'character-jump 1.2s ease-in-out infinite',
@@ -311,7 +400,7 @@ const MobileHomePage = ({
             src={characterImg || '/images/monad0.png'}
             alt="Game Character"
             style={{
-              width: '150px',
+              width: '130px',
               height: 'auto',
               filter: 'drop-shadow(0 10px 10px rgba(0,0,0,0.3))'
             }}
@@ -332,23 +421,26 @@ const MobileHomePage = ({
         </div>
       </div>
       
-      {/* Stats Card */}
+      {/* Stats Card - Using the same code as App.jsx */}
       {isConnected ? (
         <div className="stats-card" style={{
           background: 'rgba(255, 255, 255, 0.8)',
           borderRadius: '15px',
           width: '90%',
           maxWidth: '360px',
-          padding: '15px',
-          marginBottom: '30px',
+          padding: '12px',
+          paddingTop: '18px',
+          marginBottom: '15px',
           boxShadow: '0 4px 10px rgba(0, 0, 0, 0.15)',
-          border: '2px solid rgba(255, 255, 255, 0.7)'
+          border: '2px solid rgba(255, 255, 255, 0.7)',
+          overflow: 'visible'
         }}>
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
             gridTemplateRows: 'repeat(3, auto)',
-            gap: '12px'
+            gap: '15px',
+            position: 'relative'
           }}>
             {/* Hi-Score */}
             <div style={{
@@ -357,33 +449,43 @@ const MobileHomePage = ({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '15px',
+              padding: '10px',
+              paddingTop: '25px',
               background: 'rgba(255, 255, 255, 0.46)',
               borderRadius: '12px',
               position: 'relative'
             }}>
               <div style={{
                 position: 'absolute',
-                top: '10px',
+                top: '-15px',
                 left: '50%',
-                transform: 'translateX(-50%)'
+                transform: 'translateX(-50%)',
+                background: 'white',
+                borderRadius: '50%',
+                padding: '6px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 2
               }}>
-                <img src="/icon/score_ico.png" alt="High Score" width="28" height="28" />
+                <img src="/icon/score_ico.png" alt="High Score" width="24" height="24" />
               </div>
               <div style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: '#333',
-                marginBottom: '5px',
-                marginTop: '20px'
+                marginBottom: '2px'
               }}>
                 Hi-Score
               </div>
               <div className="bangers-font" style={{
-                fontSize: '36px',
+                fontSize: '24px',
                 color: '#333',
                 fontWeight: 'bold'
               }}>
-                {playerHighScore || 0}
+                {playerHighScore !== undefined ? Number(playerHighScore).toLocaleString() : '0'}
               </div>
             </div>
             
@@ -393,33 +495,42 @@ const MobileHomePage = ({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '15px',
+              padding: '8px',
+              paddingTop: '25px',
               background: 'rgba(255, 255, 255, 0.4)',
               borderRadius: '12px',
+              position: 'relative'
             }}>
               <div style={{
+                position: 'absolute',
+                top: '-10px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'white',
+                borderRadius: '50%',
+                padding: '4px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                width: '28px',
+                height: '28px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '8px'
+                justifyContent: 'center'
               }}>
-                <img src="/icon/jump_rank_ico.png" alt="Jump Rank" width="28" height="28" />
+                <img src="/icon/jump_rank_ico.png" alt="Jump Rank" width="18" height="18" />
               </div>
               <div style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: '#333',
-                marginBottom: '5px'
+                marginBottom: '2px'
               }}>
                 Jump Rank
               </div>
               <div className="bangers-font" style={{
-                fontSize: '28px',
+                fontSize: '24px',
                 color: '#333',
                 fontWeight: 'bold'
               }}>
-                {isLoading.jumpRank ? 
-                  <span style={{fontSize: '18px'}}>LOADING...</span> : 
-                  jumpRank}
+                {jumpRank || 'N/A'}
               </div>
             </div>
             
@@ -429,33 +540,42 @@ const MobileHomePage = ({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '15px',
+              padding: '8px',
+              paddingTop: '25px',
               background: 'rgba(255, 255, 255, 0.4)',
               borderRadius: '12px',
+              position: 'relative'
             }}>
               <div style={{
+                position: 'absolute',
+                top: '-10px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'white',
+                borderRadius: '50%',
+                padding: '4px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                width: '28px',
+                height: '28px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '8px'
+                justifyContent: 'center'
               }}>
-                <img src="/icon/score_rank_ico.png" alt="Score Rank" width="28" height="28" />
+                <img src="/icon/score_rank_ico.png" alt="Score Rank" width="18" height="18" />
               </div>
               <div style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: '#333',
-                marginBottom: '5px'
+                marginBottom: '2px'
               }}>
                 ScoreRank
               </div>
               <div className="bangers-font" style={{
-                fontSize: '28px',
+                fontSize: '24px',
                 color: '#333',
                 fontWeight: 'bold'
               }}>
-                {isLoading.scoreRank ? 
-                  <span style={{fontSize: '18px'}}>LOADING...</span> : 
-                  scoreRank}
+                {scoreRank || 'N/A'}
               </div>
             </div>
             
@@ -465,31 +585,42 @@ const MobileHomePage = ({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '15px',
+              padding: '8px',
+              paddingTop: '25px',
               background: 'rgba(255, 255, 255, 0.4)',
               borderRadius: '12px',
+              position: 'relative'
             }}>
               <div style={{
+                position: 'absolute',
+                top: '-10px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'white',
+                borderRadius: '50%',
+                padding: '4px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                width: '28px',
+                height: '28px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '8px'
+                justifyContent: 'center'
               }}>
-                <img src="/icon/jump_ico.png" alt="Total Jumps" width="28" height="28" />
+                <img src="/icon/jump_ico.png" alt="Total Jumps" width="18" height="18" />
               </div>
               <div style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: '#333',
-                marginBottom: '5px'
+                marginBottom: '2px'
               }}>
                 Total Jumps
               </div>
               <div className="bangers-font" style={{
-                fontSize: '28px',
+                fontSize: '24px',
                 color: '#333',
                 fontWeight: 'bold'
               }}>
-                {totalJumps?.toLocaleString() || '0'}
+                {totalJumps !== undefined ? Number(totalJumps).toLocaleString() : '0'}
               </div>
             </div>
             
@@ -499,31 +630,42 @@ const MobileHomePage = ({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '15px',
+              padding: '8px',
+              paddingTop: '25px',
               background: 'rgba(255, 255, 255, 0.4)',
               borderRadius: '12px',
+              position: 'relative'
             }}>
               <div style={{
+                position: 'absolute',
+                top: '-10px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'white',
+                borderRadius: '50%',
+                padding: '4px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                width: '28px',
+                height: '28px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '8px'
+                justifyContent: 'center'
               }}>
-                <img src="/icon/game_ico.png" alt="Total Games" width="28" height="28" />
+                <img src="/icon/game_ico.png" alt="Total Games" width="18" height="18" />
               </div>
               <div style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: '#333',
-                marginBottom: '5px'
+                marginBottom: '2px'
               }}>
                 Total Games
               </div>
               <div className="bangers-font" style={{
-                fontSize: '28px',
+                fontSize: '24px',
                 color: '#333',
                 fontWeight: 'bold'
               }}>
-                {getTotalGames()}
+                {totalGames || 0}
               </div>
             </div>
           </div>
@@ -611,13 +753,11 @@ const MobileHomePage = ({
       
       {/* Action button container with positioning to push to bottom */}
       <div style={{ 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'flex-end',
         width: '100%',
         maxWidth: '360px',
-        marginTop: '20px'
+        marginTop: '20px',
+        marginBottom: '20px',
+        paddingBottom: 'env(safe-area-inset-bottom, 10px)'
       }}>
         {!isConnected ? (
           <div style={{ marginBottom: '20px', width: '100%', display: 'none' }}>
@@ -644,21 +784,21 @@ const MobileHomePage = ({
               className="play-button-mobile bangers-font"
               style={{
                 width: '100%',
-                background: 'linear-gradient(135deg, #4CAF50 0%, #45A049 100%)',
+                background: 'linear-gradient(135deg, #57BB5D 0%, #3D9142 100%)',
                 border: 'none',
                 borderRadius: '50px',
-                padding: '15px 30px',
+                padding: '15px 20px',
                 color: 'white',
-                fontSize: '28px',
+                fontSize: '24px',
                 cursor: 'pointer',
-                boxShadow: '0 8px 0 #3A8F3E, 0 14px 24px rgba(0, 0, 0, 0.25)',
-                marginBottom: '20px',
+                boxShadow: '0 6px 0 #2C6B30, 0 10px 20px rgba(0, 0, 0, 0.25)',
+                marginBottom: '15px',
                 textTransform: 'uppercase',
                 position: 'relative',
                 overflow: 'hidden',
                 transition: 'transform 0.3s, box-shadow 0.3s',
                 letterSpacing: '1px',
-                textShadow: '2px 2px 0 #3A8F3E'
+                textShadow: '2px 2px 0 #2C6B30'
               }}
             >
               PLAY NOW
@@ -679,21 +819,21 @@ const MobileHomePage = ({
               className="mint-button-mobile bangers-font"
               style={{
                 width: '100%',
-                background: 'linear-gradient(135deg, #FF6B6B 0%, #FF5252 100%)',
+                background: 'linear-gradient(135deg, #FF7E54 0%, #E8553A 100%)',
                 border: 'none',
                 borderRadius: '50px',
-                padding: '15px 30px',
+                padding: '15px 20px',
                 color: 'white',
-                fontSize: '28px',
+                fontSize: '24px',
                 cursor: 'pointer',
-                boxShadow: '0 8px 0 #D32F2F, 0 14px 24px rgba(0, 0, 0, 0.25)',
-                marginBottom: '20px',
+                boxShadow: '0 6px 0 #BE3A22, 0 10px 20px rgba(0, 0, 0, 0.25)',
+                marginBottom: '15px',
                 textTransform: 'uppercase',
                 position: 'relative',
                 overflow: 'hidden',
                 transition: 'transform 0.3s, box-shadow 0.3s',
                 letterSpacing: '1px',
-                textShadow: '2px 2px 0 #D32F2F'
+                textShadow: '2px 2px 0 #BE3A22'
               }}
             >
               MINT TO PLAY
@@ -726,7 +866,7 @@ const MobileHomePage = ({
       )}
       
       {/* Cloud decorations with better styling */}
-      <div style={{
+      <div className="cloud-decoration" style={{
         position: 'absolute',
         top: '20%',
         left: '10%',
@@ -737,7 +877,7 @@ const MobileHomePage = ({
         zIndex: -1,
         animation: 'cloud-float 20s linear infinite'
       }}></div>
-      <div style={{
+      <div className="cloud-decoration" style={{
         position: 'absolute',
         top: '35%',
         right: '15%',
@@ -748,7 +888,7 @@ const MobileHomePage = ({
         zIndex: -1,
         animation: 'cloud-float-reverse 15s linear infinite'
       }}></div>
-      <div style={{
+      <div className="cloud-decoration" style={{
         position: 'absolute',
         bottom: '25%',
         left: '20%',
@@ -799,10 +939,90 @@ const MobileHomePage = ({
             transform: translateY(1px);
             box-shadow: 0 2px 10px rgba(76, 175, 80, 0.3);
           }
+          
+          @media screen and (max-height: 700px) {
+            .stats-card {
+              transform: scale(0.9);
+              margin-bottom: 5px !important;
+            }
+            .character-container img {
+              width: 120px !important;
+            }
+            .mobile-game-title {
+              font-size: 4rem !important;
+            }
+            .play-button-mobile, .mint-button-mobile {
+              padding: 12px 15px !important;
+              font-size: 22px !important;
+              margin-bottom: 10px !important;
+            }
+          }
+          @media screen and (max-height: 600px) {
+            .stats-card {
+              transform: scale(0.85);
+              margin-bottom: 0 !important;
+            }
+            .character-container img {
+              width: 100px !important;
+            }
+            .mobile-game-title {
+              font-size: 3.5rem !important;
+            }
+            .mobile-subtitle {
+              font-size: 0.9rem !important;
+            }
+            .play-button-mobile, .mint-button-mobile {
+              padding: 10px 12px !important;
+              font-size: 20px !important;
+              margin-bottom: 8px !important;
+              box-shadow: 0 4px 0 #2C6B30, 0 8px 16px rgba(0, 0, 0, 0.25) !important;
+            }
+            .mint-button-mobile {
+              box-shadow: 0 4px 0 #BE3A22, 0 8px 16px rgba(0, 0, 0, 0.25) !important;
+            }
+            .stats-card > div {
+              gap: 15px !important;
+            }
+          }
+          @media screen and (max-height: 500px) {
+            .mobile-container {
+              padding: 5px !important;
+            }
+            .character-container {
+              margin-bottom: 5px !important;
+            }
+            .stats-card {
+              transform: scale(0.8);
+              margin-bottom: 0 !important;
+            }
+            .mobile-game-title {
+              font-size: 3rem !important;
+            }
+            .cloud-decoration {
+              display: none !important;
+            }
+            .stats-card > div > div {
+              padding-top: 22px !important;
+            }
+            .stats-card > div > div > div:first-child {
+              top: -8px !important;
+              width: 24px !important;
+              height: 24px !important;
+              padding: 3px !important;
+            }
+            .stats-card > div > div > div:first-child img {
+              width: 16px !important;
+              height: 16px !important;
+            }
+            .play-button-mobile, .mint-button-mobile {
+              padding: 8px 10px !important;
+              margin-top: 5px !important;
+            }
+          }
         `}
       </style>
       
-      {/* Sliding Navbar Panel */}
+      {/* Sliding Navbar Panel - using Navbar component */}
       <div className={`mobile-slide-panel left ${showNavbar ? 'open' : ''}`}
            onClick={() => setShowNavbar(false)}>
         <div className="panel-content" onClick={e => e.stopPropagation()}>
@@ -822,7 +1042,7 @@ const MobileHomePage = ({
                     fontSize: '20px',
                     cursor: 'pointer'
                   }}>×</button>
-          <Navbar onClose={() => setShowNavbar(false)} />
+          <Navbar onClose={() => setShowNavbar(false)} mobileView={true} />
         </div>
       </div>
       

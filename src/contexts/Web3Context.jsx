@@ -341,32 +341,52 @@ export function Web3Provider({ children }) {
         return true;
       }
       
+      // First check if there's an existing record for this wallet
+      const { data: existingJumps, error: fetchError } = await supabase
+        .from('jumps')
+        .select('count')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .maybeSingle();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error("Error fetching existing jumps:", fetchError);
+        return false;
+      }
+      
       // Create jump data object
       const jumpData = {
         wallet_address: walletAddress.toLowerCase(),
         count: jumpCount
       };
       
-      // Instead of direct Supabase call, use our secure backend API
-      const response = await fetch('/api/secure-submit-jumps', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-game-session-token': window.__SECURE_GAME_TOKEN ? window.__SECURE_GAME_TOKEN.value : ''
-        },
-        credentials: 'include',
-        body: JSON.stringify(jumpData)
-      });
+      // Add the session token if available - this will be extracted and used in headers by the middleware
+      if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
+        jumpData.session_token = window.__SECURE_GAME_TOKEN.value;
+      }
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Error recording jumps in database:', errorData);
-        console.error('Error details:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData.error,
-          details: errorData.details
-        });
+      let result;
+      
+      if (existingJumps) {
+        // Update existing record by adding new jumps
+        const newTotal = (existingJumps.count || 0) + jumpCount;
+        console.log(`Updating jumps from ${existingJumps.count} to ${newTotal}`);
+        
+        // Include the count in jump data
+        jumpData.count = newTotal;
+        
+        result = await supabase
+          .from('jumps')
+          .update(jumpData)
+          .eq('wallet_address', walletAddress.toLowerCase());
+      } else {
+        // Insert new record if none exists
+        result = await supabase
+          .from('jumps')
+          .insert(jumpData);
+      }
+      
+      if (result.error) {
+        console.error("Error recording jump:", result.error);
         return false;
       }
       

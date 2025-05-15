@@ -2,6 +2,8 @@ import { ethers } from "ethers";
 import { useState, useEffect, useLayoutEffect } from "react";
 import MobileHomePage from "./src/components/MobileHomePage";
 import characterABI from "./src/data/characterABI.json";
+import usePlayerStats from "./src/hooks/usePlayerStats";
+import HorizontalStats from "./src/components/HorizontalStats";
 
 // Debug information to help troubleshoot mobile display issues
 console.log("Root App.jsx loading. If you see this, the root App.jsx is being used, not src/App.jsx");
@@ -87,6 +89,22 @@ function App() {
   const [characterImg, setCharacterImg] = useState('/images/character.png');
   const [hasMintedNft, setHasMintedNft] = useState(true); // Default to true for testing
   const [isNftLoading, setIsNftLoading] = useState(false);
+  
+  // Get all player stats from our new custom hook
+  const {
+    playerHighScore,
+    totalJumps,
+    gamesPlayed,
+    gameSessionsCount,
+    jumpRank,
+    scoreRank
+  } = usePlayerStats();
+  
+  // Get leaderboard data (will need to be handled differently or moved to the hook)
+  const [leaderboard, setLeaderboard] = useState([]);
+  
+  // Use wallet address from signer instead of separate state
+  const [walletAddress, setWalletAddress] = useState(null);
   
   // Run before first render
   useLayoutEffect(() => {
@@ -190,6 +208,11 @@ function App() {
           
           setProvider(web3Provider);
           setSigner(web3Provider.getSigner());
+          
+          // Set wallet address for use in stats
+          if (accounts && accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+          }
           
           // If we have accounts but aren't in mobile view, force reload
           if (accounts.length > 0 && detectMobile() && !document.querySelector('.mobile-container')) {
@@ -309,6 +332,14 @@ const handleMintNow = async () => {
         onMint={handleMintNow}
         hasMintedNft={hasMintedNft}
         isNftLoading={isNftLoading}
+        // Pass stats from our custom hook
+        playerHighScore={playerHighScore}
+        totalJumps={totalJumps}
+        jumpRank={jumpRank}
+        scoreRank={scoreRank}
+        gamesPlayed={gameSessionsCount > gamesPlayed ? gameSessionsCount : gamesPlayed}
+        leaderboard={leaderboard}
+        address={walletAddress}
       />
     );
   }

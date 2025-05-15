@@ -1,8 +1,113 @@
-<head>
-  <!-- Add these meta tags -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#000000">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  
-  <!-- ... existing head content ... -->
-</head> 
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <title>JumpNads - Jump to the MOON!</title>
+    
+    <!-- Mobile persistence script -->
+    <script>
+      (function forceMobileView() {
+        // Check if we're on mobile
+        if (window.innerWidth <= 768) {
+          // Set global markers
+          window.__FORCE_MOBILE_VIEW__ = true;
+          localStorage.setItem('isMobileDevice', 'true');
+          sessionStorage.setItem('isMobileDevice', 'true');
+          
+          // Set URL parameter if needed
+          const urlParams = new URLSearchParams(window.location.search);
+          if (!urlParams.has('isMobile')) {
+            urlParams.set('isMobile', 'true');
+            const newUrl = window.location.pathname + '?' + urlParams.toString() + window.location.hash;
+            window.history.replaceState({}, '', newUrl);
+          }
+          
+          // Force reload if needed
+          const checkMobileView = function() {
+            if (window.__FORCE_MOBILE_VIEW__ && document.body && !document.querySelector('.mobile-container')) {
+              const urlParams = new URLSearchParams(window.location.search);
+              urlParams.set('isMobile', 'true');
+              urlParams.set('t', Date.now()); // Cache buster
+              const newUrl = window.location.pathname + '?' + urlParams.toString() + window.location.hash;
+              window.location.href = newUrl;
+            }
+          };
+          
+          // Check after DOM loads and on visibility change
+          document.addEventListener('DOMContentLoaded', checkMobileView);
+          document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+              setTimeout(checkMobileView, 50);
+            }
+          });
+          
+          // Force check when wallet is connected
+          if (window.ethereum) {
+            // Direct event listeners
+            window.ethereum.on('connect', function() {
+              console.log('Wallet connected - checking mobile state');
+              setTimeout(checkMobileView, 100);
+              setTimeout(checkMobileView, 500); // Double check after a delay
+            });
+            
+            window.ethereum.on('accountsChanged', function() {
+              console.log('Accounts changed - checking mobile state');
+              setTimeout(checkMobileView, 100);
+              setTimeout(checkMobileView, 500); // Double check after a delay
+            });
+          }
+          
+          // Create a MutationObserver to watch for DOM changes
+          const observer = new MutationObserver(function(mutations) {
+            // If app structure changes, verify we're still in mobile mode
+            setTimeout(checkMobileView, 50);
+          });
+          
+          document.addEventListener('DOMContentLoaded', function() {
+            if (document.body) {
+              observer.observe(document.body, { 
+                childList: true, 
+                subtree: true 
+              });
+            }
+          });
+          
+          // Intercept wallet methods
+          const originalEthereum = window.ethereum;
+          if (originalEthereum) {
+            // Preserve the original request method
+            const originalRequest = originalEthereum.request;
+            
+            // Replace with our wrapped version
+            originalEthereum.request = function(request) {
+              console.log('Ethereum request intercepted:', request?.method);
+              
+              // Capture the original promise
+              const result = originalRequest.call(this, request);
+              
+              // Add our check after wallet interactions
+              if (request && request.method && 
+                 (request.method.includes('connect') || 
+                  request.method.includes('account'))) {
+                console.log('Wallet method detected:', request.method);
+                
+                // Run multiple checks after wallet operations
+                setTimeout(checkMobileView, 100);
+                setTimeout(checkMobileView, 500);
+                setTimeout(checkMobileView, 1500);
+              }
+              
+              return result;
+            };
+          }
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html> 

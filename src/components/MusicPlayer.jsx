@@ -19,7 +19,7 @@ if (typeof window !== 'undefined' && !window.audioState) {
   };
 }
 
-const MusicPlayer = () => {
+const MusicPlayer = ({ className }) => {
   // Use state that syncs with the global state
   const [isPlaying, setIsPlaying] = useState(() => window.audioState?.isPlaying || false);
   const [volume, setVolume] = useState(() => window.audioState?.volume || 0.5);
@@ -396,7 +396,7 @@ const MusicPlayer = () => {
   return (
     <div 
       ref={playerRef} 
-      className={`music-player ${isMuted ? 'player-muted' : ''} ${isInGameScreen ? 'game-screen' : ''} ${lowPerformanceMode ? 'low-performance' : ''}`}
+      className={`music-player ${className || ''} ${isMuted ? 'player-muted' : ''} ${isInGameScreen ? 'game-screen' : ''} ${lowPerformanceMode ? 'low-performance' : ''}`}
     >
       <div className="player-content">
         <button 

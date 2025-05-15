@@ -81,13 +81,27 @@ function getCookie(name) {
 
 // Export a function to create a secured version of Supabase that uses the proxy
 export const createSecureSupabase = (supabase) => {
+  // If supabase is not provided, return null to avoid errors
+  if (!supabase) {
+    console.error('No Supabase client provided to createSecureSupabase');
+    return null;
+  }
+
+  // IMPORTANT: Return the original client if we're in the admin dashboard
+  // This is a simple way to avoid issues with the admin dashboard
+  if (typeof window !== 'undefined' && window.location.pathname.includes('/admin')) {
+    console.log('Using original Supabase client for admin dashboard');
+    return supabase;
+  }
+
   // Store the original functions we need to override
-  const originalInsert = supabase.from;
+  const originalFrom = supabase.from;
+  const originalRpc = supabase.rpc;
   
   // Create a wrapped version that uses our proxy
   const secureFrom = (table) => {
     // Get the original table methods
-    const originalTable = originalInsert(table);
+    const originalTable = originalFrom(table);
     
     // Create secured versions of the methods
     return {
@@ -142,9 +156,16 @@ export const createSecureSupabase = (supabase) => {
     };
   };
   
-  // Return a modified Supabase client
+  // Return a modified Supabase client with all original methods
   return {
     ...supabase,
-    from: secureFrom
+    from: secureFrom,
+    // Ensure rpc is properly passed through
+    rpc: originalRpc ? originalRpc.bind(supabase) : undefined,
+    // Add any other methods that need to be preserved
+    rest: supabase.rest,
+    auth: supabase.auth,
+    storage: supabase.storage,
+    functions: supabase.functions
   };
 }; 

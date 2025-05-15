@@ -347,34 +347,63 @@ const DailyQuestContent = ({ onClose }) => {
       
       // 4. Try to update jumps table first - this is the critical part
       try {
+        // Update user's total jumps in Supabase
+        const { data: existingJumps, error: jumpsFetchError } = await supabase
+          .from('jumps')
+          .select('count')
+          .eq('wallet_address', address.toLowerCase())
+          .maybeSingle();
+          
+        if (jumpsFetchError) {
+          console.error("Error fetching existing jumps:", jumpsFetchError);
+        }
+        
+        // Calculate new total
+        let newTotal = updatedTotal;
+        if (existingJumps && existingJumps.count !== null) {
+          newTotal = parseInt(existingJumps.count) + jumpsToAdd;
+        }
+        
         // Create the jump data object
         const jumpData = {
           wallet_address: address.toLowerCase(),
-          count: jumpsToAdd
+          count: newTotal || jumpsToAdd
         };
         
-        // Instead of direct Supabase call, use secure backend API
-        const response = await fetch('/api/secure-submit-jumps', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-game-session-token': window.__SECURE_GAME_TOKEN ? window.__SECURE_GAME_TOKEN.value : ''
-          },
-          credentials: 'include',
-          body: JSON.stringify(jumpData)
-        });
+        // Add the session token if available for API validation
+        if (window.__SECURE_GAME_TOKEN && !window.__SECURE_GAME_TOKEN.used) {
+          jumpData.session_token = window.__SECURE_GAME_TOKEN.value;
+        }
         
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error('Error recording jumps in database:', errorData);
-          console.error('Error details:', {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorData.error,
-            details: errorData.details
-          });
-        } else {
-          console.log(`Successfully updated jumps in database with ${jumpsToAdd} new jumps`);
+        // If record exists, update it
+        if (existingJumps) {
+          const { error: updateError } = await supabase
+            .from('jumps')
+            .update(jumpData)
+            .eq('wallet_address', address.toLowerCase());
+            
+          if (updateError) {
+            console.error("Error updating jumps:", updateError);
+          } else {
+            console.log(`Updated jump count to: ${newTotal}`);
+          }
+        } 
+        // If no record, insert new one
+        else {
+          const { error: insertError } = await supabase
+            .from('jumps')
+            .insert(jumpData);
+            
+          if (insertError) {
+            console.error("Error inserting jumps:", insertError);
+          } else {
+            console.log(`Inserted new jump record with count: ${jumpsToAdd}`);
+          }
+        }
+        
+        // Mark token as used
+        if (window.__SECURE_GAME_TOKEN) {
+          window.__SECURE_GAME_TOKEN.used = true;
         }
         
         // Call fetchPlayerStats to update the UI
@@ -737,9 +766,17 @@ const DailyQuestContent = ({ onClose }) => {
       {/* Daily Claim title centered above calendar */}
       <h2 className="section-title daily-claim-title bangers-font">Daily Claim</h2>
       
-      <div className="main-content-wrapper">
+      <div className="main-content-wrapper" style={{
+        display: 'flex',
+        flexDirection: 'row',
+        gap: '20px',
+        flexWrap: 'wrap'
+      }}>
         {/* Calendar UI */}
-        <div className="calendar-container">
+        <div className="calendar-container" style={{
+          flex: '1 1 300px',
+          minWidth: '280px'
+        }}>
           <div className="calendar-header">
             <button onClick={prevMonth} className="month-nav">&lt;</button>
             <h3>{format(currentMonth, 'MMMM yyyy')}</h3>
@@ -762,14 +799,22 @@ const DailyQuestContent = ({ onClose }) => {
         </div>
         
         {/* Right column with cards stacked vertically */}
-        <div className="daily-quest-sidebar">
+        <div className="daily-quest-sidebar" style={{
+          flex: '1 1 300px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '15px'
+        }}>
           {/* Jumps Stats Card */}
           <div className="jumps-stats-card" style={{
             display: 'flex',
             flexDirection: 'column',
             height: '180px', /* Control total height */
             padding: '10px',
-            position: 'relative'
+            position: 'relative',
+            background: 'rgba(255, 255, 255, 0.8)',
+            borderRadius: '12px',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)'
           }}>
             <div className="jumps-card-header" style={{marginBottom: '5px'}}>
               <h3 style={{margin: '0 0 8px 0', fontFamily: 'Bangers', fontSize: '1.8rem', textAlign: 'center'}}>
@@ -796,7 +841,12 @@ const DailyQuestContent = ({ onClose }) => {
           </div>
           
           {/* Streak and Check-in UI */}
-          <div className="daily-check-in-card">
+          <div className="daily-check-in-card" style={{
+            background: 'rgba(255, 255, 255, 0.8)',
+            borderRadius: '12px',
+            padding: '15px',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)'
+          }}>
             {checkInState.isLoading ? (
               <div className="check-in-loading">Loading your check-in status...</div>
             ) : (
@@ -867,7 +917,13 @@ const DailyQuestContent = ({ onClose }) => {
         </div>
       )}
 
-      <div className="daily-quests-list" style={{marginTop: '5px', paddingTop: '0'}}>
+      <div className="daily-quests-list" style={{
+        marginTop: '5px', 
+        paddingTop: '0',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px'
+      }}>
         <h3 style={{marginTop: '0', paddingTop: '5px'}}>Games Played Quests</h3>
         {gameQuests.map((quest, index) => {
           const progress = Math.min(weeklyQuests.gamesPlayed, quest.threshold);
@@ -876,29 +932,90 @@ const DailyQuestContent = ({ onClose }) => {
           const isClaimed = weeklyQuests.claimed.games[index];
           
           return (
-            <div className="quest-item" key={`game-${index}`}>
-              <div className="quest-icon">🎮</div>
-              <div className="quest-info">
-                <div className="quest-header">
-                  <h3>Play {quest.threshold} Games</h3>
-                  <div className="quest-reward-badge">
+            <div className="quest-item" key={`game-${index}`} style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(255, 255, 255, 0.8)',
+              borderRadius: '12px',
+              padding: '15px',
+              boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)',
+              gap: '15px',
+              flexWrap: 'wrap'
+            }}>
+              <div className="quest-icon" style={{
+                fontSize: '24px',
+                minWidth: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255, 255, 255, 0.5)',
+                boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)'
+              }}>🎮</div>
+              <div className="quest-info" style={{
+                flex: '1 1 180px',
+                minWidth: '0'
+              }}>
+                <div className="quest-header" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '5px',
+                  flexWrap: 'wrap'
+                }}>
+                  <h3 style={{margin: '0', fontSize: '1rem'}}>Play {quest.threshold} Games</h3>
+                  <div className="quest-reward-badge" style={{
+                    background: '#FFD700',
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 'bold'
+                  }}>
                     <span className="reward-amount">+{quest.reward}</span>
                   </div>
                 </div>
-                <div className="progress-bar">
-                  <div className="progress" style={{width: `${progressPercent}%`}}></div>
+                <div className="progress-bar" style={{
+                  height: '8px',
+                  background: '#eee',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  margin: '8px 0'
+                }}>
+                  <div className="progress" style={{
+                    width: `${progressPercent}%`,
+                    height: '100%',
+                    background: 'linear-gradient(to right, #4ECDC4, #556270)',
+                    borderRadius: '4px'
+                  }}></div>
                 </div>
-                <div className="quest-progress">
+                <div className="quest-progress" style={{
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
                   {progress}/{quest.threshold} games
-                  {isCompleted && !isClaimed && <span className="quest-completed">✓</span>}
-                  {isClaimed && <span className="quest-claimed">Claimed</span>}
+                  {isCompleted && !isClaimed && <span className="quest-completed" style={{color: 'green'}}>✓</span>}
+                  {isClaimed && <span className="quest-claimed" style={{fontSize: '0.8rem', color: '#666'}}>Claimed</span>}
                 </div>
               </div>
               <button 
                 className="claim-button" 
                 disabled={!isCompleted || isClaimed || claimingIndex !== null}
                 onClick={() => claimQuestReward('games', index)}
-                style={{marginLeft: '15px'}}
+                style={{
+                  background: isCompleted && !isClaimed ? '#4ECDC4' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '8px 15px',
+                  fontWeight: 'bold',
+                  cursor: isCompleted && !isClaimed ? 'pointer' : 'not-allowed',
+                  minWidth: '80px',
+                  display: 'flex',
+                  justifyContent: 'center'
+                }}
               >
                 {isClaimed ? 'Claimed' : 
                  claimingIndex === index ? (
@@ -909,6 +1026,70 @@ const DailyQuestContent = ({ onClose }) => {
           );
         })}
       </div>
+      
+      {/* Add mobile responsive styles */}
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .main-content-wrapper {
+            flex-direction: column;
+          }
+          
+          .calendar-container {
+            min-width: 100%;
+          }
+          
+          .daily-quest-sidebar {
+            min-width: 100%;
+          }
+          
+          .calendar-days {
+            font-size: 0.9rem;
+          }
+          
+          .quest-item {
+            padding: 10px;
+          }
+          
+          .section-title {
+            font-size: 1.8rem;
+          }
+          
+          .panel-close-button {
+            top: 10px;
+            right: 10px;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .calendar-weekdays div, 
+          .calendar-day {
+            font-size: 0.8rem;
+          }
+          
+          .quest-item {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          
+          .quest-icon {
+            margin-bottom: 8px;
+          }
+          
+          .claim-button {
+            align-self: stretch;
+            margin-top: 10px;
+            width: 100%;
+          }
+          
+          .jumps-value {
+            font-size: 2.5rem !important;
+          }
+          
+          .section-title {
+            font-size: 1.5rem;
+          }
+        }
+      `}</style>
     </div>
   );
 };

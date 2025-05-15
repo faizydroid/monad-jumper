@@ -1,0 +1,210 @@
+/* HorizontalStats.css */
+
+.stats-card-horizontal {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 15px;
+  padding: 20px;
+  position: relative;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto 20px;
+  overflow: hidden;
+}
+
+.stats-grid-horizontal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  align-items: center;
+  gap: 15px;
+}
+
+.stat-item-horizontal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 120px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
+}
+
+.stat-item-horizontal:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-family: 'Bangers', cursive;
+  font-size: 28px;
+  color: #333;
+  letter-spacing: 1px;
+}
+
+.card-badge {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #4CAF50;
+  color: white;
+  padding: 5px 15px;
+  border-radius: 0 0 10px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.greeting-title {
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.greeting-message {
+  font-size: 16px;
+  color: #555;
+}
+
+.loading-rank {
+  font-size: 16px;
+  opacity: 0.8;
+  color: #666;
+  font-style: italic;
+}
+
+.username-form-card {
+  padding-top: 40px;
+}
+
+.username-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.username-input {
+  width: 100%;
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.3s;
+}
+
+.username-input:focus {
+  border-color: #4CAF50;
+  outline: none;
+}
+
+.set-username-button {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.set-username-button:hover {
+  background: #3e8e41;
+  transform: translateY(-2px);
+}
+
+.set-username-button:active {
+  transform: translateY(0);
+}
+
+.error-message {
+  color: #f44336;
+  margin-bottom: 15px;
+  font-size: 14px;
+  text-align: center;
+  width: 100%;
+}
+
+.success-message {
+  color: #4CAF50;
+  margin-bottom: 15px;
+  font-size: 14px;
+  text-align: center;
+  width: 100%;
+  padding: 10px;
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: 8px;
+}
+
+/* Animation for confetti */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-50px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(300px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Mobile username form styles */
+.mobile-username-form {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 15px;
+  width: 90%;
+  max-width: 360px;
+  padding: 25px 15px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  position: relative;
+}
+
+/* Media queries for responsive design */
+@media (max-width: 768px) {
+  .stats-grid-horizontal {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .stat-item-horizontal {
+    width: 100%;
+    min-width: unset;
+  }
+  
+  .stat-value {
+    font-size: 24px;
+  }
+  
+  .greeting-title {
+    font-size: 20px;
+  }
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+} 

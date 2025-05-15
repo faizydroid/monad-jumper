@@ -31,7 +31,6 @@ export default function AdminAccess() {
   if (authorized) {
     return (
       <>
-        <Navbar />
         <AdminDashboard />
       </>
     );
@@ -39,7 +38,6 @@ export default function AdminAccess() {
   
   return (
     <>
-      <Navbar />
       <div className="admin-container">
         <h2>Admin Access</h2>
         <div className="admin-login-form">

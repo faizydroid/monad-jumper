@@ -5,10 +5,12 @@
  */
 export const debounce = (func, wait) => {
   let timeout;
-  return function executedFunction(...args) {
+  return function executedFunction() {
+    const context = this;
+    const args = arguments;
     const later = () => {
       clearTimeout(timeout);
-      func(...args);
+      func.apply(context, args);
     };
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
@@ -147,9 +149,11 @@ export const incrementGamesCount = async (address, supabase) => {
  */
 export const throttle = (func, limit) => {
   let inThrottle;
-  return function(...args) {
+  return function() {
+    const context = this;
+    const args = arguments;
     if (!inThrottle) {
-      func.apply(this, args);
+      func.apply(context, args);
       inThrottle = true;
       setTimeout(() => inThrottle = false, limit);
     }

@@ -20,13 +20,16 @@ const TransactionDebugger = () => {
   useEffect(() => {
     // Add custom logging function to help debug
     const oldConsoleLog = console.log;
-    console.log = function(...args) {
-      oldConsoleLog.apply(console, args);
+    console.log = function() {
+      oldConsoleLog.apply(console, arguments);
       
       // Only capture transaction-related logs
-      const logText = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-      ).join(' ');
+      let logText = '';
+      for (let i = 0; i < arguments.length; i++) {
+        const arg = arguments[i];
+        logText += typeof arg === 'object' ? JSON.stringify(arg) : String(arg);
+        if (i < arguments.length - 1) logText += ' ';
+      }
       
       if (logText.includes('transaction') || 
           logText.includes('wallet') || 

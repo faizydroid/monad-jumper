@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useWeb3 } from '../contexts/Web3Context';
 import '../styles/Leaderboard.css';
 
-const Leaderboard = () => {
+const Leaderboard = ({ inMobilePanel }) => {
   const web3Context = useWeb3() || { leaderboard: [] };
   const { leaderboard } = web3Context;
   const { fetchJumpsLeaderboard } = useWeb3();
@@ -75,9 +75,12 @@ const Leaderboard = () => {
     }
   };
 
+  // Apply special class if rendered in mobile panel
+  const containerClass = inMobilePanel ? 'leaderboard-container mobile-panel' : 'leaderboard-container';
+
   return (
-    <div className="leaderboard-container">
-      <h2 className="leaderboard-title">🏆 TOP PLAYERS 🏆</h2>
+    <div className={containerClass}>
+      <h2 className="leaderboard-title bangers-font">🏆 TOP PLAYERS 🏆</h2>
       
       <div className="leaderboard-tabs">
         <button 
@@ -111,8 +114,8 @@ const Leaderboard = () => {
                   <div className="rank">
                     {renderRank(index)}
                   </div>
-                  <div className="player-name">{entry.player}</div>
-                  <div className="score-bubble">{Number(entry.score).toLocaleString()}</div>
+                  <div className="player-name bangers-font">{entry.player}</div>
+                  <div className="score-bubble bangers-font">{Number(entry.score).toLocaleString()}</div>
                 </div>
               ))}
               <div className="list-end-marker">• • •</div>
@@ -132,8 +135,8 @@ const Leaderboard = () => {
                   <div className="rank">
                     {renderRank(index)}
                   </div>
-                  <div className="player-name">{entry.player}</div>
-                  <div className="score-bubble jumps-bubble">{Number(entry.jumps).toLocaleString()}</div>
+                  <div className="player-name bangers-font">{entry.player}</div>
+                  <div className="score-bubble jumps-bubble bangers-font">{Number(entry.jumps).toLocaleString()}</div>
                 </div>
               ))}
               <div className="list-end-marker">• • •</div>

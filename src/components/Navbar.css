@@ -710,18 +710,18 @@ span[role="img"] {
   font-family: 'Bangers', cursive;
   font-size: 20px;
   letter-spacing: 1.5px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.3));
+  background: rgba(255, 255, 255, 0.5);
   border-radius: 14px;
   border: none;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05), 
-              inset 1px 1px 1px rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
   cursor: pointer;
   transition: all 0.3s ease;
   width: 100%;
-  justify-content: center;
+  justify-content: flex-start;
   margin: 5px 0;
   position: relative;
   overflow: hidden;
+  text-align: left;
 }
 
 .vertical-nav-item:before {
@@ -753,10 +753,10 @@ span[role="img"] {
 }
 
 .vertical-nav-item.active {
-  background: linear-gradient(145deg, rgba(255, 161, 161, 0.5), rgba(255, 107, 107, 0.3));
+  background: rgba(255, 255, 255, 0.7);
   border-left: 4px solid #FF6B6B;
-  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.15),
-              inset 1px 1px 1px rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.15);
+  padding-left: 16px;
 }
 
 /* Add subtle icon styling */
@@ -840,15 +840,43 @@ span[role="img"] {
   padding: 30px;
   overflow-y: auto;
   pointer-events: auto; /* Make panel clickable */
+  display: none; /* Hide all panels by default */
+  z-index: 91;
+}
+
+/* Panel for active section is visible by default */
+.daily-quest-panel.visible,
+.rewards-panel.visible,
+.shop-panel.visible {
+  display: block;
+  animation: slide-in 0.3s ease-out;
 }
 
 .home-panel {
-  display: none; /* Home panel is invisible since main content shows */
+  display: none; /* Home panel is always invisible */
 }
 
-.rewards-panel, .shop-panel {
-  transform: translateX(0);
-  animation: slide-in 0.3s ease-out;
+/* Mobile-specific fixes */
+@media (max-width: 768px) {
+  /* Ensure panels are full-screen */
+  .sliding-panel-container {
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    z-index: 91;
+  }
+  
+  .panel {
+    border-radius: 0;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* Animation for sliding content */
@@ -1530,4 +1558,237 @@ span[role="img"] {
   cursor: default;
   font-size: 16px !important;
   transition: all 0.3s ease;
+}
+
+/* Mobile navbar buttons */
+.mobile-navbar-buttons {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: fixed;
+  top: 18px;
+  left: 0;
+  width: 100vw;
+  z-index: 2002;
+  pointer-events: none;
+}
+.menu-btn, .leaderboard-btn {
+  background: rgba(255,255,255,0.85);
+  border: none;
+  border-radius: 12px;
+  margin: 0 12px;
+  padding: 8px 12px;
+  font-size: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s;
+}
+.menu-btn:active, .leaderboard-btn:active {
+  background: #ffe066;
+}
+
+/* Hide on desktop */
+@media (min-width: 800px) {
+  .mobile-navbar-buttons, .mobile-slide-panel {
+    display: none !important;
+  }
+}
+
+/* Sliding panels */
+.mobile-slide-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 80vw;
+  max-width: 340px;
+  background: rgba(0, 113, 255, 0.7);
+  backdrop-filter: blur(3px);
+  box-shadow: 0 0 24px 0 rgba(0,0,0,0.18);
+  z-index: 3000;
+  transition: transform 0.35s cubic-bezier(.77,0,.18,1);
+  will-change: transform;
+  touch-action: pan-y;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  background-image: url('/images/bg.jpg');
+  background-size: cover;
+  background-position: center;
+}
+
+.mobile-slide-panel.left {
+  left: 0;
+  transform: translateX(-100%);
+}
+
+.mobile-slide-panel.right {
+  right: 0;
+  transform: translateX(100%);
+}
+
+.mobile-slide-panel.open {
+  pointer-events: auto !important;
+}
+
+.mobile-slide-panel.left.open {
+  transform: translateX(0);
+}
+
+.mobile-slide-panel.right.open {
+  transform: translateX(0);
+}
+
+.mobile-slide-panel .panel-content {
+  padding: 20px 15px;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.hide-on-mobile {
+  display: block;
+}
+
+@media (max-width: 800px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+/* Mobile slide panel specific styles */
+.mobile-slide-panel .vertical-nav-item {
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 15px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  font-size: 16px;
+  box-shadow: none;
+  border: none;
+  color: #333;
+  font-weight: bold;
+  letter-spacing: 1px;
+  width: 100%;
+  max-width: 300px;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  touch-action: manipulation;
+}
+
+.mobile-slide-panel .vertical-nav-item.active {
+  background: rgba(255, 255, 255, 0.6);
+  border-left: 4px solid #FF6B6B;
+  border-radius: 15px;
+  padding-left: 12px;
+}
+
+.mobile-slide-panel .vertical-nav-item:active {
+  background: rgba(255, 255, 255, 0.7);
+  transform: scale(0.98);
+}
+
+.mobile-slide-panel .vertical-middle {
+  padding: 20px 10px;
+  width: 100%;
+}
+
+.mobile-slide-panel .vertical-nav-item span {
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1.5px;
+  font-size: 18px;
+}
+
+.mobile-slide-panel .vertical-top {
+  padding-top: 20px;
+}
+
+/* Add style for the score display in mobile panel */
+.mobile-slide-panel .high-score {
+  background: rgba(13, 110, 253, 0.2) !important;
+  border: none !important;
+  margin: 10px auto !important;
+  padding: 8px 15px !important;
+  border-radius: 30px !important;
+  box-shadow: none !important;
+}
+
+.mobile-slide-panel .username-button {
+  font-size: 28px !important;
+  margin: 0 !important;
+  padding: 5px 0 !important;
+  background: transparent !important;
+  text-align: center;
+  width: 100%;
+  color: #333;
+}
+
+.mobile-slide-panel .close-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin-bottom: 15px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  touch-action: manipulation;
+}
+
+.mobile-slide-panel .close-btn:active {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+@media (max-width: 768px) {
+  .mobile-slide-panel .vertical-middle {
+    margin-top: 10px;
+    padding: 15px 10px;
+  }
+  
+  .mobile-slide-panel .vertical-nav-item {
+    padding: 14px 16px;
+    margin: 10px 0;
+  }
+  
+  .menu-btn, .leaderboard-btn {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+    touch-action: manipulation;
+  }
+  
+  .panel-content {
+    padding: 20px 15px;
+  }
+}
+
+.panel-content {
+  padding: 32px 20px 20px 20px;
+  min-height: 100vh;
+  font-family: 'Bangers', cursive;
+  font-size: 1.5rem;
+  color: #fff;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.close-btn {
+  align-self: flex-end;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  padding: 6px 16px;
+  margin-bottom: 10px;
+  font-family: 'Bangers', cursive;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.10);
+  transition: background 0.2s;
+  color: #fff;
+}
+
+.close-btn:active {
+  background: rgba(255, 255, 255, 0.3);
 } 

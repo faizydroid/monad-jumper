@@ -25,9 +25,9 @@ import MobileHomePage from './components/MobileHomePage';
 import characterImg from '/images/monad0.png'; 
 import { FaXTwitter, FaDiscord } from "react-icons/fa6";
 import { monadTestnet } from './config/chains';
-import { fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelpers.utils';
+import { fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelpers.utils.js';
 import characterABI from "./data/characterABI.json";
-import { debounce } from './utils/fetchHelpers.utils';
+import { debounce } from './utils/fetchHelpers.utils.js';
 
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
@@ -135,6 +135,13 @@ if (typeof window !== 'undefined') {
     
     // Check if this game over has been processed
     hasProcessed: function(sessionId) {
+      // If this is after a revive, don't block the transaction!
+      if (window.__reviveUsedForGameId === sessionId) {
+        console.log(`🔄 Allowing game over after revive for session: ${sessionId}`);
+        // Don't reset the revive flag yet so other handlers can also detect it
+        return false;
+      }
+      
       // First check exact match
       if (this.sessionIds.has(sessionId)) {
         console.log(`🔍 Found exact session ID match: ${sessionId}`);
@@ -179,6 +186,16 @@ if (typeof window !== 'undefined') {
       this.isProcessing = false;
       clearTimeout(this.processingTimeout);
       console.log(`🔓 Game over processing lock manually released`);
+    },
+    
+    // Reset tracking for a specific session ID
+    resetSession: function(sessionId) {
+      if (sessionId && this.sessionIds.has(sessionId)) {
+        this.sessionIds.delete(sessionId);
+        console.log(`🔄 Tracking reset for session: ${sessionId}`);
+        return true;
+      }
+      return false;
     }
   };
   
@@ -215,9 +232,15 @@ if (typeof window !== 'undefined') {
           (args[0].includes('transaction') || 
            args[0].includes('jumps') || 
            args[0].includes('TX'))) {
-        originalConsoleLog.apply(console, [`🔎 ${new Date().toISOString().slice(11, 19)}`, ...args]);
+        const timestampArgs = Array.from(arguments);
+        if (timestampArgs.length > 0) {
+          timestampArgs.unshift(`🔎 ${new Date().toISOString().slice(11, 19)}`);
+          originalConsoleLog.apply(console, timestampArgs);
       } else {
-        originalConsoleLog.apply(console, args);
+          originalConsoleLog.apply(console, arguments);
+        }
+      } else {
+        originalConsoleLog.apply(console, arguments);
       }
     };
   }
@@ -1540,7 +1563,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 console.error('Error querying existing score:', queryError);
                 // Continue anyway to try saving the score
               }
-
+              
               // Only insert if there's no existing score or new score is higher
               const currentHighScore = existingScore?.score || 0;
               if (!existingScore || scoreValue > currentHighScore) {
@@ -1592,10 +1615,10 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   
                   // Mark token as used
                   secureToken.used = true;
-                  
-                  // Log the complete score object before sending
-                  console.log('Score object to insert:', JSON.stringify(scoreObject));
-                  
+                
+                // Log the complete score object before sending
+                console.log('Score object to insert:', JSON.stringify(scoreObject));
+                
                   try {
                     // Use our server proxy endpoint which enforces token validation
                     const response = await fetch('/api/proxy/supabase', {
@@ -1609,11 +1632,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                     });
                     
                     const result = await response.json();
-                    
+                
                     if (!response.ok || result.error) {
                       console.error('Error recording score in database:', result.error || 'Unknown error');
-                      // Log detailed error information
-                      console.error('Error details:', {
+                  // Log detailed error information
+                  console.error('Error details:', {
                         status: response.status,
                         message: result.error?.message,
                         details: result.error?.details
@@ -1630,8 +1653,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                       } else {
                         console.log('Score saved successfully via fallback method');
                       }
-                    } else {
-                      console.log(`✅ Score recorded successfully in database`);
+                } else {
+                  console.log(`✅ Score recorded successfully in database`);
                       
                       // Clear the used token
                       if (window.__SECURE_GAME_TOKEN) {
@@ -1866,8 +1889,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             
             // Create a jump data object with the session token if available
             const jumpUpdateData = {
-              wallet_address: address.toLowerCase(),
-              count: newCount
+                wallet_address: address.toLowerCase(),
+                count: newCount
             };
             
             // Include session token if available
@@ -2993,6 +3016,34 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           }
         }
         
+        // Handle the REVIVE_USED message from the game
+        if (event.data.type === 'REVIVE_USED') {
+          console.log('📨 Message from game: REVIVE_USED');
+          
+          // Get the game ID from the event or use the current game ID
+          const gameId = event.data.gameId || 
+                        (event.data.data && event.data.data.gameId) || 
+                        window.__LATEST_GAME_SESSION;
+          
+          if (gameId) {
+            // Mark this game as having used a revive to ensure game over is processed correctly
+            window.__reviveUsedForGameId = String(gameId);
+            console.log(`⭐ REVIVE FLAG SET: Game ${gameId} marked as having used revive`);
+            
+            // Reset any existing game over tracking for this session ID
+            if (window.__GAME_OVER_PROCESSED) {
+              if (window.__GAME_OVER_PROCESSED.resetSession(String(gameId))) {
+                console.log(`⭐ Game over tracking reset for session ${gameId} after revive`);
+              }
+              // Also reset any processing locks
+              window.__GAME_OVER_PROCESSED.resetProcessing();
+              console.log(`⭐ All processing locks reset for post-revive game over handling`);
+            }
+          } else {
+            console.warn('REVIVE_USED message received but no game ID available');
+          }
+        }
+        
         if (event.data.type === 'gameOver' || event.data.type === 'GAME_OVER') {
           const finalScore = event.data.score || 
                             (event.data.data && event.data.data.finalScore) || 
@@ -3121,9 +3172,51 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             console.log(`Game over after revive used. Ensuring high score is processed: ${finalScore}`);
             // Mark in the global state that we've used revive for this game
             window.__reviveUsedForGameId = gameId;
+            console.log(`CRITICAL: Set __reviveUsedForGameId=${gameId} to trigger direct processing`);
+            
+            // IMPORTANT: After revive, force process score and jumps directly like we do in REVIVE_CANCELLED
+            try {
+              setTransactionPending(true);
+              
+              // IMPORTANT: Process score directly first for high score checking
+              if (finalScore > 0) {
+                // Ensure the score is properly queued
+                if (window.__GAME_TX_QUEUE) {
+                  // Reset the queue first to clear any previous state
+                  window.__GAME_TX_QUEUE.reset();
+                  // Set the score explicitly
+                  window.__GAME_TX_QUEUE.finalScore = finalScore;
+                  window.__GAME_TX_QUEUE.gameId = gameId;
+                  
+                  // Add the jump count to the queue
+                  if (jumpCount > 0) {
+                    window.__GAME_TX_QUEUE.queueJumps(jumpCount, gameId);
+                    console.log(`📝 Added ${jumpCount} jumps to the transaction queue after revive death`);
+                  }
+                  
+                  console.log(`🏆 Processing high score ${finalScore} directly after revive death`);
+                  // Process the queue with the score
+                  await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
+                  console.log(`✅ Successfully processed game over after revive, score: ${finalScore}, jumps: ${jumpCount}`);
+                  
+                  // Reset the revive flag after we've processed everything
+                  console.log(`Cleaning up revive flag after successful processing`);
+                  window.__reviveUsedForGameId = null;
+                  
+                  // Skip calling handleGameOver since we processed everything directly
+                  return;
+                }
+              }
+            } catch (error) {
+              console.error('❌ Error processing game over after revive:', error);
+            } finally {
+              setTransactionPending(false);
+              setShowPlayAgain(true);
+            }
+          } else {
+            // Normal game over processing via handler
+            await handleGameOver(finalScore);
           }
-          
-          await handleGameOver(finalScore);
         }
       } catch (error) {
         console.error('Error handling iframe message:', error);
@@ -3222,11 +3315,47 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                 
                 // If after revive, don't process here - let the iframe message handler handle it
                 if (window.__reviveUsedForGameId === currentGameId) {
-                  console.log(`⚠️ Game over after revive - letting iframe message handler process it`);
+                  console.log(`⚠️ Game over after revive detected in setupGameCommands - processing directly`);
+                  
+                  try {
+                    // Process score and jumps directly using the same method as in the iframe handler
+                    if (finalScore > 0) {
+                      if (window.__GAME_TX_QUEUE) {
+                        // Reset the queue first to clear any previous state
+                        window.__GAME_TX_QUEUE.reset();
+                        // Set the score explicitly
+                        window.__GAME_TX_QUEUE.finalScore = finalScore;
+                        window.__GAME_TX_QUEUE.gameId = currentGameId;
+                        
+                        // Add the jump count to the queue
+                        const jumpCount = iframeRef.current.contentWindow.__jumpCount || 0;
+                        if (jumpCount > 0) {
+                          window.__GAME_TX_QUEUE.queueJumps(jumpCount, currentGameId);
+                          console.log(`📝 Added ${jumpCount} jumps to transaction queue in setupGameCommands after revive`);
+                        }
+                        
+                        console.log(`🏆 Processing score ${finalScore} directly in setupGameCommands after revive`);
+                        // Process the queue with the score
+                        const success = await window.__GAME_TX_QUEUE.processQueue(walletClient, publicClient, address, supabase);
+                        
+                        // Clean up revive flag after successful processing
+                        console.log(`Cleaning up revive flag after successful processing in setupGameCommands`);
+                        window.__reviveUsedForGameId = null;
+                        
+                        setShowPlayAgain(true);
+                        return success;
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Error processing revive game over in setupGameCommands:', error);
+                  }
+                  
+                  // If direct processing failed, show play button and return success to avoid further processing
                   setShowPlayAgain(true);
-                  return true; // Return success to avoid further processing
+                  return true;
                 }
                 
+                // Handle normal game over (not after revive)
                 try {
                   // Mark this session as processed to prevent duplicates in the iframe handler
                   if (window.__GAME_OVER_PROCESSED) {
@@ -3242,7 +3371,6 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   }
                   
                   // Set the flag to prevent duplicate transactions for this specific game
-                  const currentGameId = window.__currentGameSessionId || gameId;
                   window.__gameOverTransactionSent = currentGameId;
                   
                   // Use our transaction queue system for bundling score and jumps
@@ -3250,7 +3378,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   const success = await recordScoreAndJumpsInOneTx(finalScore, jumpCount, currentGameId);
                   
                   if (success) {
-                      console.log('Score and jumps saved successfully in one transaction');
+                    console.log('Score and jumps saved successfully in one transaction');
                   } else {
                     console.error('Failed to save score and jumps');
                   }
@@ -3258,7 +3386,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                   return success;
                 } catch (error) {
                   console.error('Error in game over handler:', error);
-                    // Still show play again button on error
+                  // Still show play again button on error
                   setShowPlayAgain(true);
                   return false;
                 } finally {
@@ -3469,33 +3597,33 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             ];
             
             // Implementation of selective logging
-            console.log = function(...args) {
+            console.log = function() {
               if (CURRENT_LOG_LEVEL === LOG_LEVELS.SILENT) return;
               
               // Always log errors
               if (CURRENT_LOG_LEVEL === LOG_LEVELS.ERRORS_ONLY) {
                 // Check if this message contains error information
-                const isError = args[0] && typeof args[0] === 'string' && 
-                  IMPORTANT_PATTERNS.some(pattern => args[0].includes(pattern));
+                const isError = arguments[0] && typeof arguments[0] === 'string' && 
+                  IMPORTANT_PATTERNS.some(pattern => arguments[0].includes(pattern));
                 
                 if (isError) {
-                  originalConsole.error.apply(console, args);
+                  originalConsole.error.apply(console, arguments);
                 }
                 return;
               }
               
               // Log all jump related info only when verbose
-              if (args[0] && typeof args[0] === 'string') {
+              if (arguments[0] && typeof arguments[0] === 'string') {
                 // Filter out frequent/noisy logs
                 if (
-                  args[0].includes('First jump on platform') || 
-                  args[0].includes('Repeated jump') ||
-                  args[0].includes('score popup') ||
-                  args[0].includes('screen shake') ||
-                  args[0].includes('PLATFORM JUMP PROCESSED')
+                  arguments[0].includes('First jump on platform') || 
+                  arguments[0].includes('Repeated jump') ||
+                  arguments[0].includes('score popup') ||
+                  arguments[0].includes('screen shake') ||
+                  arguments[0].includes('PLATFORM JUMP PROCESSED')
                 ) {
                   if (CURRENT_LOG_LEVEL === LOG_LEVELS.VERBOSE && LOGGING_ENABLED) {
-                    originalConsole.log.apply(console, args);
+                    originalConsole.log.apply(console, arguments);
                   }
                   return;
                 }
@@ -3503,27 +3631,27 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               
               // Log everything else according to current level
               if (CURRENT_LOG_LEVEL !== LOG_LEVELS.ERRORS_ONLY || LOGGING_ENABLED) {
-                originalConsole.log.apply(console, args);
+                originalConsole.log.apply(console, arguments);
               }
             };
             
             // Also override warn - important for performance
-            console.warn = function(...args) {
+            console.warn = function() {
               if (CURRENT_LOG_LEVEL === LOG_LEVELS.SILENT) return;
               
               if (CURRENT_LOG_LEVEL === LOG_LEVELS.ERRORS_ONLY) {
                 // Only log critical warnings
-                const isCritical = args[0] && typeof args[0] === 'string' && 
-                  IMPORTANT_PATTERNS.some(pattern => args[0].includes(pattern));
+                const isCritical = arguments[0] && typeof arguments[0] === 'string' && 
+                  IMPORTANT_PATTERNS.some(pattern => arguments[0].includes(pattern));
                 
                 if (isCritical) {
-                  originalConsole.warn.apply(console, args);
+                  originalConsole.warn.apply(console, arguments);
                 }
                 return;
               }
               
               if (CURRENT_LOG_LEVEL !== LOG_LEVELS.ERRORS_ONLY || LOGGING_ENABLED) {
-                originalConsole.warn.apply(console, args);
+                originalConsole.warn.apply(console, arguments);
               }
             };
             
@@ -3691,12 +3819,12 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           (function() {
             // Intercept the console.log function to filter out specific messages
             const originalConsoleLog = console.log;
-            console.log = function(...args) {
+            console.log = function() {
               // Filter out the high score messages
-              if (args[0] === 'Using high score from player stats response:') {
+              if (arguments[0] === 'Using high score from player stats response:') {
                 return; // Ignore these logs completely
               }
-              return originalConsoleLog.apply(this, args);
+              return originalConsoleLog.apply(this, arguments);
             };
             
             // Set an immutable high score getter that always returns the value
@@ -3897,6 +4025,11 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           
               // Set the revive purchased flag
               setRevivePurchased(true);
+              
+              // Mark this game ID as having used revive for special game over handling
+              window.__reviveUsedForGameId = formattedGameId;
+              console.log(`⭐ REVIVE PURCHASE: Setting revive used flag for game ID: ${formattedGameId}`);
+              
               // Reset after delay as a fallback
               setTimeout(() => {
                 console.log("Resetting revive purchased flag after delay");
@@ -4097,7 +4230,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               setShowMintModal(true);
             }}
             hasMintedNft={hasMintedNft}
-            isNftLoading={isNftLoading}
+            isNftLoading={isNftBalanceLoading}
           />
         ) : (
           <>
@@ -4445,10 +4578,11 @@ function App() {
     // Local debounce function implementation
     const localDebounce = (func, wait) => {
       let timeout;
-      return function executedFunction(...args) {
+      return function executedFunction() {
+        const args = arguments;
         const later = () => {
           clearTimeout(timeout);
-          func(...args);
+          func.apply(this, args);
         };
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
@@ -4622,10 +4756,14 @@ function App() {
     );
   }
 
+  // Use useLocation to check the current path
+  const location = useLocation();
+  const isAdminPage = location.pathname.includes('/admin');
+
   // Otherwise, render the normal desktop view
   return (
     <Web3Provider>
-      {isConnected && <Navbar />}
+      {isConnected && !isAdminPage && <Navbar />}
       
       <Routes>
         <Route path="/" element={gameComponent} />

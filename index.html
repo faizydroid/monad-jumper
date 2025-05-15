@@ -2,6 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- Check for desktop mode immediately -->
+    <script>
+        // Early check for desktop mode parameter to prevent mobile flags
+        (function() {
+            try {
+                // Check URL parameters for desktop mode indicators
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('mode') === 'desktop' || 
+                    params.get('desktop') === 'true' || 
+                    params.get('forceDesktop') === 'true') {
+                    
+                    console.log('Desktop mode detected - clearing all mobile flags early');
+                    
+                    // Clear all storage flags
+                    localStorage.removeItem('isMobileDevice');
+                    sessionStorage.removeItem('isMobileDevice');
+                    
+                    // Set global flag to prevent mobile detection
+                    window.__FORCE_MOBILE_VIEW__ = false;
+                    window.__DESKTOP_MODE_OVERRIDE__ = true;
+                }
+            } catch (e) {
+                console.error('Error in early desktop mode detection:', e);
+            }
+        })();
+    </script>
     <!-- Define b_ immediately to prevent errors -->
     <script>
         // Create b_ with safety protections
@@ -93,7 +119,7 @@
     <link rel="icon" type="image/svg+xml" href="/images/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>JumpNads</title>
 </head>
 <body>

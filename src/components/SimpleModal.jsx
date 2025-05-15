@@ -12,7 +12,7 @@ const SimpleModal = ({ isOpen, onClose, title, children }) => {
     >
       <div className="simple-modal-content">
         <div className="simple-modal-header">
-          <h2>{title}</h2>
+          <h2 className="bangers-font">{title}</h2>
           <button className="simple-modal-close" onClick={onClose}>×</button>
         </div>
         <div className="simple-modal-body">

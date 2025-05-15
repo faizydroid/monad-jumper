@@ -8,7 +8,7 @@ const CartoonPopup = ({ isOpen, onClose, title, message, buttons }) => {
     <div className="cartoon-popup-overlay">
       <div className="cartoon-popup">
         <div className="popup-cloud">
-          <h2 className="popup-title">{title}</h2>
+          <h2 className="popup-title bangers-font">{title}</h2>
           <div className="popup-content">
             {typeof message === 'string' ? <p>{message}</p> : message}
           </div>

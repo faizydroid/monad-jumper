@@ -1,344 +1,304 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { useWeb3 } from '../contexts/Web3Context';
-import { fetchGameSessionsCount } from '../utils/fetchHelpers';
+import { createClient } from '@supabase/supabase-js';
 
-// Custom hook to handle player stats calculations
-export function usePlayerStats() {
-  const [gamesPlayed, setGamesPlayed] = useState(0);
-  const [sessionGamesCount, setSessionGamesCount] = useState(0);
-  const [jumpRank, setJumpRank] = useState("Calculating");
-  const [scoreRank, setScoreRank] = useState("...");
-  const [isInitiallyLoaded, setIsInitiallyLoaded] = useState(false);
-  
-  const { playerHighScore, totalJumps, leaderboard } = useWeb3();
+// Set up Supabase client
+const supabase = createClient(
+  import.meta.env.VITE_REACT_APP_SUPABASE_URL,
+  import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY
+);
+
+// FORCE MOCK VALUES FOR TESTING - remove this in production
+const FORCE_MOCK_VALUES = true;
+
+export default function usePlayerStats() {
   const { isConnected, address } = useAccount();
+  const [playerHighScore, setPlayerHighScore] = useState(FORCE_MOCK_VALUES ? 1065 : 0);
+  const [totalJumps, setTotalJumps] = useState(FORCE_MOCK_VALUES ? 18248 : 0);
+  const [gamesPlayed, setGamesPlayed] = useState(FORCE_MOCK_VALUES ? 495 : 0);
+  const [gameSessionsCount, setGameSessionsCount] = useState(FORCE_MOCK_VALUES ? 495 : 0);
+  const [jumpRank, setJumpRank] = useState(FORCE_MOCK_VALUES ? "#11" : "Calculating");
+  const [scoreRank, setScoreRank] = useState(FORCE_MOCK_VALUES ? "1000+" : "...");
   
-  // Create a ref to track if component is mounted
-  const isMountedRef = useRef(true);
-  
-  // Track data fetch status to avoid redundant fetches
-  const fetchStatusRef = useRef({
-    gamesFetched: false,
-    sessionsFetched: false,
-    lastFetch: 0,
-    lastRankFetch: 0
+  // Track fetch attempts to implement exponential backoff
+  const fetchAttempts = useRef({
+    playerStats: 0,
+    gamesPlayed: 0,
+    gameSessions: 0,
+    jumpRank: 0,
+    scoreRank: 0
   });
-  
-  // Fetch jump rank with more immediate timing
-  useEffect(() => {
-    async function fetchJumpRank() {
-      if (!address || !window.supabase || !isMountedRef.current) {
-        console.log("Early return from fetchJumpRank due to missing requirements");
-        
-        // Set a fallback value if conditions aren't met after 1 second (reduced from 2s)
-        setTimeout(() => {
-          if (jumpRank === "Calculating" && isMountedRef.current) {
-            console.log("Setting fallback jumpRank value");
-            setJumpRank(totalJumps > 0 ? "N/A" : "Unranked");
-          }
-        }, 1000);
-        
-        return;
-      }
-      
-      try {
-        console.log("Fetching fresh jump rank from Supabase");
-        
-        // Get all users with their jump counts sorted by count descending
-        const { data, error } = await window.supabase
-          .from('jumps')
-          .select('wallet_address, count')
-          .order('count', { ascending: false })
-          .limit(1100); // Get enough to determine up to 1000+ rank
-          
-        if (error) {
-          console.error("Error fetching jump rankings:", error);
-          setJumpRank("Error");
-          return;
-        }
-        
-        // No results means no jumps
-        if (!data || data.length === 0) {
-          console.log("No jump data found");
-          setJumpRank("N/A");
-          return;
-        }
-        
-        // Store highest jump count per wallet
-        const userHighJumps = new Map();
-        
-        // First pass - determine highest jump count per wallet
-        data.forEach(item => {
-          const address = item.wallet_address.toLowerCase();
-          const currentHighJumps = userHighJumps.get(address) || 0;
-          
-          if (item.count > currentHighJumps) {
-            userHighJumps.set(address, item.count);
-          }
-        });
-        
-        // Second pass - create deduplicated array with highest jump counts
-        const uniqueJumps = Array.from(userHighJumps.entries())
-          .map(([address, count]) => ({ wallet_address: address, count }))
-          .sort((a, b) => b.count - a.count); // Sort by count descending
-        
-        // Find the user's position in the processed data
-        const userPosition = uniqueJumps.findIndex(
-          entry => entry.wallet_address.toLowerCase() === address.toLowerCase()
-        );
-        
-        // If found, display appropriate rank
-        if (userPosition >= 0) {
-          const rank = userPosition + 1;
-          console.log(`User found at position ${userPosition}, rank ${rank}`);
-          
-          if (rank <= 1000) {
-            setJumpRank(`#${rank}`);
-          } else {
-            setJumpRank("1000+");
-          }
-        } else if (totalJumps > 0) {
-          // Player has jumps but not in results (should be rare)
-          console.log("User has jumps but not found in leaderboard");
-          setJumpRank("N/A");
-        } else {
-          console.log("User has no jumps, setting as Unranked");
-          setJumpRank("Unranked");
-        }
-        
-        // Mark as initially loaded
-        if (!isInitiallyLoaded && isMountedRef.current) {
-          setIsInitiallyLoaded(true);
-        }
-      } catch (error) {
-        console.error("Error calculating jump rank:", error);
-        setJumpRank("Error");
-      }
+
+  const isMounted = useRef(true);
+  const debugMode = useRef(true); // Enable for debug logging
+
+  // Enhanced logging function
+  const logDebug = useCallback((message, data = {}) => {
+    if (debugMode.current) {
+      console.log(`[usePlayerStats] ${message}`, {
+        address: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'none',
+        ...data
+      });
     }
-    
-    // Immediate fetch on mount
-    fetchJumpRank();
-    
-    // Set up a refresh interval with shorter timeframe
-    const refreshInterval = setInterval(() => {
-      if (isMountedRef.current) {
-        fetchJumpRank();
-      }
-    }, 5000); // Refresh every 5 seconds (reduced from 15s)
-    
-    // Cleanup function
-    return () => {
-      clearInterval(refreshInterval);
-    };
-  }, [address, totalJumps, isInitiallyLoaded]);
+  }, [address]);
+
+  // Fetch player's high score and total jumps
+  const fetchPlayerStats = useCallback(async () => {
+    if (FORCE_MOCK_VALUES) return; // Skip fetch if using mock values
+    if (!address || !supabase) return;
+
+    try {
+      logDebug('Fetching player stats', { attempt: fetchAttempts.current.playerStats + 1 });
+      
+      const { data: scoreData } = await supabase
+        .from('scores')
+        .select('score')
+        .eq('wallet_address', address.toLowerCase())
+        .order('score', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setPlayerHighScore(scoreData?.score || 0);
+      logDebug('Set player high score', { score: scoreData?.score || 0 });
+
+      const { data: jumpData } = await supabase
+        .from('jumps')
+        .select('count')
+        .eq('wallet_address', address.toLowerCase())
+        .maybeSingle();
+
+      setTotalJumps(jumpData?.count || 0);
+      logDebug('Set total jumps', { jumps: jumpData?.count || 0 });
+      
+      // Reset attempt counter on success
+      fetchAttempts.current.playerStats = 0;
+      } catch (error) {
+      console.error("Error fetching player stats:", error);
+      // Increment attempt counter
+      fetchAttempts.current.playerStats++;
+    }
+  }, [address, logDebug]);
   
   // Fetch games count
-  const fetchGamesCount = useCallback(async () => {
-    if (!address || !window.supabase || !isMountedRef.current) return 0;
-    if (fetchStatusRef.current.gamesFetched) return; // Skip if already fetched
+  const fetchGamesPlayed = useCallback(async () => {
+    if (FORCE_MOCK_VALUES) return; // Skip fetch if using mock values
+    if (!address || !supabase) return;
     
     try {
-      console.log("Fetching games count");
-      const { data, error } = await window.supabase
+      logDebug('Fetching games played', { attempt: fetchAttempts.current.gamesPlayed + 1 });
+      
+      const { data } = await supabase
         .from('games')
         .select('count')
         .eq('wallet_address', address.toLowerCase())
         .maybeSingle();
       
-      if (error) {
-        console.error("Error fetching games count:", error);
-        return 0;
-      }
+      setGamesPlayed(data?.count || 0);
+      logDebug('Set games played', { count: data?.count || 0 });
       
-      if (!isMountedRef.current) return 0; // Check if still mounted
-      
-      const count = data?.count || 0;
-      setGamesPlayed(count);
-      fetchStatusRef.current.gamesFetched = true;
-      return count;
-    } catch (error) {
-      console.error("Error in fetchGamesCount:", error);
-      return 0;
+      // Reset attempt counter on success
+      fetchAttempts.current.gamesPlayed = 0;
+    } catch (err) {
+      console.error("Error fetching games played:", err);
+      // Increment attempt counter
+      fetchAttempts.current.gamesPlayed++;
     }
-  }, [address]);
+  }, [address, logDebug]);
   
   // Fetch game sessions count
-  const fetchSessionsCount = useCallback(async () => {
-    if (!address || !window.supabase || !isMountedRef.current) return;
-    if (fetchStatusRef.current.sessionsFetched) return; // Skip if already fetched
+  const fetchGameSessions = useCallback(async () => {
+    if (FORCE_MOCK_VALUES) return; // Skip fetch if using mock values
+    if (!address || !supabase) return;
     
     try {
-      const result = await fetchGameSessionsCount(address, window.supabase, setSessionGamesCount);
-      fetchStatusRef.current.sessionsFetched = true;
-      return result;
-    } catch (error) {
-      console.error('Error in fetchSessionsCount:', error);
-    }
-  }, [address]);
-  
-  // Effect to fetch accurate score rank from Supabase with more frequent updates
-  useEffect(() => {
-    async function fetchScoreRank() {
-      if (!address || !window.supabase || !playerHighScore) return;
+      logDebug('Fetching game sessions', { attempt: fetchAttempts.current.gameSessions + 1 });
       
-      // Cache for only 60 seconds to get more frequent updates
-      const now = Date.now();
-      if (now - fetchStatusRef.current.lastFetch < 60000) {
-        return; // Skip if recently fetched
+      const { count } = await supabase
+        .from('game_sessions')
+        .select('session_id', { count: 'exact', head: true })
+        .eq('wallet_address', address.toLowerCase());
+
+      setGameSessionsCount(count || 0);
+      logDebug('Set game sessions count', { count: count || 0 });
+      
+      // Reset attempt counter on success
+      fetchAttempts.current.gameSessions = 0;
+    } catch (err) {
+      console.error("Error fetching game sessions:", err);
+      // Increment attempt counter
+      fetchAttempts.current.gameSessions++;
+    }
+  }, [address, logDebug]);
+
+  // Fetch Jump Rank
+  const fetchJumpRank = useCallback(async () => {
+    if (FORCE_MOCK_VALUES) return; // Skip fetch if using mock values
+    if (!address || !supabase) return;
+    
+    try {
+      logDebug('Fetching jump rank', { attempt: fetchAttempts.current.jumpRank + 1 });
+      
+      const { data, error } = await supabase.rpc('get_jump_rank', {
+        user_address: address.toLowerCase()
+      });
+
+      if (error) throw error;
+
+      if (data?.rank) {
+        const rank = data.rank;
+        const rankDisplay = rank <= 1000 ? `#${rank}` : "1000+";
+        setJumpRank(rankDisplay);
+        logDebug('Set jump rank', { rank: rankDisplay });
+      } else {
+        setJumpRank("Unranked");
+        logDebug('No jump rank found, set to Unranked');
       }
       
-      try {
-        // Get all unique scores sorted by score descending
-        const { data, error } = await window.supabase
+      // Reset attempt counter on success
+      fetchAttempts.current.jumpRank = 0;
+    } catch (err) {
+      console.error("Error fetching jump rank:", err);
+      // If we've made more than 3 attempts, fall back to a default value
+      if (fetchAttempts.current.jumpRank >= 3) {
+        setJumpRank(totalJumps > 0 ? "#0" : "Unranked");
+        logDebug('Set fallback jump rank after multiple failures');
+      }
+      // Increment attempt counter
+      fetchAttempts.current.jumpRank++;
+    }
+  }, [address, totalJumps, logDebug]);
+
+  // Fetch Score Rank
+  const fetchScoreRank = useCallback(async () => {
+    if (FORCE_MOCK_VALUES) return; // Skip fetch if using mock values
+    if (!address || !supabase) return;
+    
+    try {
+      logDebug('Fetching score rank', { 
+        attempt: fetchAttempts.current.scoreRank + 1,
+        playerHighScore 
+      });
+      
+      const { data, error } = await supabase
           .from('scores')
           .select('wallet_address, score')
           .order('score', { ascending: false })
-          .limit(1100); // Get enough to determine up to 1000+ rank
-          
-        if (error) {
-          console.error("Error fetching score rankings:", error);
-          return;
+        .limit(1100);
+
+      if (error) throw error;
+
+      const uniqueScores = new Map();
+      data.forEach(({ wallet_address, score }) => {
+        const addr = wallet_address.toLowerCase();
+        if (!uniqueScores.has(addr) || score > uniqueScores.get(addr)) {
+          uniqueScores.set(addr, score);
         }
+      });
+
+      const sorted = Array.from(uniqueScores.entries())
+        .sort((a, b) => b[1] - a[1]);
+
+      const position = sorted.findIndex(([addr]) => addr === address.toLowerCase());
+      const rankDisplay = position >= 0 
+        ? (position + 1 <= 1000 ? `#${position + 1}` : "1000+") 
+        : (playerHighScore > 0 ? "#0" : "Unranked");
         
-        // Process scores to keep only highest score per user (deduplication)
-        const userHighScores = new Map(); // Map wallet_address -> highest score
-        
-        // First pass - determine highest score per wallet
-        data.forEach(item => {
-          const address = item.wallet_address.toLowerCase();
-          const currentHighScore = userHighScores.get(address) || 0;
-          
-          if (item.score > currentHighScore) {
-            userHighScores.set(address, item.score);
-          }
-        });
-        
-        // Second pass - create deduplicated array with highest scores
-        const uniqueScores = Array.from(userHighScores.entries())
-          .map(([address, score]) => ({ wallet_address: address, score }))
-          .sort((a, b) => b.score - a.score); // Sort by score descending
-        
-        // Find the user's position in the processed data
-        const userPosition = uniqueScores.findIndex(
-          entry => entry.wallet_address.toLowerCase() === address.toLowerCase()
-        );
-        
-        // If found, display appropriate rank
-        if (userPosition >= 0) {
-          const rank = userPosition + 1;
-          if (rank <= 1000) {
-            setScoreRank(`#${rank}`);
-          } else {
-            setScoreRank("1000+");
-          }
-        } else if (playerHighScore > 0) {
-          // Player has a score but not in results (should be rare)
-          setScoreRank("N/A");
-        } else {
-          setScoreRank("Unranked");
-        }
-        
-        // Update last fetch time
-        fetchStatusRef.current.lastFetch = now;
-        
-        // Mark as initially loaded
-        if (!isInitiallyLoaded && isMountedRef.current) {
-          setIsInitiallyLoaded(true);
-        }
-      } catch (error) {
-        console.error("Error calculating score rank:", error);
-        setScoreRank("Error");
+      setScoreRank(rankDisplay);
+      logDebug('Set score rank', { rank: rankDisplay, position });
+      
+      // Reset attempt counter on success
+      fetchAttempts.current.scoreRank = 0;
+    } catch (err) {
+      console.error("Error fetching score rank:", err);
+      // If we've made more than 3 attempts, fall back to a default value
+      if (fetchAttempts.current.scoreRank >= 3) {
+        setScoreRank(playerHighScore > 0 ? "#0" : "Unranked");
+        logDebug('Set fallback score rank after multiple failures');
       }
+      // Increment attempt counter
+      fetchAttempts.current.scoreRank++;
     }
+  }, [address, playerHighScore, logDebug]);
+
+  // Set up polling for data refresh
+  useEffect(() => {
+    logDebug('Setting up data polling');
+    isMounted.current = true;
     
-    // Immediate fetch
-    fetchScoreRank();
-    
-    // Set up a more frequent refresh interval
-    const refreshInterval = setInterval(() => {
-      if (isMountedRef.current) {
+    if (isConnected && address) {
+      // Initial fetch
+      if (!FORCE_MOCK_VALUES) {
+        fetchPlayerStats();
+        fetchGamesPlayed();
+        fetchGameSessions();
+        fetchJumpRank();
         fetchScoreRank();
       }
-    }, 3000); // Refresh every 3 seconds
+      
+      // Polling interval
+      const interval = setInterval(() => {
+        if (isMounted.current && !FORCE_MOCK_VALUES) {
+          logDebug('Polling for data updates');
+          fetchPlayerStats();
+          fetchGamesPlayed();
+          fetchGameSessions();
+          fetchJumpRank();
+          fetchScoreRank();
+        }
+      }, 5000); // Poll every 5 seconds
     
     return () => {
-      clearInterval(refreshInterval);
-    };
-  }, [address, playerHighScore, isInitiallyLoaded]);
-  
-  // Combine fetches using a single effect
-  useEffect(() => {
-    if (!isConnected || !address) {
-      // Reset state when disconnected
-      setGamesPlayed(0);
-      setSessionGamesCount(0);
-      fetchStatusRef.current.gamesFetched = false;
-      fetchStatusRef.current.sessionsFetched = false;
-      return;
-    }
-    
-    // Use a slight delay to avoid simultaneous DB requests
-    const timer1 = setTimeout(() => fetchGamesCount(), 100);
-    const timer2 = setTimeout(() => fetchSessionsCount(), 500);
-    
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-    };
-  }, [address, isConnected, fetchGamesCount, fetchSessionsCount]);
-  
-  // Reset mounted flag when component unmounts
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-  
-  // Calculate player rank directly from scoreRank, but add leaderboard fallback
-  const finalScoreRank = (() => {
-    // First check the cached score rank
-    if (scoreRank !== "...") {
-      return scoreRank;
-    }
-    
-    // Special case - if not connected or no address, return N/A
-    if (!isConnected || !address) {
-      return "N/A";
-    }
-    
-    // If we're still loading but have a high score, return "Loading..."
-    if (playerHighScore > 0) {
-      return "LOADING...";
-    }
-    
-    // Default unranked state
-    return "Unranked";
-  })();
-  
-  // Get total games directly from both sources
-  const totalGames = sessionGamesCount > gamesPlayed ? sessionGamesCount : gamesPlayed || 0;
-  
-  // Create shared isLoading flags
-  const loadingFlags = {
-    jumpRank: jumpRank === "Calculating" || jumpRank === "...",
-    scoreRank: finalScoreRank === "..." || finalScoreRank === "LOADING..."
-  };
-  
-  return {
-    jumpRank,
-    scoreRank: finalScoreRank,
-    totalGames,
-    isLoading: loadingFlags,
-    // Force refresh function for components to call
-    forceRefresh: () => {
-      fetchStatusRef.current = {
-        gamesFetched: false,
-        sessionsFetched: false,
-        lastFetch: 0,
-        lastRankFetch: 0
+        clearInterval(interval);
+        isMounted.current = false;
       };
     }
+    
+    return () => {
+      isMounted.current = false;
+    };
+  }, [
+    isConnected, 
+    address, 
+    fetchPlayerStats, 
+    fetchGamesPlayed, 
+    fetchGameSessions, 
+    fetchJumpRank, 
+    fetchScoreRank,
+    logDebug
+  ]);
+  
+  // Fallback timer for loading states
+  useEffect(() => {
+    if (FORCE_MOCK_VALUES) return; // Skip if using mock values
+    
+    // Set fallback values if loading takes too long
+    if (jumpRank === "Calculating" || scoreRank === "...") {
+      logDebug('Setting up fallback timer for ranks');
+      
+      const fallbackTimer = setTimeout(() => {
+        if (!isMounted.current) return;
+        
+        if (jumpRank === "Calculating") {
+          setJumpRank(totalJumps > 0 ? "#0" : "Unranked");
+          logDebug('Applied fallback value for jump rank');
+        }
+        
+        if (scoreRank === "...") {
+          setScoreRank(playerHighScore > 0 ? "#0" : "Unranked");
+          logDebug('Applied fallback value for score rank');
+        }
+      }, 8000); // 8 second timeout
+      
+      return () => clearTimeout(fallbackTimer);
+    }
+  }, [jumpRank, scoreRank, playerHighScore, totalJumps, logDebug]);
+  
+  return {
+    playerHighScore,
+    totalJumps,
+    gamesPlayed,
+    gameSessionsCount,
+    jumpRank,
+    scoreRank
   };
 } 

@@ -233,7 +233,11 @@ body {
   color: white;
   text-align: center;
   margin: 0;
-  text-shadow: 4px 4px 0 var(--primary), 0 0 20px rgba(255, 255, 255, 0.5);
+  text-shadow: 
+    4px 4px 0 #ff3333,
+    6px 6px 0 #cc0000,
+    8px 8px 0 #990000,
+    10px 10px 10px rgba(0, 0, 0, 0.5);
   letter-spacing: 2px;
   transform: rotate(-2deg);
   width: 100%;
@@ -3313,4 +3317,10 @@ button[contains="MINT TO PLAY"],
   .stat-value {
     font-size: 1rem;
   }
+}
+
+/* Bangers font class */
+.bangers-font {
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1px; /* Better readability for this font */
 }
