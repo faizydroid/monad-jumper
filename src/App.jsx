@@ -29,49 +29,6 @@ import { fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelper
 import characterABI from "./data/characterABI.json";
 import { debounce } from './utils/fetchHelpers.utils.js';
 
-// Add safe storage access helpers at the beginning of the file
-// Safe localStorage wrapper
-const safeLocalStorage = {
-  getItem: (key) => {
-    try {
-      return localStorage.getItem(key);
-    } catch (e) {
-      console.debug('Safe localStorage getItem failed', key);
-      return null;
-    }
-  },
-  setItem: (key, value) => {
-    try {
-      return localStorage.setItem(key, value);
-    } catch (e) {
-      console.debug('Safe localStorage setItem failed', key);
-      return null;
-    }
-  }
-};
-
-// Safe sessionStorage wrapper
-const safeSessionStorage = {
-  getItem: (key) => {
-    try {
-      return sessionStorage.getItem(key);
-    } catch (e) {
-      console.debug('Safe sessionStorage getItem failed', key);
-      return null;
-    }
-  },
-  setItem: (key, value) => {
-    try {
-      return sessionStorage.setItem(key, value);
-    } catch (e) {
-      console.debug('Safe sessionStorage setItem failed', key);
-      return null;
-    }
-  }
-};
-
-// Replace all direct storage access with safe wrappers in the app
-
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
 if (typeof window !== 'undefined') {
@@ -253,53 +210,55 @@ if (typeof window !== 'undefined') {
   }, 15 * 60 * 1000); // Clean every 15 minutes
   
   // Limited console logging for production
-  if (typeof window !== 'undefined') {
-    // Check if we're in production environment
-    const isProduction = window.location.hostname !== 'localhost' && 
-                          !window.location.hostname.includes('127.0.0.1') &&
-                          !window.location.hostname.includes('192.168.');
+  if (import.meta.env.PROD) {
+    // Completely disable all console logging in production except critical errors
+    const originalConsoleLog = console.log;
+    const originalConsoleInfo = console.info;
+    const originalConsoleWarn = console.warn;
+    const originalConsoleDebug = console.debug;
     
-    if (isProduction) {
-      // In production, completely disable all console logging
-      const noop = function() {};
-      console.log = noop;
-      console.warn = noop;
-      console.info = noop;
-      console.debug = noop;
-      
-      // Only keep error logging for critical errors
-      const originalConsoleError = console.error;
-      console.error = function(...args) {
-        // Check if it's a critical error worth logging
-        const errorString = String(args);
-        const isCritical = errorString.includes('critical') || 
-                           errorString.includes('fatal') || 
-                           errorString.includes('uncaught');
-        
-        if (isCritical) {
-          originalConsoleError.apply(console, args);
-        }
-      };
-    } else {
-      // In development, still log but limit transaction logging
-      const originalConsoleLog = console.log;
-      console.log = function(...args) {
-        if (args[0] && typeof args[0] === 'string' && 
-            (args[0].includes('transaction') || 
-             args[0].includes('jumps') || 
-             args[0].includes('TX'))) {
-          const timestampArgs = Array.from(arguments);
-          if (timestampArgs.length > 0) {
-            timestampArgs.unshift(`🔎 ${new Date().toISOString().slice(11, 19)}`);
-            originalConsoleLog.apply(console, timestampArgs);
+    // Replace all console methods except error
+    console.log = function(...args) {
+      // Only log critical errors in production
+      if (args[0] && typeof args[0] === 'string' && 
+          (args[0].includes('CRITICAL') || 
+           args[0].includes('FATAL ERROR'))) {
+        originalConsoleLog.apply(console, args);
+      }
+      // Skip all other logs
+    };
+    
+    // Also disable these console methods
+    console.info = function() {};
+    console.warn = function(...args) {
+      // Allow only serious warnings
+      if (args[0] && typeof args[0] === 'string' && 
+          (args[0].includes('CRITICAL') || 
+           args[0].includes('FATAL'))) {
+        originalConsoleWarn.apply(console, args);
+      }
+    };
+    console.debug = function() {};
+    
+  } else {
+    // In development, still log but limit transaction logging
+    const originalConsoleLog = console.log;
+    console.log = function(...args) {
+      if (args[0] && typeof args[0] === 'string' && 
+          (args[0].includes('transaction') || 
+           args[0].includes('jumps') || 
+           args[0].includes('TX'))) {
+        const timestampArgs = [...args];
+        if (timestampArgs.length > 0) {
+          timestampArgs.unshift(`🔎 ${new Date().toISOString().slice(11, 19)}`);
+          originalConsoleLog.apply(console, timestampArgs);
         } else {
-            originalConsoleLog.apply(console, arguments);
-          }
-        } else {
-          originalConsoleLog.apply(console, arguments);
+          originalConsoleLog.apply(console, args);
         }
-      };
-    }
+      } else {
+        originalConsoleLog.apply(console, args);
+      }
+    };
   }
 }
 

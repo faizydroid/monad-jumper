@@ -1,3 +1,32 @@
+// Disable console logs in production
+(function() {
+  const isProduction = window.location.hostname !== 'localhost' && 
+                      !window.location.hostname.includes('127.0.0.1') &&
+                      !window.location.hostname.includes('.local');
+                      
+  if (isProduction) {
+    const originalConsoleLog = console.log;
+    const originalConsoleInfo = console.info;
+    const originalConsoleWarn = console.warn;
+    const originalConsoleDebug = console.debug;
+    
+    // Replace console methods
+    console.log = function() {};
+    console.info = function() {};
+    console.warn = function() {};
+    console.debug = function() {};
+    
+    // Only keep console.error for critical errors
+    console.error = function(...args) {
+      // Add a marker to identify where the error is coming from
+      const newArgs = ['[GAME]', ...args];
+      originalConsoleLog.apply(console, newArgs);
+    };
+  }
+})();
+
+// --- Existing code starts below ---
+
 import { Player } from '/js/player.js'
 import { Background } from '/js/background.js'
 import { InputHandler } from '/js/input.js'
