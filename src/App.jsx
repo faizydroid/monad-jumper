@@ -29,6 +29,49 @@ import { fetchGameSessionsCount, incrementGamesCount } from './utils/fetchHelper
 import characterABI from "./data/characterABI.json";
 import { debounce } from './utils/fetchHelpers.utils.js';
 
+// Add safe storage access helpers at the beginning of the file
+// Safe localStorage wrapper
+const safeLocalStorage = {
+  getItem: (key) => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.debug('Safe localStorage getItem failed', key);
+      return null;
+    }
+  },
+  setItem: (key, value) => {
+    try {
+      return localStorage.setItem(key, value);
+    } catch (e) {
+      console.debug('Safe localStorage setItem failed', key);
+      return null;
+    }
+  }
+};
+
+// Safe sessionStorage wrapper
+const safeSessionStorage = {
+  getItem: (key) => {
+    try {
+      return sessionStorage.getItem(key);
+    } catch (e) {
+      console.debug('Safe sessionStorage getItem failed', key);
+      return null;
+    }
+  },
+  setItem: (key, value) => {
+    try {
+      return sessionStorage.setItem(key, value);
+    } catch (e) {
+      console.debug('Safe sessionStorage setItem failed', key);
+      return null;
+    }
+  }
+};
+
+// Replace all direct storage access with safe wrappers in the app
+
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
 if (typeof window !== 'undefined') {
@@ -748,119 +791,78 @@ function HorizontalStats() {
       try {
         console.log("Fetching fresh jump rank from Supabase");
         
-        // OPTIMIZED APPROACH: Get rank directly with a single SQL query
-        // This query computes the rank directly on the server side
-        const lowerCaseAddress = address.toLowerCase();
-        const { data, error } = await supabase.rpc('get_jump_rank', { 
-          user_address: lowerCaseAddress 
-        });
-        
-        // If RPC isn't available, try the fallback approach with a direct count
-        if (error && error.message && error.message.includes('function "get_jump_rank" does not exist')) {
-          console.log("RPC function not available, using direct rank calculation");
+        // First check if the RPC function exists without causing console errors
+        try {
+          // OPTIMIZED APPROACH: Get rank directly with a single SQL query
+          // This query computes the rank directly on the server side
+          const lowerCaseAddress = address.toLowerCase();
           
-          // Get this user's jumps first
-          const { data: userJumpData } = await supabase
-            .from('jumps')
-            .select('count')
-            .eq('wallet_address', lowerCaseAddress)
-            .maybeSingle();
+          // Try with a simple, controlled request first
+          const testResponse = await fetch(`${import.meta.env.VITE_REACT_APP_SUPABASE_URL}/rest/v1/rpc/get_jump_rank`, {
+            method: 'HEAD',
+            headers: {
+              'apikey': import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY
+            }
+          });
+          
+          // If function exists, use it
+          if (testResponse.ok) {
+            const { data } = await supabase.rpc('get_jump_rank', { 
+              user_address: lowerCaseAddress 
+            });
             
-          const userJumps = userJumpData?.count || totalJumps || 0;
-          
-          // If user has no jumps, show as unranked
-          if (!userJumps || userJumps <= 0) {
-            setJumpRank("Unranked");
-            return;
-          }
-          
-          // Count how many users have more jumps than this user (faster than fetching all)
-          const { count: playersAbove, error: countError } = await supabase
-            .from('jumps')
-            .select('wallet_address', { count: 'exact', head: true })
-            .gt('count', userJumps);
-            
-          if (countError) {
-            console.error("Error getting rank:", countError);
-            return;
-          }
-          
-          // Calculate rank (offset by 1 since counting players ABOVE)
-          const rank = playersAbove + 1;
-          console.log(`Jump rank calculated: ${rank}`);
-          
-          if (rank <= 1000) {
-            setJumpRank(`#${rank}`);
+            if (data) {
+              const rank = data.rank;
+              console.log(`Jump rank from RPC: ${rank}`);
+              
+              if (rank <= 0) {
+                setJumpRank("Unranked");
+              } else if (rank <= 1000) {
+                setJumpRank(`#${rank}`);
+              } else {
+                setJumpRank("1000+");
+              }
+              return;
+            }
           } else {
-            setJumpRank("1000+");
+            // If head request failed, function doesn't exist - skip to fallback
+            throw new Error("RPC function not available");
           }
-          
-          // Don't cache the result - always use fresh data
-          return;
+        } catch (rpcError) {
+          // Silently ignore RPC errors and use fallback method
+          console.debug("Using fallback jump rank calculation");
         }
         
-        // If we got data from RPC
-        if (data) {
-          const rank = data.rank;
-          console.log(`Jump rank from RPC: ${rank}`);
-          
-          if (rank <= 0) {
-            setJumpRank("Unranked");
-          } else if (rank <= 1000) {
-            setJumpRank(`#${rank}`);
-          } else {
-            setJumpRank("1000+");
-          }
-          
-          // Don't cache the result - always use fresh data
-          return;
-        }
-        
-        // Fallback to the original comprehensive method if both other approaches fail
-        console.log("Falling back to comprehensive rank calculation method");
-        
-        // First get this user's jump count to ensure we have it
-        const { data: userJumpData, error: userJumpError } = await supabase
+        // FALLBACK: Manual rank calculation
+        // Get this user's jumps first
+        const { data: userJumpData } = await supabase
           .from('jumps')
           .select('count')
           .eq('wallet_address', lowerCaseAddress)
           .maybeSingle();
+          
+        const userJumps = userJumpData?.count || totalJumps || 0;
         
-        if (userJumpError) {
-          console.error("Error fetching user's jump count:", userJumpError);
-        }
-        
-        // Get this user's current jumps count from the database or state
-        const userJumps = userJumpData ? parseInt(userJumpData.count) : totalJumps || 0;
-        
-        // If user has no jumps, they're unranked
-        if (userJumps <= 0) {
+        // If user has no jumps, show as unranked
+        if (!userJumps || userJumps <= 0) {
           setJumpRank("Unranked");
           return;
         }
         
-        // Get jump counts for players above this user's count - much faster query!
-        const { data: aboveData, error: aboveError } = await supabase
+        // Count how many users have more jumps than this user (faster than fetching all)
+        const { count: playersAbove, error: countError } = await supabase
           .from('jumps')
-          .select('wallet_address, count')
-          .gt('count', userJumps)
-          .order('count', { ascending: false });
+          .select('wallet_address', { count: 'exact', head: true })
+          .gt('count', userJumps);
           
-        if (aboveError) {
-          console.error("Error fetching players above:", aboveError);
+        if (countError) {
+          console.error("Error getting rank:", countError);
           return;
         }
         
-        // Count unique wallets above
-        const uniqueWalletsAbove = new Set();
-        aboveData?.forEach(item => {
-          if (item.wallet_address) {
-            uniqueWalletsAbove.add(item.wallet_address.toLowerCase());
-          }
-        });
-        
-        const playersAbove = uniqueWalletsAbove.size;
-        const rank = playersAbove + 1; // Player's rank is count of players above + 1
+        // Calculate rank (offset by 1 since counting players ABOVE)
+        const rank = playersAbove + 1;
+        console.log(`Jump rank calculated: ${rank}`);
         
         if (rank <= 1000) {
           setJumpRank(`#${rank}`);
@@ -870,8 +872,12 @@ function HorizontalStats() {
         
         // Don't cache the result - always use fresh data
       } catch (error) {
-        console.error("Error calculating jump rank:", error);
-        setJumpRank("Error");
+        console.debug("Error calculating jump rank - using fallback method");
+        
+        // Last resort fallback - just show unranked
+        if (!jumpRank || jumpRank === "Calculating") {
+          setJumpRank("Unranked");
+        }
       }
     }
     
