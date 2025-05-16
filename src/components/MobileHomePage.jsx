@@ -145,7 +145,7 @@ const MobileHomePage = ({
     const isSmallScreen = window.innerWidth <= 768;
     
     // ALWAYS set to false to disable the coming soon overlay
-    setIsTrueMobileDevice(true);
+    setIsTrueMobileDevice(false);
     
     // Don't set mobile flags if this is clearly a desktop device with large screen
     if (!isMobileDevice && !isSmallScreen && window.innerWidth > 1024) {
