@@ -2490,7 +2490,7 @@ iframe.game-frame {
 /* Enhance the game title styling to match homepage */
 .home-container .game-title {
   font-family: 'Bangers', cursive;
-  font-size: 7rem;
+  font-size: 18rem;
   color: white;
   text-align: center;
   margin: 0;

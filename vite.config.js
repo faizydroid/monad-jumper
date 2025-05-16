@@ -21,7 +21,21 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       open: true,
-      host: '0.0.0.0'
+      host: '0.0.0.0',
+      proxy: {
+        // Add proxy for the Supabase API endpoint
+        '/api/proxy/supabase': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          secure: false
+        },
+        // Add proxy for register-session-token endpoint
+        '/api/register-session-token': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          secure: false
+        }
+      }
     },
     css: {
       preprocessorOptions: {

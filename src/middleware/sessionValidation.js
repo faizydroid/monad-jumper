@@ -1,14 +1,3 @@
-// Check if we're in production mode
-const isProduction = typeof window !== 'undefined' && 
-                    window.location.hostname !== 'localhost' && 
-                    !window.location.hostname.includes('127.0.0.1') &&
-                    !window.location.hostname.includes('.local');
-
-// Set up conditional logging functions
-const logInfo = isProduction ? () => {} : console.log;
-const logWarn = isProduction ? () => {} : console.warn;
-const logError = console.error; // Keep error logging for critical issues
-
 // Supabase middleware for session token validation
 export const validateGameSession = async (req, supabase) => {
   // Get the token from request headers, local storage, or cookie
@@ -18,12 +7,12 @@ export const validateGameSession = async (req, supabase) => {
                (typeof document !== 'undefined' && getCookie('gameSessionToken'));
   
   if (!token) {
-    logError('No session token found for validation');
+    console.error('No session token found for validation');
     
     // For high score saving, we'll allow it to continue with a warning
     // Check if this is a score-related operation
     if (req.body?.action === 'scores' || req.url?.includes('scores')) {
-      logWarn('No token for score operation - allowing with validation warning');
+      console.warn('No token for score operation - allowing with validation warning');
       return { 
         valid: true, 
         fallback: true, 
@@ -40,7 +29,7 @@ export const validateGameSession = async (req, supabase) => {
                    (typeof window !== 'undefined' ? window.location.origin : '');
     const validationUrl = `${baseUrl}/api/validate-session-token`;
     
-    logInfo(`Validating session token at: ${validationUrl}`);
+    console.log(`Validating session token at: ${validationUrl}`);
     
     // Make a request to our validation endpoint
     const response = await fetch(validationUrl, {
@@ -55,11 +44,11 @@ export const validateGameSession = async (req, supabase) => {
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown validation error' }));
-      logError('Session validation failed:', errorData);
+      console.error('Session validation failed:', errorData);
       
       // Special handling for score operations - allow them to continue with a warning
       if (req.body?.action === 'scores' || req.url?.includes('scores')) {
-        logWarn('Score validation failed but allowing operation with warning');
+        console.warn('Score validation failed but allowing operation with warning');
         return { 
           valid: true, 
           fallback: true, 
@@ -71,10 +60,10 @@ export const validateGameSession = async (req, supabase) => {
     }
     
     const result = await response.json();
-    logInfo('Session validation successful:', result);
+    console.log('Session validation successful:', result);
     return { valid: true, data: result };
   } catch (error) {
-    logError('Error validating session token:', error);
+    console.error('Error validating session token:', error);
     // Continue anyway - don't block the user if validation server is down
     return { valid: true, error: error.message, fallback: true };
   }
@@ -94,14 +83,14 @@ function getCookie(name) {
 export const createSecureSupabase = (supabase) => {
   // If supabase is not provided, return null to avoid errors
   if (!supabase) {
-    logError('No Supabase client provided to createSecureSupabase');
+    console.error('No Supabase client provided to createSecureSupabase');
     return null;
   }
 
   // IMPORTANT: Return the original client if we're in the admin dashboard
   // This is a simple way to avoid issues with the admin dashboard
   if (typeof window !== 'undefined' && window.location.pathname.includes('/admin')) {
-    logInfo('Using original Supabase client for admin dashboard');
+    console.log('Using original Supabase client for admin dashboard');
     return supabase;
   }
 
@@ -127,7 +116,7 @@ export const createSecureSupabase = (supabase) => {
           const token = typeof window !== 'undefined' && window.__SECURE_GAME_TOKEN?.value;
           
           if (!token || window.__SECURE_GAME_TOKEN?.used) {
-            logError(`Secure token missing or already used for ${table} operation`);
+            console.error(`Secure token missing or already used for ${table} operation`);
             return { 
               error: { message: 'Missing or used session token' },
               status: 403,
@@ -156,7 +145,7 @@ export const createSecureSupabase = (supabase) => {
             
             return await response.json();
           } catch (error) {
-            logError(`Error in secure proxy for ${table}:`, error);
+            console.error(`Error in secure proxy for ${table}:`, error);
             return { error, status: 500, statusText: 'Internal Server Error' };
           }
         } else {
