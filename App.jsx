@@ -182,6 +182,56 @@ function App() {
   // Add debug info to console to help troubleshoot which App.jsx is being used
   console.log("Root App.jsx rendering");
   
+  // CRITICAL PRODUCTION FIX: Direct check for verification=true in URL query parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('verification') || urlParams.get('verification') === 'true') {
+    console.log('🚨 FINAL PRODUCTION FIX: verification=true parameter detected, rendering verification page ONLY');
+    // Force all flags for verification
+    window.__ON_VERIFICATION_PAGE__ = true;
+    window.__VERIFY_EMERGENCY_DETECTION__ = true;
+    window.__FORCE_VERIFICATION_PAGE__ = true;
+    window.__DISABLE_MOBILE_REDIRECT__ = true;
+    window.__FORCE_MOBILE_VIEW__ = false;
+    
+    // Clear mobile flags
+    localStorage.removeItem('isMobileDevice');
+    sessionStorage.removeItem('isMobileDevice');
+    
+    // Force functions to return appropriate values
+    window.detectMobile = function() { return false; };
+    window.forceMobileRedirect = function() { return false; };
+    window.isVerificationPage = function() { return true; };
+    
+    // Add style tag to force hide any content that's not verification-related
+    const forceStyle = document.createElement('style');
+    forceStyle.id = 'verification-final-fix-styles';
+    forceStyle.textContent = `
+      body > *:not(.verification-page-container):not(#root) { display: none !important; }
+      #root > *:not(.verification-page-container) { display: none !important; }
+      .desktop-container { display: none !important; }
+      .mobile-container { display: none !important; }
+      .verification-page-container { 
+        display: block !important; 
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 99999 !important;
+      }
+    `;
+    document.head.appendChild(forceStyle);
+    
+    // Set CSS and body attributes
+    document.body.classList.add('verification-page');
+    document.body.setAttribute('data-page', 'verify');
+    
+    // DIRECT RETURN - this skips ALL other logic completely
+    return <NFTVerificationPage />;
+  }
+  
   // CRITICAL FIX: Immediate check for verification=true parameter
   const currentUrl = window.location.href;
   if (currentUrl.includes('verification=true') || currentUrl.includes('/verify')) {

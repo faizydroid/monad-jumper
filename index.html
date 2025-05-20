@@ -2,6 +2,62 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    
+    <!-- PRODUCTION VERIFICATION HACK - This must run FIRST -->
+    <script>
+        (function() {
+            try {
+                console.log('⚠️ CRITICAL PRODUCTION HACK: Checking verification parameter at the earliest possible moment');
+                
+                // Check URL for verification parameter
+                var url = window.location.href;
+                var params = new URLSearchParams(window.location.search);
+                var hasVerification = params.has('verification') || url.includes('verification=true');
+                
+                console.log('⚠️ URL:', url);
+                console.log('⚠️ Has verification parameter:', hasVerification);
+                
+                if (hasVerification) {
+                    console.log('⚠️ VERIFICATION PARAMETER DETECTED - Applying immediate fix');
+                    
+                    // Register onload handler to redirect if needed
+                    window.addEventListener('DOMContentLoaded', function() {
+                        console.log('⚠️ DOMContentLoaded - Checking if verification component is visible');
+                        
+                        // Give React a moment to render
+                        setTimeout(function() {
+                            var verificationElement = document.querySelector('.verification-page-container, .nft-verification-container');
+                            console.log('⚠️ Verification element found:', verificationElement);
+                            
+                            // If verification component is not visible, force redirect to explicit verify page
+                            if (!verificationElement) {
+                                console.log('⚠️ VERIFICATION COMPONENT NOT FOUND - Forcing redirect to /verify');
+                                window.location.href = '/verify';
+                            }
+                        }, 1000);
+                    });
+                    
+                    // Add direct styles immediately
+                    var style = document.createElement('style');
+                    style.textContent = `
+                        /* Hide all non-verification content */
+                        .desktop-container, .mobile-container { display: none !important; }
+                        
+                        /* Force verification content to display */
+                        .verification-page-container, .nft-verification-container, .nft-verification-card {
+                            display: block !important;
+                            visibility: visible !important;
+                            opacity: 1 !important;
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+            } catch (e) {
+                console.error('Error in critical production hack:', e);
+            }
+        })();
+    </script>
+    
     <!-- PRODUCTION FIX: Ultra aggressive verification detection -->
     <script>
         // Run this immediately, at the highest priority
