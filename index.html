@@ -2,6 +2,92 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- PRODUCTION FIX: Ultra aggressive verification detection -->
+    <script>
+        // Run this immediately, at the highest priority
+        (function() {
+            try {
+                console.log('🔴 PRODUCTION-FIX: Running ultra aggressive verification check');
+                var url = window.location.href;
+                var pathname = window.location.pathname;
+                var search = window.location.search;
+                
+                // Log everything to help debug
+                console.log('🔴 URL:', url);
+                console.log('🔴 Pathname:', pathname);
+                console.log('🔴 Search:', search);
+                
+                // Comprehensive check for verification indicators
+                var isVerification = 
+                    url.includes('verification=true') || 
+                    url.includes('/verify') ||
+                    pathname === '/verify' ||
+                    pathname.startsWith('/verify') ||
+                    search.includes('verification=');
+                
+                console.log('🔴 Is verification page:', isVerification);
+                
+                if (isVerification) {
+                    console.log('🔴 VERIFICATION PAGE DETECTED IN PRODUCTION - FORCING DISPLAY');
+                    
+                    // Set ALL possible flags
+                    window.__ON_VERIFICATION_PAGE__ = true;
+                    window.__VERIFY_EMERGENCY_DETECTION__ = true;
+                    window.__FORCE_VERIFICATION_PAGE__ = true;
+                    window.__DISABLE_MOBILE_REDIRECT__ = true;
+                    window.__FORCE_MOBILE_VIEW__ = false;
+                    
+                    // Clear all mobile-related storage
+                    if (window.localStorage) {
+                        window.localStorage.removeItem('isMobileDevice');
+                    }
+                    if (window.sessionStorage) {
+                        window.sessionStorage.removeItem('isMobileDevice');
+                    }
+                    
+                    // Override mobile detection functions
+                    window.detectMobile = function() { return false; };
+                    window.forceMobileRedirect = function() { return false; };
+                    window.isVerificationPage = function() { return true; };
+                    
+                    // Add a special meta tag for verification
+                    var meta = document.createElement('meta');
+                    meta.name = 'x-verification-page';
+                    meta.content = 'true';
+                    document.head.appendChild(meta);
+                    
+                    // Create a style tag to force verification page visibility
+                    var style = document.createElement('style');
+                    style.textContent = `
+                        .verification-page, [data-page="verify"] { display: block !important; }
+                        .desktop-container { display: none !important; }
+                        .mobile-container { display: none !important; }
+                    `;
+                    document.head.appendChild(style);
+                    
+                    // Set body class and attribute as soon as body exists
+                    var bodyCheck = setInterval(function() {
+                        if (document.body) {
+                            document.body.classList.add('verification-page');
+                            document.body.setAttribute('data-page', 'verify');
+                            clearInterval(bodyCheck);
+                            console.log('🔴 Added verification classes to body');
+                        }
+                    }, 10);
+                    
+                    // Force validation state to persist
+                    setInterval(function() {
+                        window.__ON_VERIFICATION_PAGE__ = true;
+                        window.__VERIFY_EMERGENCY_DETECTION__ = true;
+                        window.__FORCE_VERIFICATION_PAGE__ = true;
+                    }, 100);
+                }
+            } catch (e) {
+                console.error('Error in ultra aggressive verification check:', e);
+            }
+        })();
+    </script>
+    
     <!-- EMERGENCY VERIFICATION REDIRECT - This must be first! -->
     <script>
         (function() {
