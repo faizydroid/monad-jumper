@@ -32,6 +32,10 @@ import {
   processGameOverAfterRevive, 
   registerSessionToken 
 } from './utils/gameHelpers';
+// Import supabase from the utils directory where it actually exists
+import { supabase } from './utils/supabaseClient';
+// Import NFT Verification Page
+import NFTVerificationPage from './pages/NFTVerificationPage';
 
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
@@ -253,10 +257,10 @@ if (typeof window !== 'undefined') {
           originalConsoleLog.apply(console, timestampArgs);
       } else {
           originalConsoleLog.apply(console, arguments);
-        }
+      }
       } else {
         originalConsoleLog.apply(console, arguments);
-      }
+  }
     };
   }
 
@@ -347,12 +351,6 @@ if (typeof window !== 'undefined') {
     }
   });
 }
-
-// Initialize Supabase client
-const supabase = createClient(
-  import.meta.env.VITE_REACT_APP_SUPABASE_URL,
-  import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY
-);
 
 // Global access to open the mint modal from anywhere
 window.openMintModal = () => {
@@ -1935,7 +1933,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
                       const { error: insertError } = await supabase
                   .from('scores')
                         .insert(scoreData);
-                      
+                
                       if (insertError) {
                         console.error('Second score save attempt failed:', insertError);
                         
@@ -3410,7 +3408,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           
           // Extract base session ID for checking
           const baseSessionId = iframeGameId.includes('_') ? iframeGameId.split('_')[0] : iframeGameId;
-          
+            
           // CRITICAL: Check global completion tracking first
           if (!window.__COMPLETED_GAME_SESSIONS) {
             window.__COMPLETED_GAME_SESSIONS = new Set();
@@ -3434,9 +3432,9 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
               jumpCount = dataValue;
               console.log(`?? Found jump count in event data field '${field}': ${jumpCount}`);
               break;
+              }
             }
-          }
-          
+            
           // If we found jumps, save them globally
             if (jumpCount > 0) {
             window.__LATEST_JUMPS = jumpCount;
@@ -3466,7 +3464,7 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
           } else {
             // Normal game over processing via handler
             await handleGameOver(finalScore);
-            
+          
             // Mark this session as completed after normal processing
             if (!window.__COMPLETED_GAME_SESSIONS) {
               window.__COMPLETED_GAME_SESSIONS = new Set();
@@ -5028,8 +5026,8 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
             isNftLoading={isNftBalanceLoading}
           />
         ) : (
-                    <>
-            <BackgroundElements />
+          <>
+        <BackgroundElements />
             <div style={{
               width: '100vw',
               position: 'absolute',
@@ -5621,7 +5619,7 @@ function App() {
   // Use useReadContract instead of useContractRead for Wagmi v2
   const { 
     data: nftBalanceData,
-    isLoading: isNftBalanceLoading,
+    isLoading: isNftBalanceLoading = false, // Add default value here
     refetch: refetchNftBalance
   } = useReadContract({
     address: import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS,
@@ -5641,7 +5639,7 @@ function App() {
       staleTime: 30000,
       refetchInterval: 60000,
     },
-  });
+  }) || { data: null, isLoading: false, refetch: () => {} }; // Add fallback object
 
   // Calculate NFT ownership status
   const hasMintedNft = useMemo(() => {
@@ -5660,7 +5658,27 @@ function App() {
 
   // Handle play game action for mobile view
   const handlePlayGame = useCallback(() => {
-    window.location.href = '#game';
+    console.log("Play button clicked on mobile - loading game directly");
+    
+    try {
+      // For standalone original.html version - direct load approach
+      window.location.href = window.location.origin + '/original.html';
+      
+      // If that doesn't work (after a brief delay), try alternative approaches
+      setTimeout(() => {
+        if (document.location.href.indexOf('original.html') === -1) {
+          console.log("Direct navigation failed, trying alternatives");
+          
+          // Try with full path
+          const fullPath = window.location.href.substring(0, window.location.href.lastIndexOf('/')) + '/original.html';
+          window.location.href = fullPath;
+        }
+      }, 300);
+    } catch (error) {
+      console.error("Error navigating to game:", error);
+      // Fallback to standard game mode as last resort
+      window.location.href = window.location.origin + '/#game';
+    }
   }, []);
   
   // Handle mint action for mobile view
@@ -5714,6 +5732,7 @@ function App() {
       <Routes>
         <Route path="/" element={gameComponent} />
         <Route path="/admin" element={<AdminAccess />} />
+        <Route path="/verify" element={<NFTVerificationPage />} />
       </Routes>
       <TransactionNotifications />
 

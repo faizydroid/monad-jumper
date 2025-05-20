@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, lazy, Suspense } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
@@ -6,6 +6,11 @@ import Navbar from './Navbar';
 import Leaderboard from './Leaderboard';
 import HorizontalStats from './HorizontalStats';
 import usePlayerStats from '../hooks/usePlayerStats';
+// Direct import of NFTVerification component for verification page fallback
+import NFTVerification from './NFTVerification';
+
+// Lazy load NFTVerificationPage for dynamic rendering
+const NFTVerificationPage = lazy(() => import('../pages/NFTVerificationPage'));
 
 // Custom ConnectButton wrapper to force mobile view after connection
 const MobileConnectButton = (props) => {
@@ -37,22 +42,38 @@ const MobileConnectButton = (props) => {
     
     // Add a handler for the connection flow
     const handleRedirectBack = () => {
+      // Check if we're on verification page - NEVER redirect if on verification
+      const isVerifyPage = (
+        window.location.pathname === '/verify' || 
+        window.location.pathname.startsWith('/verify') ||
+        window.location.href.includes('/verify') ||
+        window.__ON_VERIFICATION_PAGE__ === true ||
+        document.body.classList.contains('verification-page') || 
+        document.body.getAttribute('data-page') === 'verify'
+      );
+      
+      if (isVerifyPage) {
+        console.log('On verification page, not forcing mobile view');
+        return;
+      }
+      
       // Force back to mobile view after redirect
       const mobileFlag = document.createElement('div');
       mobileFlag.id = '__force_mobile_view__';
       mobileFlag.style.display = 'none';
       document.body.appendChild(mobileFlag);
       
-      // Force URL parameter
+      // Force URL parameter but PRESERVE FULL PATH
       const url = new URL(window.location.href);
       url.searchParams.set('isMobile', 'true');
       window.history.replaceState({}, '', url.toString());
       
       // Force reload if needed (last resort)
       if (!document.querySelector('.mobile-container')) {
-        const currentUrl = window.location.href;
-        const redirectUrl = currentUrl.split('?')[0] + '?isMobile=true';
-        window.location.href = redirectUrl;
+        // Preserve the full URL path - don't split by ?
+        const redirectUrl = new URL(window.location.href);
+        redirectUrl.searchParams.set('isMobile', 'true');
+        window.location.href = redirectUrl.toString();
       }
     };
     
@@ -73,14 +94,45 @@ const MobileHomePage = ({
   onPlay, 
   onMint,
   hasMintedNft,
-  isNftLoading,
+  isNftLoading = false,
   leaderboard,
   address
 }) => {
+  // CRITICAL: First thing, check if we're on verification page
+  // If so, redirect to verification component directly
+  if (window.location.pathname === '/verify' || 
+      window.location.pathname.startsWith('/verify') ||
+      window.location.href.includes('/verify') ||
+      window.__ON_VERIFICATION_PAGE__ === true ||
+      document.body.classList.contains('verification-page') || 
+      document.body.getAttribute('data-page') === 'verify' ||
+      window.__VERIFY_EMERGENCY_DETECTION__ === true ||
+      new URLSearchParams(window.location.search).has('verification')) {
+    
+    console.log('🚨 MobileHomePage detected verification path - rendering NFTVerificationPage');
+    
+    // Set verification flags to ensure persistence
+    window.__ON_VERIFICATION_PAGE__ = true;
+    window.__VERIFY_EMERGENCY_DETECTION__ = true;
+    document.body.classList.add('verification-page');
+    document.body.setAttribute('data-page', 'verify');
+    
+    // Directly render NFTVerificationPage or fallback to NFTVerification component
+    return (
+      <div className="verification-container" style={{height: '100vh', width: '100vw'}}>
+        <Suspense fallback={<div style={{height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center'}}>Loading verification page...</div>}>
+          <NFTVerificationPage />
+        </Suspense>
+      </div>
+    );
+  }
+  
   const { isConnected } = useAccount();
   const [showNavbar, setShowNavbar] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [isTrueMobileDevice, setIsTrueMobileDevice] = useState(false);
+  const [isTrueMobileDevice, setIsTrueMobileDevice] = useState(true);
+  // Add state for mobile transactions
+  const [mobileTransactions, setMobileTransactions] = useState([]);
   
   // Get player stats directly from the hook
   const {
@@ -144,8 +196,8 @@ const MobileHomePage = ({
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isSmallScreen = window.innerWidth <= 768;
     
-    // ALWAYS set to false to disable the coming soon overlay
-    setIsTrueMobileDevice(false);
+    // Keep the coming soon overlay enabled
+    // setIsTrueMobileDevice(false);
     
     // Don't set mobile flags if this is clearly a desktop device with large screen
     if (!isMobileDevice && !isSmallScreen && window.innerWidth > 1024) {
@@ -187,8 +239,25 @@ const MobileHomePage = ({
       
       // Handle visibility changes (for when returning from wallet connect)
       const checkMobileState = () => {
+        // First check if we're on verification page
+        const isVerifyPage = (
+          window.location.pathname === '/verify' || 
+          window.location.pathname.startsWith('/verify') ||
+          window.location.href.includes('/verify') ||
+          window.__ON_VERIFICATION_PAGE__ === true ||
+          document.body.classList.contains('verification-page') || 
+          document.body.getAttribute('data-page') === 'verify'
+        );
+        
+        if (isVerifyPage) {
+          console.log('On verification page, not forcing mobile container');
+          return;
+        }
+        
         // If we somehow lost our mobile container class, force refresh
         if (!document.querySelector('.mobile-container')) {
+          // Preserve the full URL path
+          const url = new URL(window.location.href);
           url.searchParams.set('isMobile', 'true');
           url.searchParams.set('reload', Date.now().toString());
           window.location.href = url.toString();
@@ -241,22 +310,100 @@ const MobileHomePage = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  return (
-    <div className="mobile-container" style={{
-      background: 'url("/images/bg.jpg")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center center',
-      backgroundRepeat: 'no-repeat',
-      height: '100vh',
-      maxHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '10px',
-      position: 'relative',
-      overflow: 'hidden'
-    }}>
+  // Add transaction handling for mobile view
+  useEffect(() => {
+    // Keep track of pending transactions
+    const pendingTransactions = new Set();
+    
+    const handleTransaction = (event) => {
+      // Skip events that aren't related to transactions
+      if (!event.data || !event.data.type) return;
+      
+      // First check that this is a mobile-specific transaction event
+      // by looking for special properties or source indications
+      const isMobileTransaction = 
+        (event.data.source === 'mobile_game') || 
+        (event.data.platform === 'mobile') ||
+        (event.data.isMobile === true);
+        
+      // Handle transaction events from the iframe, but only if marked for mobile
+      // or if we're sure it won't conflict with desktop controls
+      if (isMobileTransaction && 
+         (event.data.type === 'GAME_OVER' || 
+          event.data.type === 'gameOver' || 
+          event.data.type === 'JUMP_PERFORMED')) {
+        
+        // Generate a unique transaction ID
+        const txId = `mobile_tx_${Date.now()}`;
+        pendingTransactions.add(txId);
+        
+        // Add to visible transactions state
+        const txType = event.data.type === 'JUMP_PERFORMED' ? 'jump' : 'update_score';
+        const newTx = {
+          id: txId,
+          type: txType,
+          status: 'pending',
+          timestamp: Date.now()
+        };
+        
+        setMobileTransactions(prev => [...prev, newTx]);
+        
+        // Simulate transaction processing
+        setTimeout(() => {
+          // Remove from pending
+          pendingTransactions.delete(txId);
+          
+          // Update transaction status to complete
+          setMobileTransactions(prev => 
+            prev.map(tx => tx.id === txId ? { ...tx, status: 'confirmed' } : tx)
+          );
+          
+          // Send confirmation back to iframe
+          const gameFrame = document.querySelector('iframe');
+          if (gameFrame && gameFrame.contentWindow) {
+            gameFrame.contentWindow.postMessage({
+              type: 'TRANSACTION_SUCCESS',
+              data: {
+                type: txType,
+                status: 'confirmed',
+                txId
+              }
+            }, '*');
+          }
+          
+          // Remove after showing success briefly
+          setTimeout(() => {
+            setMobileTransactions(prev => prev.filter(tx => tx.id !== txId));
+          }, 2000);
+        }, 1000); // Process within 1 second
+      }
+    };
+    
+    // Add event listener for messages from the iframe
+    window.addEventListener('message', handleTransaction);
+    
+    // Clean up on unmount
+    return () => {
+      window.removeEventListener('message', handleTransaction);
+    };
+  }, []);
+
+      return (
+      <div className="mobile-container" style={{
+        background: 'url("/images/bg.jpg")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center center',
+        backgroundRepeat: 'no-repeat',
+        height: '100vh',
+        maxHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
       {/* Coming Soon Overlay */}
       {isTrueMobileDevice && (
         <div style={{
@@ -282,8 +429,19 @@ const MobileHomePage = ({
             textShadow: '0 0 10px rgba(255, 107, 107, 0.8)',
             letterSpacing: '2px'
           }}>
-            COMING SOON
+            COMING SOON!
           </h1>
+          <h2 style={{
+            color: '#FF6B6B',
+            fontSize: '1.8rem',
+            fontFamily: '"Bangers", cursive',
+            textAlign: 'center',
+            margin: '0 0 15px 0',
+            textShadow: '0 0 8px rgba(0, 0, 0, 0.6)',
+            letterSpacing: '1px'
+          }}>
+            MOBILE EXPERIENCE
+          </h2>
           <p style={{
             color: 'white',
             fontSize: '1.2rem',
@@ -292,8 +450,9 @@ const MobileHomePage = ({
             lineHeight: '1.5',
             textShadow: '0 0 5px rgba(0, 0, 0, 0.8)'
           }}>
-            Mobile version in development.<br/>
-            Please play on desktop for now.
+            Mobile version is currently under development.<br/>
+            Exciting mobile features are on the way!<br/>
+            Please use the desktop version for the full experience.
           </p>
           <button 
             onClick={() => {
@@ -303,21 +462,50 @@ const MobileHomePage = ({
             }}
             style={{
               marginTop: '30px',
-              padding: '12px 24px',
-              background: 'linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%)',
+              padding: '15px 30px',
+              background: 'linear-gradient(90deg, #4CAF50 0%, #388E3C 100%)',
               color: 'white',
               border: 'none',
               borderRadius: '50px',
-              fontSize: '1rem',
+              fontSize: '1.2rem',
               fontWeight: 'bold',
               cursor: 'pointer',
-              boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 6px 15px rgba(0, 0, 0, 0.4), 0 0 20px rgba(76, 175, 80, 0.3)',
               textTransform: 'uppercase',
-              letterSpacing: '1px'
+              letterSpacing: '1.5px',
+              animation: 'pulse-button 2s infinite',
+              transition: 'transform 0.3s, box-shadow 0.3s',
+              position: 'relative',
+              overflow: 'hidden'
             }}
           >
-            Go to Desktop Version
+            <span style={{position: 'relative', zIndex: 2}}>Play Now on Desktop</span>
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '0',
+              width: '100%',
+              height: '10px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              transform: 'translateY(-50%)',
+              animation: 'shine 2s infinite linear'
+            }}></div>
           </button>
+          
+          {/* Add button animation */}
+          <style>
+            {`
+              @keyframes pulse-button {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+              }
+              @keyframes shine {
+                0% { left: -100%; }
+                100% { left: 100%; }
+              }
+            `}
+          </style>
         </div>
       )}
       
@@ -752,12 +940,12 @@ const MobileHomePage = ({
       )}
       
       {/* Action button container with positioning to push to bottom */}
-      <div style={{ 
+      <div id="mobile-action-container" style={{ 
         width: '100%',
         maxWidth: '360px',
         marginTop: '20px',
-        marginBottom: '20px',
-        paddingBottom: 'env(safe-area-inset-bottom, 10px)'
+        marginBottom: '50px',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 30px) + 20px)'
       }}>
         {!isConnected ? (
           <div style={{ marginBottom: '20px', width: '100%', display: 'none' }}>
@@ -787,7 +975,7 @@ const MobileHomePage = ({
                 background: 'linear-gradient(135deg, #57BB5D 0%, #3D9142 100%)',
                 border: 'none',
                 borderRadius: '50px',
-                padding: '15px 20px',
+                padding: '12px 15px',
                 color: 'white',
                 fontSize: '24px',
                 cursor: 'pointer',
@@ -795,10 +983,14 @@ const MobileHomePage = ({
                 marginBottom: '15px',
                 textTransform: 'uppercase',
                 position: 'relative',
-                overflow: 'hidden',
+                overflow: 'visible',
                 transition: 'transform 0.3s, box-shadow 0.3s',
                 letterSpacing: '1px',
-                textShadow: '2px 2px 0 #2C6B30'
+                textShadow: '2px 2px 0 #2C6B30',
+                minHeight: '60px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
             >
               PLAY NOW
@@ -822,7 +1014,7 @@ const MobileHomePage = ({
                 background: 'linear-gradient(135deg, #FF7E54 0%, #E8553A 100%)',
                 border: 'none',
                 borderRadius: '50px',
-                padding: '15px 20px',
+                padding: '12px 15px',
                 color: 'white',
                 fontSize: '24px',
                 cursor: 'pointer',
@@ -830,10 +1022,14 @@ const MobileHomePage = ({
                 marginBottom: '15px',
                 textTransform: 'uppercase',
                 position: 'relative',
-                overflow: 'hidden',
+                overflow: 'visible',
                 transition: 'transform 0.3s, box-shadow 0.3s',
                 letterSpacing: '1px',
-                textShadow: '2px 2px 0 #BE3A22'
+                textShadow: '2px 2px 0 #BE3A22',
+                minHeight: '60px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
             >
               MINT TO PLAY
@@ -940,6 +1136,49 @@ const MobileHomePage = ({
             box-shadow: 0 2px 10px rgba(76, 175, 80, 0.3);
           }
           
+          /* Improved mobile slide panel animations */
+          .mobile-slide-panel {
+            transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1) !important;
+            will-change: transform;
+            backface-visibility: hidden;
+            height: 100% !important;
+            height: -webkit-fill-available !important;
+            max-height: -webkit-fill-available !important;
+          }
+          
+          .mobile-slide-panel.open {
+            transform: translateX(0) !important;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.3);
+          }
+          
+          .mobile-slide-panel.left {
+            box-shadow: 5px 0 25px rgba(0, 0, 0, 0.25);
+          }
+          
+          .mobile-slide-panel.right {
+            box-shadow: -5px 0 25px rgba(0, 0, 0, 0.25);
+          }
+          
+          /* Better viewport handling */
+          html, body, #root, .mobile-container {
+            height: 100%;
+            height: -webkit-fill-available;
+            min-height: -webkit-fill-available;
+            max-height: -webkit-fill-available;
+            position: fixed;
+            width: 100%;
+            overflow: hidden;
+          }
+          
+          /* Panel content improvements */
+          .panel-content {
+            max-height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: env(safe-area-inset-bottom, 20px) !important;
+          }
+          
+          /* Add mobile responsiveness rules */
           @media screen and (max-height: 700px) {
             .stats-card {
               transform: scale(0.9);
@@ -952,9 +1191,14 @@ const MobileHomePage = ({
               font-size: 4rem !important;
             }
             .play-button-mobile, .mint-button-mobile {
-              padding: 12px 15px !important;
-              font-size: 22px !important;
-              margin-bottom: 10px !important;
+              padding: 10px 12px !important;
+              font-size: 20px !important;
+              margin-bottom: 15px !important;
+              min-height: 50px !important;
+            }
+            #mobile-action-container {
+              margin-bottom: 45px !important;
+              padding-bottom: 35px !important;
             }
           }
           @media screen and (max-height: 600px) {
@@ -972,51 +1216,41 @@ const MobileHomePage = ({
               font-size: 0.9rem !important;
             }
             .play-button-mobile, .mint-button-mobile {
-              padding: 10px 12px !important;
-              font-size: 20px !important;
-              margin-bottom: 8px !important;
+              padding: 8px 10px !important;
+              font-size: 18px !important;
+              margin-bottom: 12px !important;
               box-shadow: 0 4px 0 #2C6B30, 0 8px 16px rgba(0, 0, 0, 0.25) !important;
+              min-height: 45px !important;
             }
-            .mint-button-mobile {
-              box-shadow: 0 4px 0 #BE3A22, 0 8px 16px rgba(0, 0, 0, 0.25) !important;
-            }
-            .stats-card > div {
-              gap: 15px !important;
+            #mobile-action-container {
+              margin-bottom: 50px !important;
+              padding-bottom: 40px !important;
             }
           }
+          
+          /* Add extra small screen support */
           @media screen and (max-height: 500px) {
-            .mobile-container {
-              padding: 5px !important;
-            }
-            .character-container {
-              margin-bottom: 5px !important;
-            }
             .stats-card {
               transform: scale(0.8);
               margin-bottom: 0 !important;
             }
+            .character-container img {
+              width: 80px !important;
+            }
             .mobile-game-title {
               font-size: 3rem !important;
             }
-            .cloud-decoration {
-              display: none !important;
-            }
-            .stats-card > div > div {
-              padding-top: 22px !important;
-            }
-            .stats-card > div > div > div:first-child {
-              top: -8px !important;
-              width: 24px !important;
-              height: 24px !important;
-              padding: 3px !important;
-            }
-            .stats-card > div > div > div:first-child img {
-              width: 16px !important;
-              height: 16px !important;
-            }
             .play-button-mobile, .mint-button-mobile {
-              padding: 8px 10px !important;
-              margin-top: 5px !important;
+              padding: 6px 8px !important;
+              font-size: 16px !important;
+              margin-bottom: 15px !important;
+              min-height: 40px !important;
+              box-shadow: 0 3px 0 #2C6B30, 0 6px 12px rgba(0, 0, 0, 0.25) !important;
+            }
+            /* Extra padding for action container */
+            #mobile-action-container {
+              margin-bottom: 60px !important;
+              padding-bottom: 45px !important;
             }
           }
         `}
@@ -1024,8 +1258,22 @@ const MobileHomePage = ({
       
       {/* Sliding Navbar Panel - using Navbar component */}
       <div className={`mobile-slide-panel left ${showNavbar ? 'open' : ''}`}
-           onClick={() => setShowNavbar(false)}>
-        <div className="panel-content" onClick={e => e.stopPropagation()}>
+           onClick={() => setShowNavbar(false)}
+           style={{
+             height: '100%',
+             maxHeight: '100vh',
+             overflowY: 'auto',
+             paddingBottom: 'env(safe-area-inset-bottom, 20px)'
+           }}>
+        <div className="panel-content" 
+             onClick={e => e.stopPropagation()}
+             style={{
+               paddingBottom: 'env(safe-area-inset-bottom, 20px)',
+               height: 'auto',
+               minHeight: '100%',
+               display: 'flex',
+               flexDirection: 'column'
+             }}>
           <button onClick={() => setShowNavbar(false)} className="close-btn"
                   style={{
                     position: 'absolute',
@@ -1040,7 +1288,8 @@ const MobileHomePage = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '20px',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    zIndex: 2
                   }}>×</button>
           <Navbar onClose={() => setShowNavbar(false)} mobileView={true} />
         </div>
@@ -1048,8 +1297,22 @@ const MobileHomePage = ({
       
       {/* Sliding Leaderboard Panel */}
       <div className={`mobile-slide-panel right ${showLeaderboard ? 'open' : ''}`}
-           onClick={() => setShowLeaderboard(false)}>
-        <div className="panel-content" onClick={e => e.stopPropagation()}>
+           onClick={() => setShowLeaderboard(false)}
+           style={{
+             height: '100%',
+             maxHeight: '100vh',
+             overflowY: 'auto',
+             paddingBottom: 'env(safe-area-inset-bottom, 20px)'
+           }}>
+        <div className="panel-content" 
+             onClick={e => e.stopPropagation()}
+             style={{
+               paddingBottom: 'env(safe-area-inset-bottom, 20px)',
+               height: 'auto',
+               minHeight: '100%',
+               display: 'flex',
+               flexDirection: 'column'
+             }}>
           <button onClick={() => setShowLeaderboard(false)} className="close-btn"
                   style={{
                     position: 'absolute',
@@ -1064,13 +1327,98 @@ const MobileHomePage = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '20px',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    zIndex: 2
                   }}>×</button>
           <Leaderboard inMobilePanel={true} />
         </div>
       </div>
+      
+      {/* Mobile Transaction Notifications */}
+      {mobileTransactions.length > 0 && (
+        <div className="mobile-transactions-container" style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          maxWidth: '250px'
+        }}>
+          {mobileTransactions.map(tx => (
+            <div 
+              key={tx.id}
+              style={{
+                background: tx.status === 'confirmed' ? 'rgba(39, 174, 96, 0.8)' : 'rgba(0, 0, 0, 0.7)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: '12px',
+                padding: '8px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
+                animation: tx.status === 'confirmed' ? 'fadeOut 2s forwards' : 'none',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}
+            >
+              {/* Spinner or check icon */}
+              <div style={{
+                width: '20px',
+                height: '20px',
+                ...(tx.status !== 'confirmed' 
+                  ? {
+                      border: '2px solid rgba(255, 255, 255, 0.1)',
+                      borderTop: '2px solid #FFF',
+                      borderRadius: '50%',
+                      animation: 'spin 0.6s linear infinite'
+                    }
+                  : {
+                      background: 'rgba(255, 255, 255, 0.9)',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'rgba(39, 174, 96, 1)',
+                      fontWeight: 'bold'
+                    }
+                )
+              }}>
+                {tx.status === 'confirmed' && '✓'}
+              </div>
+              
+              {/* Transaction text */}
+              <div style={{ flexGrow: 1, color: 'white' }}>
+                <p style={{ margin: '0 0 4px 0', fontWeight: 'bold', fontSize: '14px' }}>
+                  {tx.type === 'jump' && (tx.status === 'confirmed' ? 'Jump Confirmed' : 'Processing Jump')}
+                  {tx.type === 'update_score' && (tx.status === 'confirmed' ? 'Score Updated' : 'Updating Score')}
+                </p>
+                <p style={{ margin: '0', fontSize: '12px', opacity: 0.8 }}>
+                  {tx.status === 'pending' && 'Processing...'}
+                  {tx.status === 'confirmed' && 'Transaction confirmed!'}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* Add global styles for animations */}
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          @keyframes fadeOut {
+            0% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-10px); }
+          }
+        `}
+      </style>
     </div>
   );
 };
 
-export default MobileHomePage; 
+export default MobileHomePage;
