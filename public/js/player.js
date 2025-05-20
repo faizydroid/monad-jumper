@@ -21,6 +21,35 @@ export class Player {
         this.bulletInterval = 100
         this.lastPlatformType = null
         this.jumpedPlatforms = new Set()
+        this.isMobile = this.detectMobile()
+        this.usingMobileControls = false
+    }
+
+    // Add method to detect mobile
+    detectMobile() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+
+    // Add direct methods for mobile controls
+    moveLeft() {
+        // Set a flag to indicate we're using mobile controls
+        this.usingMobileControls = true;
+        // Set velocity directly without scaling to match desktop arrow key behavior
+        this.vx = -10; // Fixed value that matches desktop arrow keys
+    }
+
+    moveRight() {
+        // Set a flag to indicate we're using mobile controls
+        this.usingMobileControls = true;
+        // Set velocity directly without scaling to match desktop arrow key behavior
+        this.vx = 10; // Fixed value that matches desktop arrow keys
+    }
+
+    stopMoving() {
+        // Immediately stop movement, don't gradually slow down
+        this.vx = 0;
+        // Reset the mobile controls flag
+        this.usingMobileControls = false;
     }
 
     update(inputHandler, deltaTime = 1/60, gyroData) {
@@ -43,29 +72,37 @@ export class Player {
             return;
         }
 
-        // Horizontal movement - scale by deltaTime for frame-rate independence
-        if(inputHandler.keys.includes('ArrowLeft')){
-            this.vx = -PLAYER_SPEED * deltaTime;
-        }
-        else if(inputHandler.keys.includes('ArrowRight')){
-            this.vx = PLAYER_SPEED * deltaTime;
-        }
-        else if(this.vx !== 0) {
+        // Handle different control schemes
+        if (!this.usingMobileControls) {
+            // Desktop keyboard controls
             this.vx = 0;
+            
+            // Process keyboard controls
+            if (inputHandler && inputHandler.keys) {
+                if (inputHandler.keys.includes('ArrowLeft')) {
+                    this.vx = -PLAYER_SPEED * deltaTime;
+                }
+                else if (inputHandler.keys.includes('ArrowRight')) {
+                    this.vx = PLAYER_SPEED * deltaTime;
+                }
+            }
+        } else {
+            // Mobile controls - apply a more responsive, fixed-feel movement like desktop
+            // Scale by deltaTime to maintain consistent speed, but use a higher base value
+            this.vx = this.vx * deltaTime * 60;
         }
         
-        // Only update x position if there's velocity - normalized by delta time
-        if(this.vx !== 0) {
-            // Apply movement scaled by deltaTime
+        // Apply movement if there is velocity
+        if (this.vx !== 0) {
             this.x += this.vx;
-
-            // Horizontal boundary - only check when we've moved
-            if(this.x < -this.width/2) this.x = this.game.width - (this.width/2);
-            else if(this.x + (this.width/2) > this.game.width) this.x = -this.width/2;
         }
 
+        // Horizontal boundary - wrap around screen edges
+        if (this.x < -this.width/2) this.x = this.game.width - (this.width/2);
+        else if (this.x + (this.width/2) > this.game.width) this.x = -this.width/2;
+
         // Apply gravity first
-        if(this.vy < this.max_vy) {
+        if (this.vy < this.max_vy) {
             this.vy += GRAVITY; // Original gravity without deltaTime scaling
         }
 
@@ -102,25 +139,25 @@ export class Player {
             // Then check for platform collision
             if (this.vy > GRAVITY) {
                 const platformType = this.onPlatform();
-            if (platformType) {
-                this.lastPlatformType = platformType;
-                this.processJump(platformType);
+                if (platformType) {
+                    this.lastPlatformType = platformType;
+                    this.processJump(platformType);
                     hadPlatformCollision = true;
+                }
             }
-        }
         }
 
         // World scrolling when player reaches upper threshold - original calculations
-        if(this.y <= this.min_y && this.vy < GRAVITY) {
+        if (this.y <= this.min_y && this.vy < GRAVITY) {
             this.game.vy = -this.vy; // Use the original vy value
             this.y = this.min_y;
         }
-        else if(this.game.vy !== 0) {
+        else if (this.game.vy !== 0) {
             this.game.vy = 0;
         }
 
         // Check for collision - only done when necessary
-        if((this.vx !== 0 || this.vy !== 0) && this.collision()){
+        if ((this.vx !== 0 || this.vy !== 0) && this.collision()) {
             this.game.gameOver = true;
             this.game.deathReason = "collision";
             this.game.checkGameOver();
@@ -128,18 +165,18 @@ export class Player {
         }
 
         // Update bullets with deltaTime
-        for(let i = 0; i < this.bullets.length; i++) {
+        for (let i = 0; i < this.bullets.length; i++) {
             this.bullets[i].update(deltaTime);
         }
 
         // Remove deleted bullets
-        if(this.bullets.some(bullet => bullet.markedForDeletion)) {
+        if (this.bullets.some(bullet => bullet.markedForDeletion)) {
             this.bullets = this.bullets.filter(bullet => !bullet.markedForDeletion);
         }
 
         // Shooting logic with fixed time intervals factoring deltaTime
-        if ((inputHandler.keys.includes(' ') || inputHandler.keys.includes('w') || inputHandler.keys.includes('W')) && 
-            this.bulletTimer > this.bulletInterval) {
+        if (inputHandler && ((inputHandler.keys.includes(' ') || inputHandler.keys.includes('w') || inputHandler.keys.includes('W')) && 
+            this.bulletTimer > this.bulletInterval)) {
             this.shootTop();
             this.bulletTimer = 0;
         } else {
@@ -382,23 +419,27 @@ export class Player {
         return true;
     }
 
+    // Mobile-friendly jump method
     jump() {
-        if (this.canJump) {
-            // Play jump sound with near-zero latency using AudioManager
-            try {
-                if (window.audioManager && typeof window.audioManager.play === 'function') {
-                    window.audioManager.play('jump', 0.7);
-                } else {
-                    new Audio('sound effects/jump.wav').play().catch(e => {});
-                }
-            } catch (e) {
-                console.warn('Error playing jump sound:', e);
+        // Only jump if we're on a platform or if we're in a jumping state (vy > 0)
+        if (this.vy > 0) {
+            this.vy = this.min_vy;
+            
+            // Play jump sound
+            if (window.audioManager) {
+                window.audioManager.play('jump', 0.7);
             }
             
-            // Don't increment jump count here - let processJump handle it
-            // The processJump method will only count first jumps on platforms
+            // Count the jump for global tracking
+            window.__jumpCount = (window.__jumpCount || 0) + 1;
             
-            // Rest of jump code...
+            // Notify parent if available
+            if (typeof sendMessageToParent === 'function') {
+                sendMessageToParent({
+                    type: 'JUMP_PERFORMED',
+                    jumpCount: window.__jumpCount
+                });
+            }
         }
     }
 
@@ -504,3 +545,47 @@ export class Player {
         // Rest of reset code...
     }
 }
+
+// Cancel shooting actions and hide buttons
+function cancelShootingActions() {
+  console.log('🚫 Disabling shooting actions for shoot button');
+
+  // Remove click events from any shoot buttons
+  document.querySelectorAll('[id*="shoot"], [class*="shoot"]').forEach(el => {
+    // Clone and replace to remove events
+    const clone = el.cloneNode(true);
+    if (el.parentNode) {
+      el.parentNode.replaceChild(clone, el);
+    }
+    
+    // Hide the cloned element
+    clone.style.display = 'none';
+    clone.style.opacity = '0';
+    clone.style.visibility = 'hidden';
+    clone.style.pointerEvents = 'none';
+  });
+
+  // Override any shooting methods
+  if (window.gameInstance && window.gameInstance.player) {
+    const player = window.gameInstance.player;
+    if (player.shootTop) {
+      const originalShootTop = player.shootTop;
+      player.shootTop = function() {
+        console.log('🚫 Shoot action intercepted and blocked');
+        // Do nothing instead of shooting
+        return null;
+      };
+    }
+  }
+}
+
+// Run this immediately
+document.addEventListener('DOMContentLoaded', cancelShootingActions);
+// Also run periodically
+setInterval(cancelShootingActions, 1000);
+// Run on any user interaction
+['click', 'touchstart', 'keydown'].forEach(event => {
+  document.addEventListener(event, function() {
+    setTimeout(cancelShootingActions, 100);
+  }, {passive: true});
+});
