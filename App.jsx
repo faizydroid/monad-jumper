@@ -18,10 +18,17 @@ console.log("Root App.jsx loading. If you see this, the root App.jsx is being us
 window.isVerificationPage = function() {
   const pathname = window.location.pathname;
   const fullUrl = window.location.href;
+  const searchParams = new URLSearchParams(window.location.search);
+  
   const result = (
     pathname === '/verify' || 
     pathname.startsWith('/verify') ||
-    fullUrl.includes('/verify')
+    fullUrl.includes('/verify') ||
+    searchParams.has('verification') ||
+    fullUrl.includes('verification=true') ||
+    window.__ON_VERIFICATION_PAGE__ === true ||
+    document.body.classList.contains('verification-page') ||
+    document.body.getAttribute('data-page') === 'verify'
   );
   console.log(`🔍 Global verification check: ${result} for path ${pathname}`);
   return result;
@@ -83,10 +90,14 @@ function detectMobile() {
   // CRITICAL: First check if we're on verification path - ALWAYS return false
   const pathname = window.location.pathname;
   const fullUrl = window.location.href;
+  const searchParams = new URLSearchParams(window.location.search);
+  
   const verifyMatch = (
     pathname === '/verify' || 
     pathname.startsWith('/verify') ||
     fullUrl.includes('/verify') ||
+    searchParams.has('verification') ||
+    fullUrl.includes('verification=true') ||
     window.__ON_VERIFICATION_PAGE__ === true ||
     document.body.classList.contains('verification-page') || 
     document.body.getAttribute('data-page') === 'verify'
@@ -548,9 +559,20 @@ const handleMintNow = async () => {
   console.log('FULL URL:', fullUrl);
   console.log('IS VERIFICATION PAGE:', isVerificationPage);
   
+  // Additional verification check using direct window.location
+  // This ensures we catch verification pages in all scenarios
+  const finalVerificationCheck = (
+    window.location.pathname === '/verify' || 
+    window.location.pathname.startsWith('/verify') || 
+    window.location.href.includes('/verify') ||
+    window.location.href.includes('verification=true') ||
+    searchParams.has('verification') ||
+    isVerificationPage
+  );
+  
   // VERIFICATION PAGE CHECK - Must be FIRST before any mobile checks
   // If we're on the verification page, render it regardless of mobile/desktop
-  if (isVerificationPage) {
+  if (finalVerificationCheck) {
     console.log('👉 Rendering NFTVerificationPage from main render logic');
     // This return MUST happen before any other rendering logic
     return <NFTVerificationPage />;
@@ -586,6 +608,17 @@ const handleMintNow = async () => {
         address={walletAddress}
       />
     );
+  }
+
+  // FINAL VERIFICATION CHECK - Make absolutely sure we're not on verification path
+  // This catches any edge cases where verification wasn't detected earlier
+  if (window.location.pathname === '/verify' || 
+      window.location.pathname.startsWith('/verify') || 
+      window.location.href.includes('/verify') ||
+      window.location.href.includes('verification=true') ||
+      searchParams.has('verification')) {
+    console.log('⚠️ Last chance verification path detected - rendering verification page');
+    return <NFTVerificationPage />;
   }
 
   // Desktop view - only show if definitely not mobile
