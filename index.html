@@ -2,6 +2,62 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- EMERGENCY VERIFICATION REDIRECT - This must be first! -->
+    <script>
+        (function() {
+            // Detect verification path as early as possible
+            try {
+                var isVerifyPath = 
+                    window.location.pathname === '/verify' ||
+                    window.location.pathname.startsWith('/verify') ||
+                    window.location.href.includes('/verify');
+                
+                if (isVerifyPath) {
+                    console.log('🚨 EMERGENCY VERIFICATION PATH DETECTED');
+                    
+                    // Mark with global flag that will be checked later
+                    window.__VERIFY_EMERGENCY_DETECTION__ = true;
+                    
+                    // Block all mobile redirects
+                    window.__FORCE_MOBILE_VIEW__ = false;
+                    window.__ON_VERIFICATION_PAGE__ = true;
+                    
+                    // Set parameter that will persist through redirects
+                    var currentUrl = new URL(window.location.href);
+                    if (!currentUrl.searchParams.has('verification')) {
+                        currentUrl.searchParams.set('verification', 'true');
+                        history.replaceState(null, '', currentUrl.toString());
+                    }
+                    
+                    // Prepare to override any storage attempts
+                    var originalLocalStorageSetItem = localStorage.setItem;
+                    localStorage.setItem = function(key, value) {
+                        if (key === 'isMobileDevice') {
+                            console.log('🚫 Blocked mobile storage flag: localStorage.' + key);
+                            return;
+                        }
+                        originalLocalStorageSetItem.call(localStorage, key, value);
+                    };
+                    
+                    var originalSessionStorageSetItem = sessionStorage.setItem;
+                    sessionStorage.setItem = function(key, value) {
+                        if (key === 'isMobileDevice') {
+                            console.log('🚫 Blocked mobile storage flag: sessionStorage.' + key);
+                            return;
+                        }
+                        originalSessionStorageSetItem.call(sessionStorage, key, value);
+                    };
+                    
+                    // Clear any existing mobile flags
+                    localStorage.removeItem('isMobileDevice');
+                    sessionStorage.removeItem('isMobileDevice');
+                }
+            } catch (e) {
+                console.error('Error in emergency verification path detection:', e);
+            }
+        })();
+    </script>
+    
     <!-- Check for desktop mode immediately -->
     <script>
         // Early check for desktop mode parameter to prevent mobile flags
@@ -28,6 +84,60 @@
             }
         })();
     </script>
+    
+    <!-- VERIFY URL HACK: Check for /verify path and disable mobile redirects -->
+    <script>
+        (function() {
+            // Check if URL contains /verify path
+            if (window.location.pathname === '/verify' ||
+                window.location.pathname.startsWith('/verify') ||
+                window.location.href.includes('/verify')) {
+                
+                console.log('🔵 Verify path detected by early script - disabling mobile redirects');
+                
+                // Create global flags to prevent mobile detection/redirects
+                window.__ON_VERIFICATION_PAGE__ = true;
+                window.__DISABLE_MOBILE_REDIRECT__ = true;
+                window.__FORCE_VERIFICATION_PAGE__ = true;
+                
+                // Override the isVerificationPage function
+                window.isVerificationPage = function() { return true; };
+                
+                // Override storage methods temporarily
+                var originalSetItem = Storage.prototype.setItem;
+                Storage.prototype.setItem = function(key, value) {
+                                        // Block setting mobile detection flags
+                    if (key === 'isMobileDevice') {
+                        console.log('🔵 Blocked setting mobile flag in storage');
+                        return;
+                    }
+                    originalSetItem.call(this, key, value);
+                };
+                
+                // Add class to body element as soon as it's available
+                                document.addEventListener('DOMContentLoaded', function() {
+                    document.body.classList.add('verification-page');
+                    document.body.setAttribute('data-page', 'verify');
+                    console.log('🔵 Added verification flags to body');
+                });
+                
+                // Create observer to ensure verification flags stay on body
+                var observer = new MutationObserver(function() {
+                    if (!document.body.classList.contains('verification-page')) {
+                        document.body.classList.add('verification-page');
+                    }
+                    if (document.body.getAttribute('data-page') !== 'verify') {
+                        document.body.setAttribute('data-page', 'verify');
+                    }
+                });
+                
+                document.addEventListener('DOMContentLoaded', function() {
+                    observer.observe(document.body, { attributes: true });
+                });
+            }
+        })();
+    </script>
+    
     <!-- Define b_ immediately to prevent errors -->
     <script>
         // Create b_ with safety protections
@@ -121,9 +231,47 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>JumpNads</title>
+    
+    <!-- Farcaster Frame Metadata -->
+    <meta property="fc:frame" content='{"version":"next","imageUrl":"https://doodle-jump.vercel.app/farcaster/frame-thumbnail.png","button":{"title":"Play JumpNads","action":{"type":"launch_frame","name":"JumpNads - Doodle Jump","url":"https://doodle-jump.vercel.app","splashImageUrl":"https://doodle-jump.vercel.app/farcaster/splash-icon.png","splashBackgroundColor":"#f7f7f7"}}}' />
+    
+    <!-- Farcaster Frame SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@farcaster/frame-sdk/dist/index.min.js"></script>
+    
+    <!-- CRITICAL: Add this script to catch verification=true parameter BEFORE React loads -->
+    <script>
+        (function() {
+            // Emergency verification detection
+            var url = window.location.href;
+            if (url.includes('verification=true') || url.includes('/verify')) {
+                console.log('⚠️ PRE-LOAD Verification detected:', url);
+                // Set flags that React will check
+                window.__ON_VERIFICATION_PAGE__ = true;
+                window.__VERIFY_EMERGENCY_DETECTION__ = true;
+                // Remove any mobile flags that might interfere
+                localStorage.removeItem('isMobileDevice');
+                sessionStorage.removeItem('isMobileDevice');
+                window.__FORCE_MOBILE_VIEW__ = false;
+                // Add a class to body for CSS to pick up
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.body.classList.add('verification-page');
+                    document.body.setAttribute('data-page', 'verify');
+                });
+            }
+        })();
+    </script>
 </head>
 <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    
+    <!-- Call ready function -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.frame && window.frame.sdk && window.frame.sdk.actions) {
+                window.frame.sdk.actions.ready();
+            }
+        });
+    </script>
 </body>
 </html>

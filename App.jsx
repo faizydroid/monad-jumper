@@ -40,6 +40,19 @@ function forceMobileRedirect() {
   const pathname = window.location.pathname;
   const fullUrl = window.location.href;
   
+  // CRITICAL: Special check for URL parameter - most important case
+  if (fullUrl.includes('verification=true')) {
+    console.log('🔥 EMERGENCY DETECTION - verification=true parameter found, skipping mobile redirect');
+    window.__ON_VERIFICATION_PAGE__ = true;
+    document.body.classList.add('verification-page');
+    document.body.setAttribute('data-page', 'verify');
+    // Force NOT mobile
+    window.__FORCE_MOBILE_VIEW__ = false;
+    localStorage.removeItem('isMobileDevice');
+    sessionStorage.removeItem('isMobileDevice');
+    return false;
+  }
+  
   // Fix: Check both www and non-www versions for verify path
   const isVerifyPage = (
     pathname === '/verify' || 
@@ -168,6 +181,23 @@ function detectMobile() {
 function App() {
   // Add debug info to console to help troubleshoot which App.jsx is being used
   console.log("Root App.jsx rendering");
+  
+  // CRITICAL FIX: Immediate check for verification=true parameter
+  const currentUrl = window.location.href;
+  if (currentUrl.includes('verification=true') || currentUrl.includes('/verify')) {
+    console.log('🚨 EMERGENCY VERIFICATION CHECK - Found verification=true in URL:', currentUrl);
+    window.__ON_VERIFICATION_PAGE__ = true;
+    document.body.classList.add('verification-page');
+    document.body.setAttribute('data-page', 'verify');
+    
+    // Force verification flags
+    window.__FORCE_MOBILE_VIEW__ = false;
+    localStorage.removeItem('isMobileDevice');
+    sessionStorage.removeItem('isMobileDevice');
+    
+    // Return NFTVerificationPage immediately - nothing else runs
+    return <NFTVerificationPage />;
+  }
   
   // Immediate verification path check - Do this first thing before any other logic
   const pathname = window.location.pathname;
