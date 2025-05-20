@@ -1,0 +1,24 @@
+/* Style that hides navbar and music player on the verification page */
+.verification-page-container {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  isolation: isolate;
+}
+
+/* Hide navbar and music player when body has verification-page class */
+body.verification-page .vertical-navbar,
+body.verification-page .mobile-navbar-buttons,
+body.verification-page .music-player {
+  display: none !important;
+}
+
+/* Ensure the verification component takes up full screen */
+body.verification-page .nft-verification-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+} 

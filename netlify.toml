@@ -2,6 +2,18 @@
   command = "npm run build"
   publish = "dist"
 
+# Specific redirect for verification page
+[[redirects]]
+  from = "/verify"
+  to = "/index.html"
+  status = 200
+
+# Also handle any sub-paths under /verify
+[[redirects]]
+  from = "/verify/*"
+  to = "/index.html"
+  status = 200
+
 # Handle SPA routing for React
 [[redirects]]
   from = "/*"
