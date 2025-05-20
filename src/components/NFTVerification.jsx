@@ -104,10 +104,24 @@ const NFTVerification = () => {
   const handleConnectDiscord = () => {
     // Determine if we're in dev or production
     const isProduction = window.location.hostname !== 'localhost';
+    
+    // Get current hostname to handle both www and non-www versions
+    const currentHost = window.location.hostname;
+    const useWWW = currentHost.startsWith('www.');
+    
     // Redirect URI - use appropriate URL for environment
-    const redirectUri = isProduction 
-      ? encodeURIComponent("https://jumpnads.xyz/verify")
-      : encodeURIComponent("http://localhost:3000/verify");
+    let redirectUri;
+    if (isProduction) {
+      // Use the exact same domain (www or non-www) as the user is currently on
+      const protocol = window.location.protocol;
+      redirectUri = encodeURIComponent(`${protocol}//${currentHost}/verify`);
+      
+      // For safety, also register two alternate versions with Discord OAuth
+      console.log(`Using redirect URI: ${redirectUri}`);
+    } else {
+      // Local development
+      redirectUri = encodeURIComponent("http://localhost:3000/verify");
+    }
       
     window.location.href = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CONFIG.CLIENT_ID}&redirect_uri=${redirectUri}&response_type=token&scope=identify`;
   };
@@ -123,8 +137,15 @@ const NFTVerification = () => {
     try {
       console.log('Assigning role to Discord user:', discordId, 'NFT status:', hasNft);
       
-      // Use the bot server endpoint
-      const BOT_API_URL = 'http://localhost:9000/verify-nft';
+      // Determine environment
+      const isProduction = window.location.hostname !== 'localhost';
+      
+      // Use the bot server endpoint based on environment
+      const BOT_API_URL = isProduction
+        ? 'https://jumpnads-bot.example.com/verify-nft' // Replace with your actual production bot API
+        : 'http://localhost:9000/verify-nft';
+      
+      console.log('Using bot API URL:', BOT_API_URL);
       
       const response = await axios.post(BOT_API_URL, {
         discordId,
