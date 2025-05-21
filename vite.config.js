@@ -47,6 +47,8 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+        // Add canvas alias to use our fallback
+        'canvas': path.resolve(__dirname, './src/canvasFallback.js'),
       },
     },
     define: {
