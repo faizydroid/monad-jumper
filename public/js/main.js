@@ -148,14 +148,14 @@ window.addEventListener('load', () => {
             }
         } else {
             // For desktop, maintain aspect ratio while fitting screen
-            if (windowWidth * aspectRatio <= windowHeight) {
-                // Width is the limiting factor
-                canvasWidth = Math.min(windowWidth, 532);
-                canvasHeight = canvasWidth / aspectRatio;
-            } else {
-                // Height is the limiting factor
-                canvasHeight = Math.min(windowHeight, 850);
-                canvasWidth = canvasHeight * aspectRatio;
+        if (windowWidth * aspectRatio <= windowHeight) {
+            // Width is the limiting factor
+            canvasWidth = Math.min(windowWidth, 532);
+            canvasHeight = canvasWidth / aspectRatio;
+        } else {
+            // Height is the limiting factor
+            canvasHeight = Math.min(windowHeight, 850);
+            canvasWidth = canvasHeight * aspectRatio;
             }
         }
         
@@ -1590,8 +1590,8 @@ window.addEventListener('load', () => {
                 const controlsGuide = document.createElement('div');
                 controlsGuide.id = 'controlsGuide';
                 controlsGuide.innerHTML = 
-                    '<img src="/images/arrow.png" alt="Left/Right Arrows" style="height: 30px; vertical-align: middle; margin-right: 10px;"> MOVE (or A/D) | ' + 
-                    '<img src="/images/spacebar.png" alt="Spacebar" style="height: 30px; vertical-align: middle; margin: 0 10px;"> SHOOT (or W)';
+                    '<img src="/images/arrow.png" alt="Left/Right Arrows" style="height: 30px; vertical-align: middle; margin-right: 10px;"> MOVE | ' + 
+                    '<img src="/images/spacebar.png" alt="Spacebar" style="height: 30px; vertical-align: middle; margin: 0 10px;"> SHOOT';
                 controlsGuide.style.fontFamily = '"Bangers", cursive';
                 controlsGuide.style.fontSize = '18px';
                 controlsGuide.style.color = 'white';
@@ -1781,21 +1781,21 @@ window.addEventListener('load', () => {
             // No longer using canvas taps for jumping since we have dedicated control buttons
             // Only use touch to start the game if not started yet
             if (this.isMobile && this.detectMobile()) {
-                this.canvas.addEventListener('touchstart', (event) => {
+            this.canvas.addEventListener('touchstart', (event) => {
                     // First check if we're not in game over state (which is handled separately)
                     if (!this.gameOver && !this.showingReviveMenu && !this.showingReviveErrorScreen) {
                         event.preventDefault(); // Prevent scrolling only for active gameplay
                         
                         // Only use touch to start the game when not started
                         if (!this.gameStart) {
-                            // Start the game on touch if not started
-                            this.startGame();
-                        }
+                    // Start the game on touch if not started
+                    this.startGame();
+                }
                         
                         // No longer handling jump actions here since we have dedicated control buttons
                     }
                     // If in game over state, the other handler will take care of it
-                }, { passive: false });
+            }, { passive: false });
                 
                 console.log('Mobile touch controls enabled (game start only)');
             } else {
@@ -1975,59 +1975,59 @@ window.addEventListener('load', () => {
                         
                         // Left button
                         const leftBtn = document.getElementById('left-btn');
-                        leftBtn.addEventListener('touchstart', (e) => {
-                            e.preventDefault();
-                            leftBtn.style.transform = 'scale(0.95)';
-                            leftBtn.style.opacity = '1';
+            leftBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                    leftBtn.style.transform = 'scale(0.95)';
+                    leftBtn.style.opacity = '1';
                             leftBtn.style.backgroundColor = 'rgba(0,122,255,1)';
                             sendMessage('keydown', 'ArrowLeft');
-                        }, { passive: false });
-                        
-                        leftBtn.addEventListener('touchend', (e) => {
-                            e.preventDefault();
-                            leftBtn.style.transform = 'scale(1)';
-                            leftBtn.style.opacity = '0.8';
+            }, { passive: false });
+            
+            leftBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                    leftBtn.style.transform = 'scale(1)';
+                    leftBtn.style.opacity = '0.8';
                             leftBtn.style.backgroundColor = 'rgba(0,122,255,0.8)';
                             sendMessage('keyup', 'ArrowLeft');
-                        }, { passive: false });
-                        
+            }, { passive: false });
+            
                         // Right button
                         const rightBtn = document.getElementById('right-btn');
-                        rightBtn.addEventListener('touchstart', (e) => {
-                            e.preventDefault();
-                            rightBtn.style.transform = 'scale(0.95)';
-                            rightBtn.style.opacity = '1';
+            rightBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                    rightBtn.style.transform = 'scale(0.95)';
+                    rightBtn.style.opacity = '1';
                             rightBtn.style.backgroundColor = 'rgba(0,122,255,1)';
                             sendMessage('keydown', 'ArrowRight');
-                        }, { passive: false });
-                        
-                        rightBtn.addEventListener('touchend', (e) => {
-                            e.preventDefault();
-                            rightBtn.style.transform = 'scale(1)';
-                            rightBtn.style.opacity = '0.8';
+            }, { passive: false });
+            
+            rightBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                    rightBtn.style.transform = 'scale(1)';
+                    rightBtn.style.opacity = '0.8';
                             rightBtn.style.backgroundColor = 'rgba(0,122,255,0.8)';
                             sendMessage('keyup', 'ArrowRight');
-                        }, { passive: false });
-                        
+            }, { passive: false });
+            
                         // Shoot button
                         const shootBtn = document.getElementById('shoot-btn');
-                        shootBtn.addEventListener('touchstart', (e) => {
-                            e.preventDefault();
+            shootBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
                             shootBtn.style.transform = 'translateX(-50%) scale(0.95)';
-                            shootBtn.style.opacity = '1';
+                    shootBtn.style.opacity = '1';
                             shootBtn.style.backgroundColor = 'rgba(255,90,95,1)';
                             sendMessage('keydown', ' ');
-                        }, { passive: false });
-                        
-                        shootBtn.addEventListener('touchend', (e) => {
-                            e.preventDefault();
+            }, { passive: false });
+            
+            shootBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
                             setTimeout(() => {
                                 shootBtn.style.transform = 'translateX(-50%) scale(1)';
-                                shootBtn.style.opacity = '0.8';
+                shootBtn.style.opacity = '0.8';
                                 shootBtn.style.backgroundColor = 'rgba(255,90,95,0.8)';
                             }, 150);
                             sendMessage('keyup', ' ');
-                        }, { passive: false });
+            }, { passive: false });
                     </script>
                 </body>
                 </html>
