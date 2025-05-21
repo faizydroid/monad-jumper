@@ -1,6 +1,6 @@
 {
   "framework": "vite",
   "buildCommand": "chmod +x build.sh && ./build.sh",
-  "installCommand": "npm ci --no-optional --no-audit",
+  "installCommand": "npm install --no-optional --no-audit",
   "outputDirectory": "dist"
 } 
