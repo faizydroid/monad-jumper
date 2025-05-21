@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo, lazy, Suspense } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import './MobileHomePage.css';
@@ -6,11 +6,19 @@ import Navbar from './Navbar';
 import Leaderboard from './Leaderboard';
 import HorizontalStats from './HorizontalStats';
 import usePlayerStats from '../hooks/usePlayerStats';
-// Direct import of NFTVerification component for verification page fallback
-import NFTVerification from './NFTVerification';
 
-// Lazy load NFTVerificationPage for dynamic rendering
-const NFTVerificationPage = lazy(() => import('../pages/NFTVerificationPage'));
+// Coming Soon Overlay Component
+const ComingSoonOverlay = () => {
+  return (
+    <div className="coming-soon-overlay">
+      <h1 className="coming-soon-title">Coming Soon</h1>
+      <p className="coming-soon-message">
+        Our mobile version is under development and will be available shortly. 
+        Get ready for an amazing jumping experience on your mobile device!
+      </p>
+    </div>
+  );
+};
 
 // Custom ConnectButton wrapper to force mobile view after connection
 const MobileConnectButton = (props) => {
@@ -42,38 +50,22 @@ const MobileConnectButton = (props) => {
     
     // Add a handler for the connection flow
     const handleRedirectBack = () => {
-      // Check if we're on verification page - NEVER redirect if on verification
-      const isVerifyPage = (
-        window.location.pathname === '/verify' || 
-        window.location.pathname.startsWith('/verify') ||
-        window.location.href.includes('/verify') ||
-        window.__ON_VERIFICATION_PAGE__ === true ||
-        document.body.classList.contains('verification-page') || 
-        document.body.getAttribute('data-page') === 'verify'
-      );
-      
-      if (isVerifyPage) {
-        console.log('On verification page, not forcing mobile view');
-        return;
-      }
-      
       // Force back to mobile view after redirect
       const mobileFlag = document.createElement('div');
       mobileFlag.id = '__force_mobile_view__';
       mobileFlag.style.display = 'none';
       document.body.appendChild(mobileFlag);
       
-      // Force URL parameter but PRESERVE FULL PATH
+      // Force URL parameter
       const url = new URL(window.location.href);
       url.searchParams.set('isMobile', 'true');
       window.history.replaceState({}, '', url.toString());
       
       // Force reload if needed (last resort)
       if (!document.querySelector('.mobile-container')) {
-        // Preserve the full URL path - don't split by ?
-        const redirectUrl = new URL(window.location.href);
-        redirectUrl.searchParams.set('isMobile', 'true');
-        window.location.href = redirectUrl.toString();
+        const currentUrl = window.location.href;
+        const redirectUrl = currentUrl.split('?')[0] + '?isMobile=true';
+        window.location.href = redirectUrl;
       }
     };
     
@@ -94,43 +86,14 @@ const MobileHomePage = ({
   onPlay, 
   onMint,
   hasMintedNft,
-  isNftLoading = false,
+  isNftLoading,
   leaderboard,
   address
 }) => {
-  // CRITICAL: First thing, check if we're on verification page
-  // If so, redirect to verification component directly
-  if (window.location.pathname === '/verify' || 
-      window.location.pathname.startsWith('/verify') ||
-      window.location.href.includes('/verify') ||
-      window.__ON_VERIFICATION_PAGE__ === true ||
-      document.body.classList.contains('verification-page') || 
-      document.body.getAttribute('data-page') === 'verify' ||
-      window.__VERIFY_EMERGENCY_DETECTION__ === true ||
-      new URLSearchParams(window.location.search).has('verification')) {
-    
-    console.log('🚨 MobileHomePage detected verification path - rendering NFTVerificationPage');
-    
-    // Set verification flags to ensure persistence
-    window.__ON_VERIFICATION_PAGE__ = true;
-    window.__VERIFY_EMERGENCY_DETECTION__ = true;
-    document.body.classList.add('verification-page');
-    document.body.setAttribute('data-page', 'verify');
-    
-    // Directly render NFTVerificationPage or fallback to NFTVerification component
-    return (
-      <div className="verification-container" style={{height: '100vh', width: '100vw'}}>
-        <Suspense fallback={<div style={{height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center'}}>Loading verification page...</div>}>
-          <NFTVerificationPage />
-        </Suspense>
-      </div>
-    );
-  }
-  
   const { isConnected } = useAccount();
   const [showNavbar, setShowNavbar] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [isTrueMobileDevice, setIsTrueMobileDevice] = useState(true);
+  const [isTrueMobileDevice, setIsTrueMobileDevice] = useState(false);
   // Add state for mobile transactions
   const [mobileTransactions, setMobileTransactions] = useState([]);
   
@@ -196,8 +159,8 @@ const MobileHomePage = ({
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isSmallScreen = window.innerWidth <= 768;
     
-    // Keep the coming soon overlay enabled
-    // setIsTrueMobileDevice(false);
+    // Set to true to enable the coming soon overlay
+    setIsTrueMobileDevice(true);
     
     // Don't set mobile flags if this is clearly a desktop device with large screen
     if (!isMobileDevice && !isSmallScreen && window.innerWidth > 1024) {
@@ -239,25 +202,8 @@ const MobileHomePage = ({
       
       // Handle visibility changes (for when returning from wallet connect)
       const checkMobileState = () => {
-        // First check if we're on verification page
-        const isVerifyPage = (
-          window.location.pathname === '/verify' || 
-          window.location.pathname.startsWith('/verify') ||
-          window.location.href.includes('/verify') ||
-          window.__ON_VERIFICATION_PAGE__ === true ||
-          document.body.classList.contains('verification-page') || 
-          document.body.getAttribute('data-page') === 'verify'
-        );
-        
-        if (isVerifyPage) {
-          console.log('On verification page, not forcing mobile container');
-          return;
-        }
-        
         // If we somehow lost our mobile container class, force refresh
         if (!document.querySelector('.mobile-container')) {
-          // Preserve the full URL path
-          const url = new URL(window.location.href);
           url.searchParams.set('isMobile', 'true');
           url.searchParams.set('reload', Date.now().toString());
           window.location.href = url.toString();
@@ -388,22 +334,22 @@ const MobileHomePage = ({
     };
   }, []);
 
-      return (
-      <div className="mobile-container" style={{
-        background: 'url("/images/bg.jpg")',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center center',
-        backgroundRepeat: 'no-repeat',
-        height: '100vh',
-        maxHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '10px',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
+  return (
+    <div className="mobile-container" style={{
+      background: 'url("/images/bg.jpg")',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center center',
+      backgroundRepeat: 'no-repeat',
+      height: '100vh',
+      maxHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '10px',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
       {/* Coming Soon Overlay */}
       {isTrueMobileDevice && (
         <div style={{
@@ -429,19 +375,8 @@ const MobileHomePage = ({
             textShadow: '0 0 10px rgba(255, 107, 107, 0.8)',
             letterSpacing: '2px'
           }}>
-            COMING SOON!
+            COMING SOON
           </h1>
-          <h2 style={{
-            color: '#FF6B6B',
-            fontSize: '1.8rem',
-            fontFamily: '"Bangers", cursive',
-            textAlign: 'center',
-            margin: '0 0 15px 0',
-            textShadow: '0 0 8px rgba(0, 0, 0, 0.6)',
-            letterSpacing: '1px'
-          }}>
-            MOBILE EXPERIENCE
-          </h2>
           <p style={{
             color: 'white',
             fontSize: '1.2rem',
@@ -450,9 +385,8 @@ const MobileHomePage = ({
             lineHeight: '1.5',
             textShadow: '0 0 5px rgba(0, 0, 0, 0.8)'
           }}>
-            Mobile version is currently under development.<br/>
-            Exciting mobile features are on the way!<br/>
-            Please use the desktop version for the full experience.
+            Mobile version in development.<br/>
+            Please play on desktop for now.
           </p>
           <button 
             onClick={() => {
@@ -462,50 +396,21 @@ const MobileHomePage = ({
             }}
             style={{
               marginTop: '30px',
-              padding: '15px 30px',
-              background: 'linear-gradient(90deg, #4CAF50 0%, #388E3C 100%)',
+              padding: '12px 24px',
+              background: 'linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%)',
               color: 'white',
               border: 'none',
               borderRadius: '50px',
-              fontSize: '1.2rem',
+              fontSize: '1rem',
               fontWeight: 'bold',
               cursor: 'pointer',
-              boxShadow: '0 6px 15px rgba(0, 0, 0, 0.4), 0 0 20px rgba(76, 175, 80, 0.3)',
+              boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
               textTransform: 'uppercase',
-              letterSpacing: '1.5px',
-              animation: 'pulse-button 2s infinite',
-              transition: 'transform 0.3s, box-shadow 0.3s',
-              position: 'relative',
-              overflow: 'hidden'
+              letterSpacing: '1px'
             }}
           >
-            <span style={{position: 'relative', zIndex: 2}}>Play Now on Desktop</span>
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '0',
-              width: '100%',
-              height: '10px',
-              background: 'rgba(255, 255, 255, 0.2)',
-              transform: 'translateY(-50%)',
-              animation: 'shine 2s infinite linear'
-            }}></div>
+            Go to Desktop Version
           </button>
-          
-          {/* Add button animation */}
-          <style>
-            {`
-              @keyframes pulse-button {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.05); }
-                100% { transform: scale(1); }
-              }
-              @keyframes shine {
-                0% { left: -100%; }
-                100% { left: 100%; }
-              }
-            `}
-          </style>
         </div>
       )}
       
@@ -1194,7 +1099,6 @@ const MobileHomePage = ({
               padding: 10px 12px !important;
               font-size: 20px !important;
               margin-bottom: 15px !important;
-              min-height: 50px !important;
             }
             #mobile-action-container {
               margin-bottom: 45px !important;
@@ -1417,6 +1321,9 @@ const MobileHomePage = ({
           }
         `}
       </style>
+      
+      {/* Coming Soon Overlay */}
+      {isTrueMobileDevice && <ComingSoonOverlay />}
     </div>
   );
 };
