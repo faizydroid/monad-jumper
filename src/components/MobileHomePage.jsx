@@ -160,7 +160,7 @@ const MobileHomePage = ({
     const isSmallScreen = window.innerWidth <= 768;
     
     // Set to true to enable the coming soon overlay
-    setIsTrueMobileDevice(true);
+    setIsTrueMobileDevice(false);
     
     // Don't set mobile flags if this is clearly a desktop device with large screen
     if (!isMobileDevice && !isSmallScreen && window.innerWidth > 1024) {
@@ -350,70 +350,6 @@ const MobileHomePage = ({
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* Coming Soon Overlay */}
-      {isTrueMobileDevice && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          backdropFilter: 'blur(5px)'
-        }}>
-          <h1 style={{
-            color: 'white',
-            fontSize: '3rem',
-            fontFamily: '"Bangers", cursive',
-            textAlign: 'center',
-            marginBottom: '20px',
-            textShadow: '0 0 10px rgba(255, 107, 107, 0.8)',
-            letterSpacing: '2px'
-          }}>
-            COMING SOON
-          </h1>
-          <p style={{
-            color: 'white',
-            fontSize: '1.2rem',
-            textAlign: 'center',
-            maxWidth: '80%',
-            lineHeight: '1.5',
-            textShadow: '0 0 5px rgba(0, 0, 0, 0.8)'
-          }}>
-            Mobile version in development.<br/>
-            Please play on desktop for now.
-          </p>
-          <button 
-            onClick={() => {
-              const url = new URL(window.location.href);
-              url.searchParams.set('mode', 'desktop');
-              window.location.href = url.toString();
-            }}
-            style={{
-              marginTop: '30px',
-              padding: '12px 24px',
-              background: 'linear-gradient(90deg, #FF6B6B 0%, #FF5252 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50px',
-              fontSize: '1rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
-              textTransform: 'uppercase',
-              letterSpacing: '1px'
-            }}
-          >
-            Go to Desktop Version
-          </button>
-        </div>
-      )}
-      
       {/* Header with menu button and leaderboard icon */}
       <div style={{
         width: '100%',
@@ -1321,9 +1257,6 @@ const MobileHomePage = ({
           }
         `}
       </style>
-      
-      {/* Coming Soon Overlay */}
-      {isTrueMobileDevice && <ComingSoonOverlay />}
     </div>
   );
 };
