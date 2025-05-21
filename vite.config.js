@@ -65,9 +65,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: mode === 'development', // Only generate sourcemaps in development
-      target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+      // Disable rollup native binary usage
       rollupOptions: {
+        external: [],
         input: {
           main: resolve(__dirname, './index.html'),
         },
@@ -78,22 +78,9 @@ export default defineConfig(({ mode }) => {
           }
         }
       },
+      // Simplify build configuration to reduce errors
       assetsInlineLimit: 4096,
-      minify: 'terser',
-      terserOptions: {
-        compress: {
-          drop_console: mode === 'production', // Remove console logs in production
-          unsafe: false,
-          unsafe_arrows: false,
-          unsafe_comps: false,
-          unsafe_Function: false,
-          unsafe_math: false,
-          unsafe_methods: false,
-          unsafe_proto: false,
-          unsafe_regexp: false,
-          unsafe_undefined: false,
-        },
-      },
+      minify: 'esbuild', // Use esbuild instead of terser
     },
     optimizeDeps: {
       include: [

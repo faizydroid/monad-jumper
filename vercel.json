@@ -1,6 +1,11 @@
 {
-  "framework": "vite",
   "buildCommand": "chmod +x build.sh && ./build.sh",
-  "installCommand": "npm install --no-optional --no-audit",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 } 

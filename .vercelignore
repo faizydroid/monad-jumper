@@ -1,0 +1,7 @@
+node_modules
+.git
+__backup_js
+.github
+backend/node_modules
+coverage
+*.log 
