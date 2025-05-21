@@ -1,15 +1,6 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist",
-        "installCommand": "npm ci --no-optional",
-        "buildCommand": "npm run build"
-      }
-    }
-  ],
-  "nodeVersion": "18.x"
+  "framework": "vite",
+  "buildCommand": "chmod +x build.sh && ./build.sh",
+  "installCommand": "npm ci --no-optional --no-audit",
+  "outputDirectory": "dist"
 } 
