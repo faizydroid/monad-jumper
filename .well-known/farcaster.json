@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjM1MjQ3NCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDhhZUUzY0ExNjRjMGEwNUY5MjFjMmJmQzhiMDE0ZTBlYTU0Q0NGQTIifQ",
+    "payload": "eyJkb21haW4iOiJqdW1wbmFkcy54eXoifQ",
+    "signature": "MHgzNWU0ODllZGVmMzBjMjgyNjhmMWM1NDViMTkwODE1YTFjYzMzMzAyODUzOWM2OTI2ZTc4MDk5ZDEwZDEzOGQ4NjE5ZmYzYWZhYzU4Zjk3MzBlMWM4ZDBkYWRmMTIyNzgyMmM4MjQyZWNkYjhhYjE1OTMyYzg2NjMyM2FkMzYxMDFj"
+  },
+  "frame": {
+    "version": "1",
+    "name": "Jumpnads",
+    "iconUrl": "https://jumpnads.xyz/icon.png",
+    "homeUrl": "https://jumpnads.xyz/",
+    "imageUrl": "https://jumpnads.xyz/image.png",
+    "buttonTitle": "Check this out",
+    "splashImageUrl": "https://jumpnads.xyz/splash.png",
+    "splashBackgroundColor": "#eeccff",
+    "webhookUrl": "https://jumpnads.xyz/api/webhook"
+  }
+}

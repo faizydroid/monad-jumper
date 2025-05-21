@@ -34,19 +34,16 @@ export class Player {
     moveLeft() {
         // Set a flag to indicate we're using mobile controls
         this.usingMobileControls = true;
-        // Set velocity directly without scaling to match desktop arrow key behavior
-        this.vx = -10; // Fixed value that matches desktop arrow keys
+        this.vx = -this.max_vx;
     }
 
     moveRight() {
         // Set a flag to indicate we're using mobile controls
         this.usingMobileControls = true;
-        // Set velocity directly without scaling to match desktop arrow key behavior
-        this.vx = 10; // Fixed value that matches desktop arrow keys
+        this.vx = this.max_vx;
     }
 
     stopMoving() {
-        // Immediately stop movement, don't gradually slow down
         this.vx = 0;
         // Reset the mobile controls flag
         this.usingMobileControls = false;
@@ -72,29 +69,27 @@ export class Player {
             return;
         }
 
-        // Handle different control schemes
+        // Only reset velocity if not using mobile controls
         if (!this.usingMobileControls) {
-            // Desktop keyboard controls
             this.vx = 0;
             
             // Process keyboard controls
             if (inputHandler && inputHandler.keys) {
-                if (inputHandler.keys.includes('ArrowLeft')) {
-                    this.vx = -PLAYER_SPEED * deltaTime;
-                }
-                else if (inputHandler.keys.includes('ArrowRight')) {
-                    this.vx = PLAYER_SPEED * deltaTime;
+            if (inputHandler.keys.includes('ArrowLeft')) {
+                this.vx = -PLAYER_SPEED * deltaTime;
+            }
+            else if (inputHandler.keys.includes('ArrowRight')) {
+                this.vx = PLAYER_SPEED * deltaTime;
                 }
             }
         } else {
-            // Mobile controls - apply a more responsive, fixed-feel movement like desktop
-            // Scale by deltaTime to maintain consistent speed, but use a higher base value
-            this.vx = this.vx * deltaTime * 60;
+            // For mobile controls, scale the velocity by deltaTime for consistent speed
+            this.vx = this.vx * deltaTime * 60; 
         }
         
         // Apply movement if there is velocity
         if (this.vx !== 0) {
-            this.x += this.vx;
+                this.x += this.vx;
         }
 
         // Horizontal boundary - wrap around screen edges
@@ -545,47 +540,3 @@ export class Player {
         // Rest of reset code...
     }
 }
-
-// Cancel shooting actions and hide buttons
-function cancelShootingActions() {
-  console.log('🚫 Disabling shooting actions for shoot button');
-
-  // Remove click events from any shoot buttons
-  document.querySelectorAll('[id*="shoot"], [class*="shoot"]').forEach(el => {
-    // Clone and replace to remove events
-    const clone = el.cloneNode(true);
-    if (el.parentNode) {
-      el.parentNode.replaceChild(clone, el);
-    }
-    
-    // Hide the cloned element
-    clone.style.display = 'none';
-    clone.style.opacity = '0';
-    clone.style.visibility = 'hidden';
-    clone.style.pointerEvents = 'none';
-  });
-
-  // Override any shooting methods
-  if (window.gameInstance && window.gameInstance.player) {
-    const player = window.gameInstance.player;
-    if (player.shootTop) {
-      const originalShootTop = player.shootTop;
-      player.shootTop = function() {
-        console.log('🚫 Shoot action intercepted and blocked');
-        // Do nothing instead of shooting
-        return null;
-      };
-    }
-  }
-}
-
-// Run this immediately
-document.addEventListener('DOMContentLoaded', cancelShootingActions);
-// Also run periodically
-setInterval(cancelShootingActions, 1000);
-// Run on any user interaction
-['click', 'touchstart', 'keydown'].forEach(event => {
-  document.addEventListener(event, function() {
-    setTimeout(cancelShootingActions, 100);
-  }, {passive: true});
-});

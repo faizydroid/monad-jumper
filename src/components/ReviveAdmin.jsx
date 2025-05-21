@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePublicClient, useWalletClient } from 'wagmi';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../utils/supabaseClient';
 import './ReviveAdmin.css';
 
 // Revive contract address

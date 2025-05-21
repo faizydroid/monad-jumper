@@ -4,105 +4,6 @@ import { InputHandler } from '/js/input.js'
 import { Platform } from '/js/platform.js'
 import { Enemy } from '/js/enemy.js'
 
-// Immediately apply mobile iframe positioning
-(function() {
-    // Check if we're on mobile
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    if (isMobile) {
-        // Create and insert styling
-        const style = document.createElement('style');
-        style.textContent = `
-            body, html {
-                margin: 0 !important;
-                padding: 0 !important;
-                overflow: hidden !important;
-                position: fixed !important;
-                width: 100% !important;
-                height: 100% !important;
-                max-width: 100% !important;
-                max-height: 100% !important;
-                touch-action: none !important;
-            }
-            
-            #canvas1 {
-                position: fixed !important;
-                top: 0 !important;
-                left: 50% !important;
-                transform: translateX(-50%) !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                max-height: calc(100vh - 120px) !important; /* Add space for controls at bottom */
-                z-index: 1 !important;
-            }
-            
-            /* Rules for iframe */
-            iframe {
-                position: fixed !important;
-                top: 0 !important;
-                left: 0 !important;
-                width: 100vw !important;
-                height: 100vh !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                border: none !important;
-                padding-bottom: 120px !important; /* Add space for controls */
-                box-sizing: border-box !important;
-            }
-            
-            /* Ensure controls stay visible */
-            #mobile-controls-overlay {
-                z-index: 10000 !important;
-                position: fixed !important;
-                bottom: 0 !important;
-                left: 0 !important;
-                width: 100% !important;
-                pointer-events: none !important;
-            }
-            
-            #mobile-controls {
-                position: absolute !important;
-                bottom: 40px !important;
-                left: 0 !important;
-                width: 100% !important;
-                z-index: 10001 !important;
-                display: flex !important;
-                justify-content: space-between !important;
-                padding: 0 20px !important;
-            }
-            
-            /* Ensure buttons are not cropped */
-            #mobile-controls button {
-                width: 70px !important;
-                height: 70px !important;
-                margin-bottom: 20px !important;
-                transform: translateZ(0) !important;
-                position: relative !important;
-                z-index: 10002 !important;
-            }
-        `;
-        
-        // Insert immediately when the file loads
-        document.head.appendChild(style);
-        
-        // Send message to parent window as soon as possible
-        setTimeout(() => {
-            try {
-                if (window.parent && window.parent !== window) {
-                    window.parent.postMessage({
-                        type: 'FIX_IFRAME_POSITION',
-                        position: 'top',
-                        isMobile: true,
-                        immediate: true
-                    }, '*');
-                }
-            } catch (e) {
-                // Silent fail
-            }
-        }, 0);
-    }
-})();
-
 /*
  * PERFORMANCE OPTIMIZATION:
  * 
@@ -215,236 +116,8 @@ window.addEventListener('load', () => {
     // Initialize global variables
     window.gameInitialized = false;
     
-    // Set mobile detection flags immediately
-    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const isInIframe = window.self !== window.top;
-    
-    // Only set the forceMobileControls flag if we're on mobile or in iframe
-    window.forceMobileControls = isInIframe || isMobileDevice;
-    
-    // Set desktop mode flag based on detection
-    window.isDesktopMode = !(isInIframe || isMobileDevice);
-    
-    // EXTREME MEASURE FOR DESKTOP: Replace control image sources with transparent pixel
-    if (window.isDesktopMode) {
-        // Create a data URL for a transparent 1x1 pixel PNG
-        const transparentPixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-        
-        // Override the image loading for control buttons by hijacking Image prototype
-        const originalImageSrc = Object.getOwnPropertyDescriptor(Image.prototype, 'src');
-        Object.defineProperty(Image.prototype, 'src', {
-            set: function(url) {
-                // Check if this is a control button image
-                if (typeof url === 'string' && 
-                    (url.includes('left_arrow.png') || 
-                     url.includes('right_arrow.png') || 
-                     url.includes('shoot.png'))) {
-                    console.log('INTERCEPTED: Control image load attempt in desktop mode', url);
-                    originalImageSrc.set.call(this, transparentPixel);
-                } else {
-                    originalImageSrc.set.call(this, url);
-                }
-            },
-            get: function() {
-                return originalImageSrc.get.call(this);
-            }
-        });
-        
-        // Override createElement to prevent control button creation
-        const originalCreateElement = document.createElement;
-        document.createElement = function(tagName) {
-            const element = originalCreateElement.call(document, tagName);
-            
-            // For img elements, add a special setter for the src attribute
-            if (tagName.toLowerCase() === 'img') {
-                const originalSetAttribute = element.setAttribute;
-                element.setAttribute = function(name, value) {
-                    if (name === 'src' && 
-                        typeof value === 'string' && 
-                        (value.includes('left_arrow.png') || 
-                         value.includes('right_arrow.png') || 
-                         value.includes(' '))) {
-                        console.log('BLOCKED: Control image setAttribute in desktop mode', value);
-                        return originalSetAttribute.call(this, name, transparentPixel);
-                    }
-                    return originalSetAttribute.call(this, name, value);
-                };
-            }
-            
-            return element;
-        };
-    }
-    
-    // Add CSS to force-hide mobile controls in desktop mode
-    if (window.isDesktopMode) {
-        const styleEl = document.createElement('style');
-        styleEl.id = 'desktop-mode-styles';
-        styleEl.textContent = `
-            /* Force hide all mobile controls in desktop mode */
-            #mobile-controls-overlay, 
-            #left-btn, #right-btn, #shoot-btn, 
-            #mobile-controls, 
-            #ultra-stable-controls,
-            #stable-controls,
-            img[src*="left_arrow.png"],
-            img[src*="right_arrow.png"],
-            img[src*="shoot.png"] {
-                display: none !important;
-                opacity: 0 !important;
-                visibility: hidden !important;
-                pointer-events: none !important;
-                position: absolute !important;
-                left: -9999px !important;
-                top: -9999px !important;
-                height: 0 !important;
-                width: 0 !important;
-                z-index: -9999 !important;
-            }
-        `;
-        document.head.appendChild(styleEl);
-    }
-    
-    // IMPORTANT: Force cleanup of any stray mobile controls on desktop
-    if (window.isDesktopMode) {
-        // Create a global cleanup function 
-        window.cleanupMobileControls = function() {
-            console.log('Global cleanup of mobile controls in desktop mode');
-            
-            // Remove by ID - more thorough with querySelectorAll
-            document.querySelectorAll('#mobile-controls-overlay, #left-btn, #right-btn, #shoot-btn, #mobile-controls, #ultra-stable-controls, #stable-controls').forEach(el => {
-                if (el) el.remove();
-            });
-            
-            // Remove by image source to catch any without IDs
-            document.querySelectorAll('img[src*="left_arrow.png"], img[src*="right_arrow.png"], img[src*="shoot.png"]').forEach(el => el.remove());
-            
-            // Remove by style/class attributes that might indicate they're control buttons
-            document.querySelectorAll('img[style*="fixed"], div[style*="z-index: 10000"], div[style*="z-index:10000"]').forEach(el => {
-                // Check if it's likely a control button
-                if (el.style.position === 'fixed' || 
-                    el.style.bottom === '30px' || 
-                    el.style.zIndex > 9000) {
-                    el.remove();
-                }
-            });
-        };
-        
-        // Run initial cleanup
-        window.cleanupMobileControls();
-        
-        // Set interval to periodically check and remove controls in desktop mode
-        setInterval(window.cleanupMobileControls, 1000);
-        
-        // Also check on window focus
-        window.addEventListener('focus', window.cleanupMobileControls);
-    }
-    
     const canvas = document.querySelector('#canvas1')
     const ctx = canvas.getContext('2d')
-    
-    // Create function to add standalone controls for iframe display
-    function addStandaloneControls() {
-        // STRICT CHECK - only show controls on mobile devices or in iframe
-        const isInIframe = window.self !== window.top;
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        // Intentionally NOT using touch detection which can trigger on desktop
-        // Only show standalone controls if in iframe or on mobile device based on user agent
-        if (!isInIframe && !isMobileDevice) {
-            console.log('Skipping standalone controls on desktop device');
-            return null;
-        }
-        
-        // Create a simple controls overlay just for display
-        const controlsOverlay = document.createElement('div');
-        controlsOverlay.id = 'iframe-controls-display';
-        controlsOverlay.style.position = 'fixed';
-        controlsOverlay.style.bottom = '20px';
-        controlsOverlay.style.left = '0';
-        controlsOverlay.style.width = '100%';
-        controlsOverlay.style.display = 'flex';
-        controlsOverlay.style.justifyContent = 'space-between';
-        controlsOverlay.style.padding = '0 20px';
-        controlsOverlay.style.zIndex = '9999';
-        
-                 // Add the buttons with better positioning
-         const buttonContainer = document.createElement('div');
-         buttonContainer.style.display = 'flex';
-         buttonContainer.style.width = '100%';
-         buttonContainer.style.justifyContent = 'space-between';
-         buttonContainer.style.alignItems = 'center';
-         buttonContainer.style.maxWidth = '400px';
-         buttonContainer.style.margin = '0 auto';
-        
-        // Left button
-        const leftBtn = document.createElement('img');
-        leftBtn.src = '/icon/left_arrow.png';
-        leftBtn.alt = 'Left';
-        leftBtn.style.width = '70px';
-        leftBtn.style.height = '70px';
-        
-        // Shoot button
-        const shootBtn = document.createElement('img');
-        shootBtn.src = '/icon/shoot.png';
-        shootBtn.alt = 'Shoot';
-        shootBtn.style.width = '70px';
-        shootBtn.style.height = '70px';
-        
-        // Right button
-        const rightBtn = document.createElement('img');
-        rightBtn.src = '/icon/right_arrow.png';
-        rightBtn.alt = 'Right';
-        rightBtn.style.width = '70px';
-        rightBtn.style.height = '70px';
-        
-        // Add buttons to container
-        buttonContainer.appendChild(leftBtn);
-        buttonContainer.appendChild(shootBtn);
-        buttonContainer.appendChild(rightBtn);
-        
-        // Add container to overlay
-        controlsOverlay.appendChild(buttonContainer);
-        
-        // Add overlay to document
-        document.body.appendChild(controlsOverlay);
-        
-        return controlsOverlay;
-    }
-    
-    // Check if we're in an iframe and show controls immediately ONLY if on mobile
-    if (window.parent !== window) {
-        // Check if we're on a mobile device
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        if (isMobileDevice) {
-            const iframeControls = addStandaloneControls();
-            
-            // Hide these controls when game starts
-            window.addEventListener('gamestart', function() {
-                if (iframeControls) {
-                    iframeControls.style.display = 'none';
-                }
-                
-                // Ensure mobile controls are shown when in iframe on mobile
-                if (window.gameInstance) {
-                    // Force mobile mode in iframe context to ensure controls show up
-                    window.gameInstance.isMobile = true;
-                    window.forceMobileControls = true; // Force mobile controls in iframe
-                    
-                    // Ensure controls are visible
-                    const mobileControls = document.getElementById('mobile-controls-overlay');
-                    if (!mobileControls) {
-                        window.gameInstance.addOnScreenControls();
-                    } else {
-                        mobileControls.style.display = 'block';
-                    }
-                }
-            });
-        } else {
-            console.log("Desktop iframe detected - not showing mobile controls");
-        }
-        
-    }
     
     // Make canvas responsive to screen size
     const updateCanvasSize = () => {
@@ -455,149 +128,53 @@ window.addEventListener('load', () => {
         // Use a fixed aspect ratio (532:850 ≈ 0.625)
         const aspectRatio = 0.625;
         
-        // Check if we're on mobile
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        // Check if we're on a mobile device
+        const isMobile = window.innerWidth <= 768 || 
+                    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                    (typeof window.orientation !== 'undefined');
         
         // Calculate dimensions to maintain aspect ratio
         let canvasWidth, canvasHeight;
         
-        if (windowWidth * aspectRatio <= windowHeight) {
-            // Width is the limiting factor
-            canvasWidth = Math.min(windowWidth, 532);
-            canvasHeight = canvasWidth / aspectRatio;
-        } else {
-            // Height is the limiting factor
-            canvasHeight = Math.min(windowHeight, 850);
+        if (isMobile) {
+            // For mobile, prioritize using full height of the screen
+            canvasHeight = windowHeight;
             canvasWidth = canvasHeight * aspectRatio;
+            
+            // If width exceeds window width, adjust accordingly
+            if (canvasWidth > windowWidth) {
+                canvasWidth = windowWidth;
+                canvasHeight = canvasWidth / aspectRatio;
+            }
+        } else {
+            // For desktop, maintain aspect ratio while fitting screen
+            if (windowWidth * aspectRatio <= windowHeight) {
+                // Width is the limiting factor
+                canvasWidth = Math.min(windowWidth, 532);
+                canvasHeight = canvasWidth / aspectRatio;
+            } else {
+                // Height is the limiting factor
+                canvasHeight = Math.min(windowHeight, 850);
+                canvasWidth = canvasHeight * aspectRatio;
+            }
         }
         
         // Set canvas dimensions
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
         
-        // On mobile, fix the canvas to the top of the screen with space for controls
-        if (isMobile) {
-            // Add fixed positioning styles
-            canvas.style.position = 'fixed';
-            canvas.style.top = '0';
-            canvas.style.left = '50%';
-            canvas.style.transform = 'translateX(-50%)';
-            canvas.style.maxHeight = 'calc(100vh - 120px)'; // Reserve space for controls
-            canvas.style.margin = '0';
-            canvas.style.zIndex = '1';
-            canvas.style.boxSizing = 'border-box';
-            
-            // Ensure mobile controls are visible and not cropped
-            const controlsOverlay = document.getElementById('mobile-controls-overlay');
-            if (controlsOverlay) {
-                controlsOverlay.style.zIndex = '10000';
-                controlsOverlay.style.position = 'fixed';
-                controlsOverlay.style.bottom = '0';
-            }
-            
-            // Ensure the mobile controls container is properly positioned
-            const controlsContainer = document.getElementById('mobile-controls');
-            if (controlsContainer) {
-                controlsContainer.style.position = 'absolute';
-                controlsContainer.style.bottom = '40px';
-                controlsContainer.style.zIndex = '10001';
-            }
-            
-            // Add styles to ensure the containing element doesn't offset the canvas
-            const canvasContainer = canvas.parentElement;
-            if (canvasContainer) {
-                canvasContainer.style.padding = '0';
-                canvasContainer.style.margin = '0';
-                canvasContainer.style.position = 'fixed';
-                canvasContainer.style.top = '0';
-                canvasContainer.style.left = '0';
-                canvasContainer.style.width = '100%';
-                canvasContainer.style.height = '100%';
-                canvasContainer.style.overflow = 'hidden';
-            }
-            
-            // Add CSS to ensure body and html don't cause scrolling or margin issues
-            const style = document.createElement('style');
-            style.textContent = `
-                body, html {
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    overflow: hidden !important;
-                    position: fixed !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                    max-width: 100% !important;
-                    max-height: 100% !important;
-                }
-                
-                #canvas1 {
-                    position: fixed !important;
-                    top: 0 !important;
-                    left: 50% !important;
-                    transform: translateX(-50%) !important;
-                    margin: 0 !important;
-                    max-height: 100vh !important;
-                    z-index: 1 !important;
-                }
-                
-                /* Fix iframe positioning for containing page */
-                @media (max-width: 768px) {
-                    iframe {
-                        position: fixed !important;
-                        top: 0 !important;
-                        left: 0 !important;
-                        width: 100vw !important;
-                        height: 100vh !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        border: none !important;
-                        z-index: 1 !important;
-                    }
-                }
-            `;
-            document.head.appendChild(style);
-            
-            // Send message to parent page to fix iframe position if possible
-            try {
-                if (window.parent && window.parent !== window) {
-                    window.parent.postMessage({
-                        type: 'FIX_IFRAME_POSITION',
-                        position: 'top',
-                        isMobile: true
-                    }, '*');
-                }
-            } catch (e) {
-                // Silently fail if cross-origin issues prevent messaging
-            }
-        }
+        // Make canvas visible after sizing
+        canvas.style.display = 'block';
         
         // Log the new dimensions
-        console.log(`Canvas resized to: ${canvasWidth}x${canvasHeight}`);
+        console.log(`Canvas resized to: ${canvasWidth}x${canvasHeight}, isMobile: ${isMobile}`);
     };
     
     // Initial sizing
     updateCanvasSize();
     
     // Handle window resize
-    window.addEventListener('resize', function() {
-        // Update canvas size
-        updateCanvasSize();
-        
-        // Check if in desktop mode and clean up controls if needed
-        if (window.isDesktopMode === true || (window.gameInstance && window.gameInstance.detectMobile && !window.gameInstance.detectMobile())) {
-            console.log('Window resized - checking desktop mode');
-            
-            // Use global cleanup if available
-            if (typeof window.cleanupMobileControls === 'function') {
-                window.cleanupMobileControls();
-            }
-            
-            // Also use game instance cleanup if available
-            if (window.gameInstance && typeof window.gameInstance.ensureNoMobileControls === 'function') {
-                window.gameInstance.ensureNoMobileControls();
-            }
-        }
-    });
+    window.addEventListener('resize', updateCanvasSize);
 
     class Game {
         constructor(width, height) {
@@ -799,46 +376,6 @@ window.addEventListener('load', () => {
             
             // Generate a unique game session token
             this.generateGameSessionToken();
-            
-            // Add screen shake method
-            this.screenShake = (intensity = 5, duration = 300) => {
-                if (!this.canvas) return;
-                
-                const originalTransform = this.canvas.style.transform;
-                const shakeAmount = Math.min(intensity, 15);
-                
-                // Apply shake only to canvas
-                this.canvas.style.transform = `translate(${Math.random() * shakeAmount - shakeAmount/2}px, ${Math.random() * shakeAmount - shakeAmount/2}px)`;
-                
-                setTimeout(() => {
-                    this.canvas.style.transform = originalTransform;
-                }, duration);
-            };
-            
-            // Set up event listeners for window resize to check desktop/mobile status
-            window.addEventListener('resize', this.handleResize.bind(this));
-            
-            // Initial detection
-            this.detectMobile();
-        }
-    
-        // Handler for window resize to check if we need to show/hide mobile controls
-        handleResize() {
-            // Re-detect mobile/desktop status on resize
-            const wasMobile = !window.isDesktopMode;
-            this.detectMobile();
-            const isMobile = !window.isDesktopMode;
-            
-            // If changed from mobile to desktop, remove controls
-            if (wasMobile && !isMobile) {
-                console.log('Changed to desktop mode - removing mobile controls');
-                this.ensureNoMobileControls();
-            } 
-            // If changed from desktop to mobile, add controls
-            else if (!wasMobile && isMobile) {
-                console.log('Changed to mobile mode - adding mobile controls');
-                this.initMobileControls();
-            }
         }
     
         initializeGame() {
@@ -964,11 +501,11 @@ window.addEventListener('load', () => {
             context.fillStyle = this.scoreTextFormat.style;
             context.font = this.scoreTextFormat.font;
             context.textAlign = this.scoreTextFormat.align;
-            context.fillText(`Score: ${Math.floor(this.score)}`, 20, 40);
+            context.fillText(`Score: ${Math.floor(this.score)}`, 20, 25);
             
             // Draw jumps counter on the right side
             context.textAlign = 'end';
-            context.fillText(`Jumps: ${window.__jumpCount || 0}`, this.width - 20, 40);
+            context.fillText(`Jumps: ${window.__jumpCount || 0}`, this.width - 20, 25);
             // Reset text alignment
             context.textAlign = this.scoreTextFormat.align;
 
@@ -1102,25 +639,6 @@ window.addEventListener('load', () => {
                 this.deathReason = "fall";
             }
             
-            // Make sure we have the most accurate jump count at game over
-            // This helps ensure mobile jumps are counted properly
-            console.log(`Checking for final jump count - current value: ${this.finalJumpCount}`);
-            
-            // Use the highest value available for jump count
-            if (window.__jumpCount > this.finalJumpCount) {
-                console.log(`Updating final jump count from ${this.finalJumpCount} to ${window.__jumpCount}`);
-                this.finalJumpCount = window.__jumpCount;
-            }
-            
-            // For mobile devices, ensure jumps are counted
-            if (this.detectMobile() && this.finalJumpCount < 1) {
-                // Use a minimum value for mobile, or based on score
-                const minimumJumps = Math.max(5, Math.floor(this.score / 20));
-                console.log(`Mobile device with no jumps detected - using minimum value: ${minimumJumps}`);
-                this.finalJumpCount = minimumJumps;
-                window.__jumpCount = minimumJumps;
-            }
-            
             // Create a final game token with score included only at game over time
             let finalToken = null;
             
@@ -1131,8 +649,7 @@ window.addEventListener('load', () => {
                         ...this.sessionToken,
                         finalScore: this.score,
                         finalJumps: this.finalJumpCount,
-                        finishTime: Date.now(),
-                        isMobile: this.detectMobile() || false
+                        finishTime: Date.now()
                     };
                 } else {
                     // If session token is missing, create a fallback token
@@ -1194,9 +711,7 @@ window.addEventListener('load', () => {
                 reviveCancelled: !!this.reviveCancelled,
                 hasUsedRevive: !!this.hasUsedRevive,
                 timestamp: Date.now(),
-                highScore: true, // Always mark as potential high score to be checked by parent
-                isMobile: this.detectMobile() || false, // Flag to indicate if this is a mobile device
-                mobileJumpCount: window.__jumpCount || 0 // Include raw jump count for verification
+                highScore: true // Always mark as potential high score to be checked by parent
             });
             
             // Invalidate the current token after use
@@ -1889,33 +1404,11 @@ window.addEventListener('load', () => {
                 this.needsAdminReset = false; // Reset admin reset flag
                 this.adminResetRequested = false; // Reset admin reset request flag
                 
-                // Make sure mobile controls are initialized and visible when game starts
-                if (!document.getElementById('mobile-controls-overlay')) {
-                    this.addOnScreenControls();
-                }
-                
-                // Show the mobile controls now that the game is starting
-                const controlsOverlay = document.getElementById('mobile-controls-overlay');
-                if (controlsOverlay) {
-                    controlsOverlay.style.display = 'block';
-                }
-                
-                // Hide the control guide for mobile view
-                if (this.detectMobile()) {
-                    const controlsGuide = document.getElementById('controlsGuide');
-                    const controlsImage = document.querySelector('#controlsGuide + img');
-                    if (controlsGuide) controlsGuide.style.display = 'none';
-                    if (controlsImage) controlsImage.style.display = 'none';
-                }
-                
                 // Notify parent that a new game has started (for UI updates only, not blockchain)
                 sendMessageToParent({
                     type: 'NEW_GAME_STARTED',
                     gameId: this.gameId
                 });
-                
-                // Dispatch event to hide iframe display controls
-                window.dispatchEvent(new Event('gamestart'));
                 
                 // Play background music when game starts
                 if (window.audioManager) {
@@ -1936,12 +1429,6 @@ window.addEventListener('load', () => {
         drawStartButton(context) {
             // Hide the canvas initially
             this.canvas.style.display = 'none';
-            
-            // Hide the game controls but keep iframe controls visible
-            const controlsOverlay = document.getElementById('mobile-controls-overlay');
-            if (controlsOverlay) {
-                controlsOverlay.style.display = 'none';
-            }
             
             // Show the start screen
             const startScreen = document.getElementById('startScreen');
@@ -2128,15 +1615,6 @@ window.addEventListener('load', () => {
                 controlsImage.style.opacity = '0';
                 controlsImage.style.transition = 'opacity 0.8s ease';
                 
-                // Check if we're on mobile and hide controls guide if so
-                const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                const isMobileMode = isMobileDevice || window.__FORCE_MOBILE_VIEW__ || window.isMobile;
-                
-                if (isMobileMode) {
-                    controlsGuide.style.display = 'none';
-                    controlsImage.style.display = 'none';
-                }
-                
                 playButton.style.display = 'none'; // Initially hidden
                 playButton.style.opacity = '0';
                 playButton.style.fontSize = '32px';
@@ -2218,16 +1696,14 @@ window.addEventListener('load', () => {
                         playButton.style.transition = 'opacity 0.8s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
                         playButton.style.opacity = '1';
                         
-                        // Only show controls guide on desktop
-                        if (!isMobileMode) {
-                            controlsGuide.style.display = 'block';
-                            controlsGuide.style.transition = 'opacity 0.8s ease';
-                            controlsGuide.style.opacity = '1';
-                            
-                            // Show keyboard controls image
-                            controlsImage.style.display = 'block';
-                            controlsImage.style.opacity = '1';
-                        }
+                        // Also show controls guide
+                        controlsGuide.style.display = 'block';
+                        controlsGuide.style.transition = 'opacity 0.8s ease';
+                        controlsGuide.style.opacity = '1';
+                        
+                        // Show keyboard controls image
+                        controlsImage.style.display = 'block';
+                        controlsImage.style.opacity = '1';
                         
                         // Add a bouncy entrance effect
                         playButton.style.transform = 'scale(0.8)';
@@ -2288,124 +1764,40 @@ window.addEventListener('load', () => {
                     type: 'JUMP_PERFORMED',
                     jumpCount: window.__jumpCount
                 });
-                
-                // Apply screen shake on big jumps
-                if (this.speedY < -20) {
-                    this.screenShake(Math.min(Math.abs(this.speedY) * 0.5, 15), 300);
-                }
             }
         }
 
         // Add these new methods to the Game class
         detectMobile() {
-            // Check if we're in an iframe
-            const isInIframe = window.self !== window.top;
-            
-            // Check for mobile device using user agent (most reliable method)
-            const userAgentCheck = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            // Respect a forced mobile flag if set elsewhere (mainly for iframe contexts)
-            const forcedMobile = window.forceMobileControls === true;
-            
-            // Set a global indicator for the UI to reference
-            const previousDesktopMode = window.isDesktopMode;
-            window.isDesktopMode = !(isInIframe || userAgentCheck || forcedMobile);
-            
-            // If desktop mode has changed, ensure UI controls are updated
-            if (previousDesktopMode !== window.isDesktopMode && window.isDesktopMode === true) {
-                this.ensureNoMobileControls();
-            }
-            
-            // Return true ONLY if we're in an iframe or on an actual mobile device
-            // We're deliberately NOT using touchCheck or dimensionCheck to avoid showing on desktop
-            return isInIframe || userAgentCheck || forcedMobile;
-        }
-        
-        // Helper function to ensure no mobile controls exist in desktop mode
-        ensureNoMobileControls() {
-            console.log('Ensuring no mobile controls in desktop mode');
-            
-            // Use global cleanup function if available
-            if (typeof window.cleanupMobileControls === 'function') {
-                window.cleanupMobileControls();
-                return;
-            }
-            
-            // Fallback to local cleanup if global function isn't available
-            const mobileControlsOverlay = document.getElementById('mobile-controls-overlay');
-            if (mobileControlsOverlay) {
-                mobileControlsOverlay.remove();
-            }
-            
-            // Remove individual controls if they somehow exist separately
-            const controlIds = ['left-btn', 'right-btn', 'shoot-btn', 'mobile-controls', 'ultra-stable-controls'];
-            controlIds.forEach(id => {
-                const elements = document.querySelectorAll(`#${id}`);
-                elements.forEach(element => {
-                    if (element) {
-                        element.remove();
-                    }
-                });
-            });
-            
-            // Also clean by image source
-            document.querySelectorAll('img[src*="left_arrow.png"]').forEach(el => el.remove());
-            document.querySelectorAll('img[src*="right_arrow.png"]').forEach(el => el.remove());
-            document.querySelectorAll('img[src*="shoot.png"]').forEach(el => el.remove());
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
         initMobileControls() {
-            // Enhanced check for desktop mode
-            if (window.isDesktopMode === true) {
-                console.log('📱 Desktop mode detected - skipping mobile controls');
-                // Make sure we clean up any controls that might exist
-                this.ensureNoMobileControls();
-                return;
-            }
-            
-            // Secondary check for non-mobile devices
-            if (!this.detectMobile()) {
-                console.log('📱 Skipping mobile controls on desktop device');
-                return;
-            }
-            
             console.log('📱 Initializing mobile controls');
             
             // Set a global flag to indicate we're in mobile mode
             window.isMobile = true;
             
-            // Add on-screen controls immediately
-            this.addOnScreenControls();
-            
-            // Add touch event for jumping/firing when in mobile device
+            // No longer using canvas taps for jumping since we have dedicated control buttons
+            // Only use touch to start the game if not started yet
             if (this.isMobile && this.detectMobile()) {
                 this.canvas.addEventListener('touchstart', (event) => {
-                    // Only handle events for game over state (which is handled separately)
+                    // First check if we're not in game over state (which is handled separately)
                     if (!this.gameOver && !this.showingReviveMenu && !this.showingReviveErrorScreen) {
                         event.preventDefault(); // Prevent scrolling only for active gameplay
                         
-                        // Tap to jump/fire in active gameplay
-                        if (this.gameStart) {
-                            // Jump action
-                            this.player.jump();
-                            
-                            // Play jump sound if available
-                            if (window.audioManager && typeof window.audioManager.play === 'function') {
-                                window.audioManager.play('jump', 0.7);
-                            }
-                            
-                            // Tag this event as a mobile event
-                            event.isMobile = true;
-                            
-                        } else if (!this.gameStart) {
+                        // Only use touch to start the game when not started
+                        if (!this.gameStart) {
                             // Start the game on touch if not started
                             this.startGame();
                         }
+                        
+                        // No longer handling jump actions here since we have dedicated control buttons
                     }
                     // If in game over state, the other handler will take care of it
                 }, { passive: false });
                 
-                console.log('Mobile touch controls enabled successfully');
+                console.log('Mobile touch controls enabled (game start only)');
             } else {
                 console.log('Not enabling mobile touch events - device detected as desktop');
             }
@@ -2450,6 +1842,9 @@ window.addEventListener('load', () => {
                     this.gyroEnabled = true;
                 }
             }
+            
+            // Add on-screen controls for movement and shooting
+            this.addOnScreenControls();
         }
 
         handleGyroscope(event) {
@@ -2479,325 +1874,197 @@ window.addEventListener('load', () => {
         }
 
         addOnScreenControls() {
-            // Enhanced check for desktop mode - use window.isDesktopMode which is set in detectMobile()
-            if (window.isDesktopMode === true) {
-                console.log('Desktop mode detected - hiding on-screen controls');
-                
-                // Remove any existing mobile controls if they exist
-                const existingControls = document.getElementById('mobile-controls-overlay');
-                if (existingControls) {
-                    existingControls.remove();
-                }
+            // Get iframe reference
+            const controlsFrame = document.getElementById('controls-iframe');
+            if (!controlsFrame || !controlsFrame.contentWindow) {
+                console.error('Controls iframe not found');
                 return;
             }
             
-            // Secondary check for non-mobile devices (belt and suspenders approach)
+            // Create a completely independent document in the iframe
+            const frameDoc = controlsFrame.contentDocument || controlsFrame.contentWindow.document;
+            frameDoc.open();
+            frameDoc.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                    <style>
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            overflow: hidden;
+                            width: 100%;
+                            height: 100%;
+                            background-color: transparent;
+                            position: relative;
+                        }
+                        .control-btn {
+                            position: fixed;
+                            border-radius: 50%;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            color: white;
+                            border: none;
+                            pointer-events: auto;
+                            touch-action: manipulation;
+                            -webkit-tap-highlight-color: transparent;
+                            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                            transition: transform 0.15s ease, opacity 0.15s ease, background-color 0.15s ease;
+                            font-family: Arial, sans-serif;
+                            font-weight: bold;
+                        }
+                        #left-btn {
+                            bottom: 3vh;
+                            left: 10vw;
+                            width: 15vw;
+                            height: 15vw;
+                            max-width: 80px;
+                            max-height: 80px;
+                            min-width: 50px;
+                            min-height: 50px;
+                            background-color: rgba(0,122,255,0.8);
+                            font-size: 30px;
+                        }
+                        #shoot-btn {
+                            bottom: 3vh;
+                            left: 50%;
+                            transform: translateX(-50%);
+                            width: 18vw;
+                            height: 18vw;
+                            max-width: 90px;
+                            max-height: 90px;
+                            min-width: 60px;
+                            min-height: 60px;
+                            background-color: rgba(255,90,95,0.8);
+                            font-size: 30px;
+                        }
+                        #right-btn {
+                            bottom: 3vh;
+                            right: 10vw;
+                            width: 15vw;
+                            height: 15vw;
+                            max-width: 80px;
+                            max-height: 80px;
+                            min-width: 50px;
+                            min-height: 50px;
+                            background-color: rgba(0,122,255,0.8);
+                            font-size: 30px;
+                        }
+                        @media (min-width: 768px) {
+                            .control-btn {
+                                display: none !important;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <button id="left-btn" class="control-btn">←</button>
+                    <button id="shoot-btn" class="control-btn">🔫</button>
+                    <button id="right-btn" class="control-btn">→</button>
+                    <script>
+                        // Function to send messages to parent window
+                        function sendMessage(action, key) {
+                            window.parent.postMessage({
+                                type: 'CONTROL_ACTION',
+                                action: action,
+                                key: key
+                            }, '*');
+                        }
+                        
+                        // Left button
+                        const leftBtn = document.getElementById('left-btn');
+                        leftBtn.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            leftBtn.style.transform = 'scale(0.95)';
+                            leftBtn.style.opacity = '1';
+                            leftBtn.style.backgroundColor = 'rgba(0,122,255,1)';
+                            sendMessage('keydown', 'ArrowLeft');
+                        }, { passive: false });
+                        
+                        leftBtn.addEventListener('touchend', (e) => {
+                            e.preventDefault();
+                            leftBtn.style.transform = 'scale(1)';
+                            leftBtn.style.opacity = '0.8';
+                            leftBtn.style.backgroundColor = 'rgba(0,122,255,0.8)';
+                            sendMessage('keyup', 'ArrowLeft');
+                        }, { passive: false });
+                        
+                        // Right button
+                        const rightBtn = document.getElementById('right-btn');
+                        rightBtn.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            rightBtn.style.transform = 'scale(0.95)';
+                            rightBtn.style.opacity = '1';
+                            rightBtn.style.backgroundColor = 'rgba(0,122,255,1)';
+                            sendMessage('keydown', 'ArrowRight');
+                        }, { passive: false });
+                        
+                        rightBtn.addEventListener('touchend', (e) => {
+                            e.preventDefault();
+                            rightBtn.style.transform = 'scale(1)';
+                            rightBtn.style.opacity = '0.8';
+                            rightBtn.style.backgroundColor = 'rgba(0,122,255,0.8)';
+                            sendMessage('keyup', 'ArrowRight');
+                        }, { passive: false });
+                        
+                        // Shoot button
+                        const shootBtn = document.getElementById('shoot-btn');
+                        shootBtn.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            shootBtn.style.transform = 'translateX(-50%) scale(0.95)';
+                            shootBtn.style.opacity = '1';
+                            shootBtn.style.backgroundColor = 'rgba(255,90,95,1)';
+                            sendMessage('keydown', ' ');
+                        }, { passive: false });
+                        
+                        shootBtn.addEventListener('touchend', (e) => {
+                            e.preventDefault();
+                            setTimeout(() => {
+                                shootBtn.style.transform = 'translateX(-50%) scale(1)';
+                                shootBtn.style.opacity = '0.8';
+                                shootBtn.style.backgroundColor = 'rgba(255,90,95,0.8)';
+                            }, 150);
+                            sendMessage('keyup', ' ');
+                        }, { passive: false });
+                    </script>
+                </body>
+                </html>
+            `);
+            frameDoc.close();
+            
+            // Make container and iframe visible
+            const container = document.getElementById('controls-iframe-container');
+            if (container) {
+                container.style.pointerEvents = 'auto';
+            }
+            controlsFrame.style.pointerEvents = 'auto';
+            
+            // Listen for messages from the iframe
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'CONTROL_ACTION') {
+                    const { action, key } = event.data;
+                    
+                    // Create and dispatch keyboard event
+                    const keyEvent = new KeyboardEvent(action, {
+                        key: key,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    document.dispatchEvent(keyEvent);
+                    
+                    // Play sound for shoot button
+                    if (action === 'keydown' && key === ' ' && window.audioManager) {
+                        window.audioManager.play('shoot', 0.5);
+                    }
+                }
+            });
+            
+            // Hide controls on desktop
             if (!this.detectMobile()) {
-                console.log('Skipping touch controls on non-mobile device');
-                return;
+                if (container) container.style.display = 'none';
             }
-            
-            // Remove any existing mobile controls to avoid duplicates
-            const existingControls = document.getElementById('mobile-controls-overlay');
-            if (existingControls) {
-                existingControls.remove();
-            }
-            
-            // Create an absolutely positioned overlay relative to viewport
-            const controlsOverlay = document.createElement('div');
-            controlsOverlay.id = 'mobile-controls-overlay';
-            controlsOverlay.style.position = 'fixed';
-            controlsOverlay.style.top = '0';
-            controlsOverlay.style.left = '0';
-            controlsOverlay.style.width = '100%'; 
-            controlsOverlay.style.height = '100%';
-            controlsOverlay.style.pointerEvents = 'none';
-            controlsOverlay.style.zIndex = '10000'; // Extremely high z-index
-            controlsOverlay.style.transform = 'translateZ(0)';
-            controlsOverlay.style.willChange = 'transform';
-            controlsOverlay.style.isolation = 'isolate'; // Create stacking context
-            
-            // Important: Ensure the controls are visible immediately in iframe
-            controlsOverlay.style.display = 'block';
-            
-            // Create control container with increased bottom spacing
-            const controlsContainer = document.createElement('div');
-            controlsContainer.id = 'mobile-controls';
-            controlsContainer.style.position = 'absolute';
-            controlsContainer.style.bottom = '20px'; // Reduce bottom space to ensure visibility
-            controlsContainer.style.left = '0';
-            controlsContainer.style.width = '100%';
-            controlsContainer.style.display = 'flex';
-            controlsContainer.style.justifyContent = 'space-between';
-            controlsContainer.style.padding = '0 20px';
-            controlsContainer.style.boxSizing = 'border-box';
-            controlsContainer.style.zIndex = '10001';
-            controlsContainer.style.pointerEvents = 'none';
-            controlsContainer.style.transform = 'translateZ(0)';
-            
-            // Create left button as direct PNG image
-            const leftBtn = document.createElement('img');
-            leftBtn.id = 'left-btn';
-            leftBtn.src = '/icon/left_arrow.png';
-            leftBtn.alt = 'Left';
-            leftBtn.style.width = '70px'; 
-            leftBtn.style.height = '70px';
-            leftBtn.style.position = 'fixed'; // Use fixed position to prevent movement
-            leftBtn.style.pointerEvents = 'auto';
-            leftBtn.style.WebkitTapHighlightColor = 'transparent';
-            leftBtn.style.touchAction = 'manipulation';
-            leftBtn.style.transform = 'translate3d(0,0,0)'; // Hardware acceleration
-            leftBtn.style.willChange = 'transform';
-            leftBtn.style.userSelect = 'none';
-            leftBtn.style.border = 'none'; 
-            leftBtn.style.background = 'none';
-            leftBtn.style.padding = '0';
-            leftBtn.style.margin = '0';
-            leftBtn.style.zIndex = '10005'; // Ensure it's above everything
-            
-            // Create shoot button as direct PNG image
-            const shootBtn = document.createElement('img');
-            shootBtn.id = 'shoot-btn';
-            shootBtn.src = '/icon/shoot.png';
-            shootBtn.alt = 'Shoot';
-            shootBtn.style.width = '70px';
-            shootBtn.style.height = '70px';
-            shootBtn.style.position = 'fixed'; // Use fixed position to prevent movement
-            shootBtn.style.pointerEvents = 'auto';
-            shootBtn.style.WebkitTapHighlightColor = 'transparent';
-            shootBtn.style.touchAction = 'manipulation';
-            shootBtn.style.transform = 'translate3d(0,0,0)'; // Hardware acceleration
-            shootBtn.style.willChange = 'transform';
-            shootBtn.style.userSelect = 'none';
-            shootBtn.style.border = 'none';
-            shootBtn.style.background = 'none';
-            shootBtn.style.padding = '0';
-            shootBtn.style.margin = '0';
-            shootBtn.style.zIndex = '10005'; // Ensure it's above everything
-            
-            // Create right button as direct PNG image
-            const rightBtn = document.createElement('img');
-            rightBtn.id = 'right-btn';
-            rightBtn.src = '/icon/right_arrow.png';
-            rightBtn.alt = 'Right';
-            rightBtn.style.width = '70px';
-            rightBtn.style.height = '70px';
-            rightBtn.style.position = 'fixed'; // Use fixed position to prevent movement
-            rightBtn.style.pointerEvents = 'auto';
-            rightBtn.style.WebkitTapHighlightColor = 'transparent';
-            rightBtn.style.touchAction = 'manipulation';
-            rightBtn.style.transform = 'translate3d(0,0,0)'; // Hardware acceleration
-            rightBtn.style.willChange = 'transform';
-            rightBtn.style.userSelect = 'none';
-            rightBtn.style.border = 'none';
-            rightBtn.style.background = 'none';
-            rightBtn.style.padding = '0';
-            rightBtn.style.margin = '0';
-            rightBtn.style.zIndex = '10005'; // Ensure it's above everything
-            
-            // Add improved touch event handling for buttons
-            leftBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.player) {
-                    this.player.moveLeft();
-                    leftBtn.style.transform = 'scale(0.95) translateZ(0)';
-                    leftBtn.style.opacity = '0.7';
-                }
-            }, { passive: false });
-            
-            leftBtn.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                // Ensure movement continues during touch hold-and-drag
-                if (this.player) {
-                    this.player.moveLeft();
-                }
-            }, { passive: false });
-            
-            leftBtn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.player) {
-                    this.player.stopMoving();
-                    leftBtn.style.transform = 'scale(1) translateZ(0)';
-                    leftBtn.style.opacity = '1';
-                }
-            }, { passive: false });
-            
-            // Similar improvements for right button
-            rightBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.player) {
-                    this.player.moveRight();
-                    rightBtn.style.transform = 'scale(0.95) translateZ(0)';
-                    rightBtn.style.opacity = '0.7';
-                }
-            }, { passive: false });
-            
-            rightBtn.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                // Ensure movement continues during touch hold-and-drag
-                if (this.player) {
-                    this.player.moveRight();
-                }
-            }, { passive: false });
-            
-            rightBtn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.player) {
-                    this.player.stopMoving();
-                    rightBtn.style.transform = 'scale(1) translateZ(0)';
-                    rightBtn.style.opacity = '1';
-                }
-            }, { passive: false });
-            
-            // Improved shoot button handling
-            shootBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.player && this.player.bullets.length < 3) {
-                    this.player.shootTop();
-                    shootBtn.style.transform = 'scale(0.95) translateZ(0)';
-                    shootBtn.style.opacity = '0.7';
-                }
-            }, { passive: false });
-            
-            shootBtn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                shootBtn.style.transform = 'scale(1) translateZ(0)';
-                shootBtn.style.opacity = '1';
-            }, { passive: false });
-            
-            // Position each button directly with fixed coordinates
-            // Left button position (bottom left)
-            leftBtn.style.bottom = '5vh';
-            leftBtn.style.left = '5vw';
-            leftBtn.style.width = '15vw'; 
-            leftBtn.style.height = '15vw'; // Keep aspect ratio square
-            leftBtn.style.maxWidth = '80px';
-            leftBtn.style.maxHeight = '80px';
-            leftBtn.style.minWidth = '50px';
-            leftBtn.style.minHeight = '50px';
-            
-            // Center button position (bottom center) 
-            shootBtn.style.bottom = '5vh';
-            shootBtn.style.left = '50vw';
-            shootBtn.style.width = '15vw';
-            shootBtn.style.height = '15vw'; // Keep aspect ratio square
-            shootBtn.style.maxWidth = '80px';
-            shootBtn.style.maxHeight = '80px';
-            shootBtn.style.minWidth = '50px';
-            shootBtn.style.minHeight = '50px';
-            shootBtn.style.transform = 'translate(-50%, 0)'; // Center horizontally
-            
-            // Right button position (bottom right)
-            rightBtn.style.bottom = '5vh';
-            rightBtn.style.right = '5vw';
-            rightBtn.style.width = '15vw';
-            rightBtn.style.height = '15vw'; // Keep aspect ratio square
-            rightBtn.style.maxWidth = '80px';
-            rightBtn.style.maxHeight = '80px';
-            rightBtn.style.minWidth = '50px';
-            rightBtn.style.minHeight = '50px';
-            
-            // Add buttons directly to the document body
-            document.body.appendChild(leftBtn);
-            document.body.appendChild(shootBtn);
-            document.body.appendChild(rightBtn);
-            
-            // Add container to overlay
-            controlsOverlay.appendChild(controlsContainer);
-            
-            // Add the overlay to document.body instead of documentElement
-            document.body.appendChild(controlsOverlay);
-            
-            // Store references to buttons
-            this.mobileButtons = {
-                left: leftBtn,
-                right: rightBtn,
-                shoot: shootBtn
-            };
-            
-            // Add CSS to ensure controls are always visible, even in iframes
-            const style = document.createElement('style');
-            style.textContent = `
-                /* Stable mobile controls overlay */
-                #mobile-controls-overlay {
-                    position: fixed !important;
-                    top: 0 !important;
-                    left: 0 !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                    z-index: 10000 !important;
-                    pointer-events: none !important;
-                    user-select: none !important;
-                    touch-action: none !important;
-                    -webkit-user-select: none !important;
-                    -webkit-touch-callout: none !important;
-                    isolation: isolate !important;
-                    display: block !important; /* ALWAYS SHOW */
-                }
-                
-                /* Container for the buttons */
-                #mobile-controls {
-                    position: absolute !important;
-                    bottom: 20px !important;  
-                    left: 0 !important;
-                    width: 100% !important;
-                    pointer-events: none !important;
-                    z-index: 10001 !important;
-                    display: flex !important;
-                    justify-content: space-between !important;
-                    padding: 0 20px !important;
-                    box-sizing: border-box !important;
-                }
-                
-                /* Mobile button styling */
-                #mobile-controls button {
-                    width: 70px !important;
-                    height: 70px !important;
-                    transform: translateZ(0) !important;
-                    transition: transform 0.1s ease !important;
-                    backface-visibility: hidden !important;
-                    -webkit-tap-highlight-color: transparent !important;
-                    touch-action: manipulation !important;
-                    pointer-events: auto !important;
-                    background-color: transparent !important;
-                    border: none !important;
-                    padding: 0 !important;
-                    position: relative !important;
-                    z-index: 10002 !important;
-                }
-                
-                /* Make buttons more visible on mobile with a subtle background */
-                #mobile-controls button {
-                    background-color: rgba(255, 255, 255, 0.1) !important;
-                    border-radius: 50% !important;
-                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
-                }
-                
-                /* Ensure top position for mobile viewport */
-                body.mobile-view #canvas1 {
-                    margin-top: 0 !important;
-                }
-                
-                /* Prevent parent iframe scrolling */
-                body, html {
-                    overflow: hidden !important;
-                    position: fixed !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                    max-width: 100% !important;
-                    max-height: 100% !important;
-                    touch-action: none !important;
-                }
-            `;
-            document.head.appendChild(style);
         }
 
         handleReloadButton() {
@@ -3453,20 +2720,6 @@ window.addEventListener('load', () => {
     const game = new Game(canvas.width,canvas.height)
     window.gameInstance = game; // Make game globally accessible
     
-    // Remove any mobile controls on desktop
-    if (!game.detectMobile()) {
-        console.log("Desktop detected - removing all mobile controls");
-        setTimeout(() => {
-            // Remove ALL mobile control elements from the DOM
-            document.querySelectorAll('#left-btn, #right-btn, #shoot-btn, #mobile-controls-overlay, #ultra-stable-controls, #iframe-controls-display, #stable-controls').forEach(el => {
-                if (el && el.parentNode) {
-                    el.parentNode.removeChild(el);
-                    console.log("Removed mobile control:", el.id);
-                }
-            });
-        }, 100);
-    }
-    
     // Replace the existing animate function with a proper game loop using deltaTime
     let lastTime = performance.now();
     
@@ -3562,202 +2815,6 @@ window.addEventListener('load', () => {
         } else {
             console.error("Game instance not found on window!");
         }
-        
-        // Fix iframe position for mobile devices
-        const fixFramePosition = () => {
-            // Check if we're on mobile
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            if (isMobile) {
-                // Position canvas at the top
-                const canvas = document.getElementById('canvas1');
-                if (canvas) {
-                    canvas.style.position = 'fixed';
-                    canvas.style.top = '0';
-                    canvas.style.left = '50%';
-                    canvas.style.transform = 'translateX(-50%)';
-                    canvas.style.maxHeight = '100vh';
-                    canvas.style.margin = '0';
-                    canvas.style.zIndex = '1';
-                }
-                
-                // Fix document body and html
-                document.body.style.margin = '0';
-                document.body.style.padding = '0';
-                document.body.style.overflow = 'hidden';
-                document.body.style.position = 'fixed';
-                document.body.style.width = '100%';
-                document.body.style.height = '100%';
-                
-                document.documentElement.style.margin = '0';
-                document.documentElement.style.padding = '0';
-                document.documentElement.style.overflow = 'hidden';
-                document.documentElement.style.position = 'fixed';
-                document.documentElement.style.width = '100%';
-                document.documentElement.style.height = '100%';
-                
-                // Tell parent window to fix the iframe position
-                try {
-                    if (window.parent && window.parent !== window) {
-                        window.parent.postMessage({
-                            type: 'FIX_IFRAME_POSITION',
-                            position: 'top',
-                            isMobile: true
-                        }, '*');
-                    }
-                } catch (e) {
-                    // Silent fail
-                }
-            }
-        };
-        
-        // Run position fix on load and when orientation changes
-        fixFramePosition();
-        window.addEventListener('orientationchange', fixFramePosition);
-        window.addEventListener('resize', fixFramePosition);
-    });
-
-    // Add special handling for iframes at the end of the load event
-    try {
-        // Check if we're in an iframe
-        if (window !== window.parent) {
-            console.log('Game running in iframe - ensuring controls are visible');
-            
-            // Dispatch a special event to ensure mobile controls are visible
-            window.addEventListener('DOMContentLoaded', function() {
-                // Force mobile controls to be visible
-                setTimeout(function() {
-                    const mobileControls = document.getElementById('mobile-controls-overlay');
-                    if (!mobileControls && window.gameInstance) {
-                        window.gameInstance.addOnScreenControls();
-                    } else if (mobileControls) {
-                        mobileControls.style.display = 'block';
-                    }
-                    
-                    // Add a class to indicate we're in iframe mode
-                    document.body.classList.add('iframe-mode');
-                    
-                    // Create a special style for iframe mode
-                    const iframeStyle = document.createElement('style');
-                    iframeStyle.innerHTML = `
-                        body.iframe-mode {
-                            overflow: hidden !important;
-                            position: fixed !important;
-                            width: 100% !important;
-                            height: 100% !important;
-                        }
-                        
-                        body.iframe-mode #mobile-controls-overlay {
-                            display: block !important;
-                            z-index: 99999 !important;
-                        }
-                        
-                        body.iframe-mode #mobile-controls button {
-                            background-color: rgba(255, 255, 255, 0.2) !important;
-                            border-radius: 50% !important;
-                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-                        }
-                    `;
-                    document.head.appendChild(iframeStyle);
-                }, 500);
-            });
-        }
-    } catch (e) {
-        // Silent fail for cross-origin iframe issues
-    }
-
-    // Force iframe mode detection and automatically create stable controls
-    document.addEventListener('DOMContentLoaded', function() {
-      // CRITICAL: Check desktop mode first before any control creation
-      if (window.isDesktopMode === true) {
-        console.log('Desktop mode detected - blocking ALL control creation attempts');
-        
-        // Run cleanup
-        if (typeof window.cleanupMobileControls === 'function') {
-          window.cleanupMobileControls();
-        }
-        
-        // Override the createStableControlOverlay function to always return null in desktop mode
-        window.createStableControlOverlay = function() {
-          console.log('BLOCKED: Attempt to create controls in desktop mode');
-          return null;
-        };
-        
-        return; // Exit early - don't proceed with ANY control creation
-      }
-      
-      // Check if we're in an iframe or on mobile
-      const isIframe = window !== window.parent;
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      if (isIframe || isMobile) {
-        console.log('Mobile or iframe detected - creating stable controls');
-        
-        // Create stable controls immediately
-        const controls = createStableControlOverlay();
-        
-        // Store reference to the controls globally
-        window._stableControls = controls;
-        
-        // Force iframe mode
-        document.body.classList.add('iframe-mode');
-        
-        // Also handle window resize to ensure buttons stay in position
-        window.addEventListener('resize', function() {
-          // Recreate controls on resize to ensure proper positioning
-          setTimeout(function() {
-            const updatedControls = createStableControlOverlay();
-            window._stableControls = updatedControls;
-          }, 100);
-        });
-        
-        // Handle orientation change specifically
-        window.addEventListener('orientationchange', function() {
-          // Recreate controls on orientation change
-          setTimeout(function() {
-            const updatedControls = createStableControlOverlay();
-            window._stableControls = updatedControls;
-          }, 300);
-        });
-      }
-
-      // CRITICAL: Check desktop mode AGAIN before force-creating controls
-      if (window.isDesktopMode === true) {
-        console.log('Desktop mode confirmed - preventing delayed control creation');
-        return;
-      }
-      
-      // Forcibly create stable controls after a delay regardless of detection
-      setTimeout(function() {
-        // FINAL CHECK: Make sure we're not in desktop mode
-        if (window.isDesktopMode === true) {
-          console.log('Desktop mode detected in timeout - blocking control creation');
-          return;
-        }
-        
-        // Create new stable controls
-        const controls = createStableControlOverlay();
-        window._stableControls = controls;
-        
-        // Also try to handle any game instance that might load later
-        if (window.gameInstance) {
-          // Override the addOnScreenControls method to respect desktop mode
-          const originalMethod = window.gameInstance.addOnScreenControls;
-          window.gameInstance.addOnScreenControls = function() {
-            if (window.isDesktopMode === true) {
-              console.log('Desktop mode - not creating controls via game instance');
-              // Just clean up any existing controls
-              if (typeof window.cleanupMobileControls === 'function') {
-                window.cleanupMobileControls();
-              }
-              return;
-            }
-            
-            // Only create controls if not in desktop mode
-            createStableControlOverlay();
-          };
-        }
-      }, 2000);
     });
 })
 
@@ -4038,41 +3095,6 @@ window.addEventListener('message', (event) => {
         // Force redraw of game over screen if it's currently shown
         if (game && game.gameOver) {
             game.draw(ctx);
-        }
-    }
-    
-    // Handle iframe position messages from parent
-    if (event.data?.type === 'POSITION_IFRAME') {
-        console.log('Received position iframe request:', event.data.position);
-        const position = event.data.position || 'top';
-        
-        // Fix canvas to the specified position
-        const canvas = document.getElementById('canvas1');
-        if (canvas) {
-            canvas.style.position = 'fixed';
-            
-            // Position based on request
-            if (position === 'top') {
-                canvas.style.top = '0';
-                canvas.style.bottom = 'auto';
-            } else if (position === 'middle') {
-                canvas.style.top = '50%';
-                canvas.style.transform = 'translate(-50%, -50%)';
-            } else if (position === 'bottom') {
-                canvas.style.top = 'auto';
-                canvas.style.bottom = '0';
-            }
-            
-            // Center horizontally
-            canvas.style.left = '50%';
-            if (!position || position !== 'middle') {
-                canvas.style.transform = 'translateX(-50%)';
-            }
-            
-            // Apply general styles
-            canvas.style.maxHeight = '100vh';
-            canvas.style.margin = '0';
-            canvas.style.zIndex = '1';
         }
     }
 });
@@ -4969,788 +3991,3 @@ function updateTestStatus(message) {
         return false;
     }
 })();
-
-// Add CSS to ensure controls are always visible, even in iframes
-const style = document.createElement('style');
-style.textContent = `
-    /* Direct button styling for game controls */
-    #left-btn, #right-btn, #shoot-btn {
-        position: fixed !important;
-        z-index: 99999 !important;
-        width: 70px !important;
-        height: 70px !important;
-        transform: translate3d(0,0,0) !important;
-        will-change: transform !important;
-        backface-visibility: hidden !important;
-        -webkit-tap-highlight-color: transparent !important;
-        touch-action: manipulation !important;
-        pointer-events: auto !important;
-        user-select: none !important;
-        -webkit-user-select: none !important;
-        filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)) !important;
-        border: none !important;
-        background: none !important;
-        transition: opacity 0.2s ease !important;
-    }
-    
-    /* Center shoot button adjustment */
-    #shoot-btn {
-        transform: translate3d(-50%, 0, 0) !important;
-    }
-    
-    /* Button positions */
-    #left-btn {
-        bottom: 20px !important;
-        left: 20px !important;
-    }
-    
-    #shoot-btn {
-        bottom: 20px !important;
-        left: 50% !important;
-    }
-    
-    #right-btn {
-        bottom: 20px !important;
-        right: 20px !important;
-    }
-    
-    /* Active state */
-    #left-btn:active, #right-btn:active, #shoot-btn:active {
-        opacity: 0.7 !important;
-        transform: scale(0.95) !important;
-    }
-    
-    /* Ensure top position for mobile viewport */
-    body.mobile-view #canvas1 {
-        margin-top: 0 !important;
-    }
-    
-    /* Prevent parent iframe scrolling */
-    body, html {
-        overflow: hidden !important;
-        position: fixed !important;
-        width: 100% !important;
-        height: 100% !important;
-        max-width: 100% !important;
-        max-height: 100% !important;
-        touch-action: none !important;
-    }
-    
-    /* Special iframe mode styles */
-    body.iframe-mode #left-btn,
-    body.iframe-mode #right-btn,
-    body.iframe-mode #shoot-btn {
-        position: fixed !important;
-        z-index: 999999 !important; /* Super high z-index */
-    }
-`
-
-// Add the global CSS style to the document
-document.head.appendChild(style);
-
-// Add special iframe-specific styling to keep controls stable
-const iframeStyle = document.createElement('style');
-iframeStyle.textContent = `
-    /* Fixed control position even in iframe */
-    #left-btn, #right-btn, #shoot-btn {
-        position: fixed !important;
-        z-index: 999999 !important;
-        transform: translate3d(0,0,0) !important;
-        will-change: transform !important;
-        transform-style: preserve-3d !important;
-        -webkit-transform: translate3d(0,0,0) !important;
-        -webkit-transform-style: preserve-3d !important;
-        filter: drop-shadow(0 4px 8px rgba(0,0,0,0.7)) !important;
-        backface-visibility: hidden !important;
-        -webkit-backface-visibility: hidden !important;
-        contain: layout style paint !important;
-        touch-action: manipulation !important;
-        perspective: 1000px !important;
-        pointer-events: auto !important;
-    }
-
-    /* Shoot button needs special transform */
-    #shoot-btn {
-        transform: translate(-50%, 0) !important;
-        -webkit-transform: translate(-50%, 0) !important;
-    }
-
-    /* Make sure they don't move when parent iframe shakes */
-    body.iframe-mode #left-btn,
-    body.iframe-mode #right-btn, 
-    body.iframe-mode #shoot-btn {
-        position: fixed !important;
-        bottom: 5vh !important;
-    }
-    
-    /* Specific positions */
-    body.iframe-mode #left-btn {
-        left: 5vw !important;
-    }
-    
-    body.iframe-mode #shoot-btn {
-        left: 50vw !important;
-    }
-    
-    body.iframe-mode #right-btn {
-        right: 5vw !important;
-    }
-    
-    /* Ensure consistent sizing */
-    body.iframe-mode #left-btn,
-    body.iframe-mode #right-btn,
-    body.iframe-mode #shoot-btn {
-        width: 15vw !important;
-        height: 15vw !important;
-        max-width: 80px !important;
-        max-height: 80px !important;
-        min-width: 50px !important;
-        min-height: 50px !important;
-    }
-    
-    /* Add special iframe body class for optimal performance */
-    body.iframe-mode {
-        overflow: hidden !important;
-        position: fixed !important;
-        width: 100% !important;
-        height: 100% !important;
-        max-width: 100% !important;
-        max-height: 100% !important;
-        touch-action: none !important;
-        -webkit-overflow-scrolling: none !important;
-    }
-`;
-document.head.appendChild(iframeStyle);
-
-// Create a completely stable control overlay that can't be affected by game movement
-function createStableControlOverlay() {
-  console.log("SHOOT BUTTON CONTROLLER: Checking device mode...");
-  
-  // FORCE CHECK desktop mode from multiple sources for reliability
-  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const isInIframe = window.self !== window.top;
-  const isDesktop = !(isInIframe || isMobileDevice);
-  
-  // ALWAYS update the global desktop flag
-  window.isDesktopMode = isDesktop;
-  
-  // CRITICAL: Exit immediately if desktop mode
-  if (isDesktop) {
-    console.log("⛔ DESKTOP MODE DETECTED - BLOCKING ALL CONTROL CREATION");
-    
-    // EXTREME EMERGENCY REMOVAL OF ALL SHOOT BUTTONS
-    setTimeout(function() {
-      console.log("EMERGENCY: Forcibly removing all control buttons");
-      
-      // Remove all buttons by ID
-      ['shoot-btn', 'left-btn', 'right-btn', 'mobile-controls-overlay', 
-       'stable-controls', 'ultra-stable-controls', 'mobile-controls'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-          console.log(`Removing control element: #${id}`);
-          el.remove();
-        }
-      });
-      
-      // Remove all buttons by image source
-      document.querySelectorAll('img[src*="shoot.png"], img[src*="left_arrow.png"], img[src*="right_arrow.png"]').forEach(img => {
-        console.log("Removing control image:", img.src);
-        img.remove();
-      });
-      
-      // Also nuke any element with SHOOT text
-      document.querySelectorAll('*').forEach(el => {
-        if (el.textContent && el.textContent.trim() === 'SHOOT') {
-          console.log("Found element with SHOOT text:", el);
-          el.remove();
-        }
-      });
-      
-      // Apply CSS that completely disables all control elements
-      if (!document.getElementById('disable-controls-style')) {
-        const style = document.createElement('style');
-        style.id = 'disable-controls-style';
-        style.innerHTML = `
-          #shoot-btn, #left-btn, #right-btn, 
-          img[src*="shoot.png"], img[src*="left_arrow.png"], img[src*="right_arrow.png"],
-          #mobile-controls-overlay, #stable-controls, #ultra-stable-controls, #mobile-controls {
-            display: none !important;
-            opacity: 0 !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-            position: absolute !important;
-            left: -9999px !important;
-            top: -9999px !important;
-            height: 0 !important;
-            width: 0 !important;
-            z-index: -9999 !important;
-          }
-        `;
-        document.head.appendChild(style);
-        
-        // Set an interval to continually check for and remove controls
-        setInterval(function() {
-          document.querySelectorAll('#shoot-btn, img[src*="shoot.png"]').forEach(el => {
-            console.log("Removing persistent control:", el);
-            el.remove();
-          });
-        }, 500);
-      }
-    }, 0);
-    
-    // Return null - NEVER create controls in desktop mode
-    return null;
-  }
-  
-  // If we're here, we're on mobile and should create controls
-  console.log("📱 Mobile device confirmed - creating stable controls");
-  
-  // Rest of the mobile control creation logic here...
-}
-
-  // Execute immediately when the document loads
-document.addEventListener('DOMContentLoaded', function() {
-  console.log("DOM loaded - checking if controls should be created");
-  
-  // CRITICAL: Check desktop mode before creating controls
-  if (window.isDesktopMode === true) {
-    console.log("Desktop mode detected - not creating any mobile controls");
-    
-    // Run the cleanup function
-    if (typeof window.cleanupMobileControls === 'function') {
-      window.cleanupMobileControls();
-    }
-    
-    // Set up MutationObserver to detect and remove any dynamically added controls
-    const observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-          // Check if any of the added nodes are controls
-          for (let i = 0; i < mutation.addedNodes.length; i++) {
-            const node = mutation.addedNodes[i];
-            
-            // Only process Element nodes (not text nodes)
-            if (node.nodeType === 1) {
-              // Check if it's a control element by id
-              const controlIds = ['left-btn', 'right-btn', 'shoot-btn', 'mobile-controls-overlay', 'ultra-stable-controls', 'stable-controls'];
-              if (node.id && controlIds.includes(node.id)) {
-                console.log("Detected dynamic control element - removing", node.id);
-                node.remove();
-              }
-              
-              // Check if it's an image with control source
-              if (node.tagName === 'IMG' && node.src) {
-                if (node.src.includes('left_arrow.png') || 
-                    node.src.includes('right_arrow.png') || 
-                    node.src.includes('shoot.png')) {
-                  console.log("Detected dynamic control image - removing", node.src);
-                  node.remove();
-                }
-              }
-            }
-          }
-        }
-      });
-      
-      // Run cleanup after mutations, just to be sure
-      if (typeof window.cleanupMobileControls === 'function') {
-        window.cleanupMobileControls();
-      }
-    });
-    
-    // Start observing the document with the configured parameters
-    observer.observe(document.body, { childList: true, subtree: true });
-    
-    // No need for the rest of the function in desktop mode
-    return;
-  }
-  
-  // Only proceed with control creation in mobile mode
-  createStableControlOverlay();
-  
-  // Set up a monitor for jump count to ensure mobile transactions are not lost
-  const monitorJumpCount = function() {
-    if (window.__jumpCount && window.__jumpCount > 0) {
-      // Ensure the jump count is sent to the parent window periodically
-      if (typeof sendMessageToParent === 'function') {
-        sendMessageToParent({
-          type: 'JUMP_PERFORMED',
-          jumpCount: window.__jumpCount,
-          timestamp: Date.now(),
-          fromMobile: true,
-          isMobileDevice: true
-        });
-        
-        console.log(`🔄 Sending periodic jump count update: ${window.__jumpCount} jumps`);
-      }
-    }
-  };
-  
-  // Start a 3-second interval to monitor and transmit jump count
-  const jumpMonitorInterval = setInterval(monitorJumpCount, 3000);
-  
-  // Store the interval ID so it can be cleared if needed
-  window.__jumpMonitorInterval = jumpMonitorInterval;
-  
-  // Also recreate controls on resize and orientation change
-  window.addEventListener('resize', function() {
-    // Check desktop mode before recreating controls
-    if (window.isDesktopMode === true) {
-      console.log('Window resize detected in desktop mode - NOT recreating controls');
-      // Run cleanup instead
-      if (typeof window.cleanupMobileControls === 'function') {
-        window.cleanupMobileControls();
-      }
-      return;
-    }
-    
-    // Only create controls if not in desktop mode
-    createStableControlOverlay();
-  });
-  
-  window.addEventListener('orientationchange', function() {
-    // Check desktop mode before recreating controls on orientation change
-    if (window.isDesktopMode === true) {
-      console.log('Orientation change detected in desktop mode - NOT recreating controls');
-      // Run cleanup instead
-      if (typeof window.cleanupMobileControls === 'function') {
-        window.cleanupMobileControls();
-      }
-      return;
-    }
-    
-    // Only proceed with control creation in mobile mode
-    setTimeout(createStableControlOverlay, 300);
-  });
-});
-
-// Block any game screenshake from affecting the document body
-if (window.juiceEffects && window.juiceEffects.screenShake) {
-  const originalScreenShake = window.juiceEffects.screenShake;
-  window.juiceEffects.screenShake = function(intensity, duration) {
-    // Only apply shake to canvas element, not body
-    const canvas = document.getElementById('canvas1');
-    if (canvas) {
-      const originalTransform = canvas.style.transform;
-      const shakeAmount = Math.min(intensity || 5, 10);
-      
-      // Apply shake directly to canvas
-      canvas.style.transform = `translate(${Math.random() * shakeAmount - shakeAmount/2}px, ${Math.random() * shakeAmount - shakeAmount/2}px)`;
-      
-      // Reset after duration
-      setTimeout(() => {
-        canvas.style.transform = originalTransform;
-      }, duration || 300);
-    }
-  };
-}
-
-// Execute code to directly remove all SHOOT buttons from the page
-(function removeShootButton() {
-  // Check if we're in desktop mode
-  if (window.isDesktopMode === true) {
-    console.log('DIRECT REMOVAL: Attempting to remove all SHOOT buttons');
-    
-    // Function to find and remove all shoot buttons
-    function nukeShootButtons() {
-      // Find by ID
-      const directShootBtn = document.getElementById('shoot-btn');
-      if (directShootBtn) {
-        console.log('Found shoot button by ID - removing');
-        directShootBtn.remove();
-      }
-      
-      // Find by source attribute
-      document.querySelectorAll('img[src*="shoot.png"]').forEach(img => {
-        console.log('Found shoot button by src attribute - removing');
-        img.remove();
-      });
-      
-      // Find by text content containing "SHOOT"
-      document.querySelectorAll('*').forEach(el => {
-        if (el.textContent && el.textContent.includes('SHOOT')) {
-          // Check if this is likely a button
-          if (el.tagName === 'BUTTON' || 
-              el.tagName === 'IMG' || 
-              el.style.position === 'fixed' ||
-              el.style.zIndex > 1000) {
-            console.log('Found element with SHOOT text - removing', el);
-            el.remove();
-          }
-        }
-      });
-      
-      // Find by position and styling that might indicate it's a control button
-      document.querySelectorAll('img, div, button').forEach(el => {
-        // Check for characteristics of the shoot button
-        if (el.style && (
-            (el.style.position === 'fixed' || el.style.position === 'absolute') &&
-            (el.style.bottom === '30px' || el.style.bottom === '5vh') &&
-            (el.style.zIndex > 1000 || el.style.zIndex === '2147483647')
-          )) {
-          console.log('Found suspected control button by position/style - removing', el);
-          el.remove();
-        }
-      });
-    }
-    
-    // Run immediately
-    nukeShootButtons();
-    
-    // Also run periodically
-    setInterval(nukeShootButtons, 500);
-    
-    // Run on resize
-    window.addEventListener('resize', nukeShootButtons);
-    
-    // Run when document becomes visible
-    document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState === 'visible') {
-        nukeShootButtons();
-      }
-    });
-    
-    // Watch for new elements being added
-    const observer = new MutationObserver(function(mutations) {
-      let shouldNuke = false;
-      
-      mutations.forEach(function(mutation) {
-        if (mutation.addedNodes && mutation.addedNodes.length) {
-          for (let i = 0; i < mutation.addedNodes.length; i++) {
-            const node = mutation.addedNodes[i];
-            // Check if it might be a shoot button
-            if (node.id === 'shoot-btn' || 
-                (node.src && node.src.includes('shoot.png')) ||
-                (node.textContent && node.textContent.includes('SHOOT'))) {
-              shouldNuke = true;
-              break;
-            }
-          }
-        }
-      });
-      
-      if (shouldNuke) {
-        nukeShootButtons();
-      }
-    });
-    
-    // Start observing
-    observer.observe(document.documentElement, { 
-      childList: true,
-      subtree: true,
-      attributes: true
-    });
-  }
-})();
-
-// NUCLEAR OPTION: Direct and immediate removal of ALL touch buttons
-(function completelyRemoveAllTouchButtons() {
-  // Execute this immediately
-  console.log('🔥 EXECUTING NUCLEAR OPTION: Complete removal of all touch buttons');
-  
-  // DIRECT TARGETING of the specific button images
-  const TARGET_BUTTON_IMAGES = ['left_arrow.png', 'right_arrow.png', 'shoot.png'];
-  
-  // Create a transparent pixel to replace button images
-  const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-  
-  // Function to directly target and remove buttons with these specific images
-  function targetSpecificButtonImages() {
-    console.log('🎯 Direct targeting of specific button images');
-    
-    // Remove any image elements with these sources
-    document.querySelectorAll('img').forEach(img => {
-      if (img.src) {
-        for (const targetImage of TARGET_BUTTON_IMAGES) {
-          if (img.src.includes(targetImage)) {
-            console.log(`Found and removing image: ${targetImage}`);
-            img.remove();
-            break;
-          }
-        }
-      }
-    });
-    
-    // Intercept direct Image.src setting
-    if (!window.__imageSrcIntercepted) {
-      try {
-        const originalDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
-        if (originalDescriptor && originalDescriptor.set) {
-          Object.defineProperty(HTMLImageElement.prototype, 'src', {
-            set: function(value) {
-              if (typeof value === 'string') {
-                for (const targetImage of TARGET_BUTTON_IMAGES) {
-                  if (value.includes(targetImage)) {
-                    console.log(`🛑 Blocked direct Image.src setting: ${targetImage}`);
-                    return originalDescriptor.set.call(this, transparentPixel);
-                  }
-                }
-              }
-              return originalDescriptor.set.call(this, value);
-            },
-            get: originalDescriptor.get
-          });
-          console.log('Successfully intercepted Image.src property');
-          window.__imageSrcIntercepted = true;
-        }
-      } catch (e) {
-        console.error('Error intercepting Image.src:', e);
-      }
-    }
-    
-    // Intercept style.backgroundImage setting
-    if (!window.__backgroundImageIntercepted) {
-      try {
-        const originalDescriptor = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, 'backgroundImage');
-        if (originalDescriptor && originalDescriptor.set) {
-          Object.defineProperty(CSSStyleDeclaration.prototype, 'backgroundImage', {
-            set: function(value) {
-              if (typeof value === 'string') {
-                for (const targetImage of TARGET_BUTTON_IMAGES) {
-                  if (value.includes(targetImage)) {
-                    console.log(`🛑 Blocked style.backgroundImage: ${targetImage}`);
-                    return originalDescriptor.set.call(this, 'none');
-                  }
-                }
-              }
-              return originalDescriptor.set.call(this, value);
-            },
-            get: originalDescriptor.get
-          });
-          console.log('Successfully intercepted style.backgroundImage property');
-          window.__backgroundImageIntercepted = true;
-        }
-      } catch (e) {
-        console.error('Error intercepting style.backgroundImage:', e);
-      }
-    }
-    
-    // Replace image sources via setAttribute
-    const originalSetAttribute = Element.prototype.setAttribute;
-    Element.prototype.setAttribute = function(name, value) {
-      if (name === 'src' && typeof value === 'string') {
-        for (const targetImage of TARGET_BUTTON_IMAGES) {
-          if (value.includes(targetImage)) {
-            console.log('BLOCKED: Control image setAttribute', value);
-            return originalSetAttribute.call(this, name, transparentPixel);
-          }
-        }
-      }
-      return originalSetAttribute.call(this, name, value);
-    };
-    
-    // Look for buttons that might be referencing these images
-    document.querySelectorAll('[style*="background-image"]').forEach(el => {
-      const bgImage = el.style.backgroundImage;
-      if (bgImage) {
-        for (const targetImage of TARGET_BUTTON_IMAGES) {
-          if (bgImage.includes(targetImage)) {
-            console.log(`Found and removing element with background image: ${targetImage}`);
-            el.remove();
-            break;
-          }
-        }
-      }
-    });
-    
-    // Also look for elements with known button IDs
-    ['left-btn', 'right-btn', 'shoot-btn'].forEach(btnId => {
-      const btn = document.getElementById(btnId);
-      if (btn) {
-        console.log(`Found button by ID: ${btnId} - removing`);
-        btn.remove();
-      }
-    });
-  }
-  
-  // Run the targeted removal immediately
-  targetSpecificButtonImages();
-  
-  // Also set a periodic check specifically for these images
-  setInterval(targetSpecificButtonImages, 300);
-  
-  // Define all possible selectors for touch controls
-  const CONTROL_SELECTORS = [
-    // By ID
-    '#shoot-btn', '#left-btn', '#right-btn', '#mobile-controls-overlay', 
-    '#mobile-controls', '#ultra-stable-controls', '#stable-controls', 
-    '#iframe-controls-display', '#gyro-permission',
-    
-    // By attribute
-    'img[src*="shoot.png"]', 'img[src*="left_arrow.png"]', 'img[src*="right_arrow.png"]',
-    
-    // By position/style
-    '[style*="z-index: 2147483647"]', '[style*="z-index:2147483647"]',
-    '[style*="position: fixed"][style*="bottom"]', '[style*="position:fixed"][style*="bottom"]',
-    
-    // By any element containing SHOOT text
-    '*:contains("SHOOT")'
-  ];
-  
-  // Complete removal function
-  function nukeAllTouchControls() {
-    console.log('☢️ NUCLEAR CLEANING: Removing ALL touch controls');
-    
-    // 1. Remove by specific selectors
-    CONTROL_SELECTORS.forEach(selector => {
-      try {
-        document.querySelectorAll(selector).forEach(el => {
-          console.log(`Removing element matching: ${selector}`, el);
-          el.remove();
-        });
-      } catch (e) {
-        console.log(`Error with selector ${selector}:`, e);
-      }
-    });
-    
-    // 2. Search for any elements with shoot text content
-    document.querySelectorAll('*').forEach(el => {
-      if (el.textContent && 
-          (el.textContent.trim() === 'SHOOT' || 
-           el.textContent.includes('SHOOT') && el.textContent.length < 10)) {
-        console.log('Found and removing element with SHOOT text:', el);
-        el.remove();
-      }
-    });
-    
-    // 3. Find elements by style characteristics that might be controls
-    document.querySelectorAll('img, div, button').forEach(el => {
-      // Check for common control styles
-      if (el.style && (
-          (el.style.position === 'fixed' || el.style.position === 'absolute') &&
-          (el.style.bottom === '30px' || 
-           parseInt(el.style.bottom) < 60 || 
-           el.style.bottom.includes('vh')) &&
-          (parseInt(el.style.zIndex) > 1000 || el.style.zIndex === '2147483647')
-        )) {
-        console.log('Found and removing suspected control by style:', el);
-        el.remove();
-      }
-    });
-    
-    // 4. Apply extra CSS to force-hide any elements that might have slipped through
-    if (!document.getElementById('nuclear-control-blocker')) {
-      const style = document.createElement('style');
-      style.id = 'nuclear-control-blocker';
-      style.innerHTML = `
-        /* Hide ALL possible controls with extreme prejudice */
-        [id*="shoot"], [id*="btn"], [id*="control"], [class*="control"], [class*="btn"],
-        img[src*=".png"][style*="position"], img[style*="bottom"], 
-        div[style*="z-index"][style*="bottom"], div[style*="fixed"][style*="bottom"],
-        button[style*="fixed"], button[style*="absolute"][style*="bottom"] {
-          display: none !important;
-          opacity: 0 !important;
-          visibility: hidden !important;
-          pointer-events: none !important;
-          position: absolute !important;
-          left: -9999px !important;
-          top: -9999px !important;
-          height: 0 !important;
-          width: 0 !important;
-          z-index: -9999 !important;
-          transform: scale(0) !important;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }
-  
-  // Run immediately
-  nukeAllTouchControls();
-  
-  // Override control creation functions
-  window.createStableControlOverlay = function() {
-    console.log('🚫 Blocked attempt to create stable controls');
-    return null;
-  };
-  
-  // If Game class methods exist for controls, override them too
-  if (window.gameInstance) {
-    if (window.gameInstance.addOnScreenControls) {
-      window.gameInstance.addOnScreenControls = function() {
-        console.log('🚫 Blocked attempt to add on-screen controls');
-        return;
-      };
-    }
-    
-    if (window.gameInstance.initMobileControls) {
-      window.gameInstance.initMobileControls = function() {
-        console.log('🚫 Blocked attempt to initialize mobile controls');
-        return;
-      };
-    }
-  }
-  
-  // Set up a MutationObserver to catch and remove any dynamically added controls
-  const observer = new MutationObserver(function(mutations) {
-    let controlsDetected = false;
-    
-    mutations.forEach(function(mutation) {
-      if (mutation.addedNodes && mutation.addedNodes.length) {
-        for (let i = 0; i < mutation.addedNodes.length; i++) {
-          const node = mutation.addedNodes[i];
-          if (node.nodeType === 1) { // Element node
-            // Check if this is a control element
-            if ((node.id && 
-                (node.id.includes('btn') || 
-                 node.id.includes('control') || 
-                 node.id.includes('shoot'))) ||
-                (node.src && 
-                (node.src.includes('arrow.png') || 
-                 node.src.includes('shoot.png')))) {
-              console.log('Observer detected control element:', node);
-              controlsDetected = true;
-              break;
-            }
-          }
-        }
-      }
-    });
-    
-    if (controlsDetected) {
-      nukeAllTouchControls();
-    }
-  });
-  
-  // Start observing once DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      observer.observe(document.body, { 
-        childList: true, 
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['style', 'class', 'id', 'src']
-      });
-      
-      // Run again after DOM is fully loaded
-      nukeAllTouchControls();
-      
-      // And set interval for continuous checking
-      setInterval(nukeAllTouchControls, 500);
-    });
-  } else {
-    // DOM is already ready
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['style', 'class', 'id', 'src']
-    });
-    
-    // Set interval for continuous checking
-    setInterval(nukeAllTouchControls, 500);
-  }
-  
-  // Also run on all visibility and focus events
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible') {
-      nukeAllTouchControls();
-    }
-  });
-  
-  window.addEventListener('focus', nukeAllTouchControls);
-  window.addEventListener('resize', nukeAllTouchControls);
-  window.addEventListener('orientationchange', nukeAllTouchControls);
-})();
-
-// Execute code to directly remove all SHOOT buttons from the page

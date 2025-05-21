@@ -758,24 +758,86 @@ const DailyQuestContent = ({ onClose }) => {
   };
 
   return (
-    <div className="daily-quest-content">
-      <button className="panel-close-button" onClick={onClose}>
+    <div className="daily-quest-content" style={{
+      overflow: 'hidden',
+      position: 'relative',
+      height: '100%',
+      maxHeight: '100vh',
+      margin: 0,
+      padding: 0,
+      width: '100%',
+      background: '#222', // Dark background to match overlay
+      color: 'white'
+    }}>
+      <div className="coming-soon-overlay" style={{
+        position: 'absolute',
+        top: '0', // Cover from the very top
+        left: '0',
+        right: '0',
+        bottom: '0',
+        background: 'rgba(0, 0, 0, 0.85)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999,
+        overflow: 'hidden',
+        margin: 0,
+        padding: 0,
+        pointerEvents: 'auto'
+      }}>
+        <div className="coming-soon-message" style={{
+          fontFamily: 'Bangers, cursive',
+          fontSize: '3rem',
+          color: 'white',
+          textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
+          transform: 'rotate(-5deg)',
+          border: '3px solid white',
+          padding: '15px 30px',
+          borderRadius: '10px',
+          boxShadow: '0 0 20px rgba(255, 255, 255, 0.3)'
+        }}>COMING SOON</div>
+      </div>
+      
+      <button className="panel-close-button" onClick={onClose} style={{
+        position: 'absolute',
+        top: '15px',
+        right: '15px',
+        zIndex: 10002,
+        pointerEvents: 'auto',
+        background: 'rgba(255, 0, 0, 0.8)',
+        color: 'white',
+        border: 'none',
+        borderRadius: '50%',
+        width: '40px',
+        height: '40px',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        cursor: 'pointer',
+        fontSize: '20px'
+      }}>
         <FaTimes />
       </button>
       
       {/* Daily Claim title centered above calendar */}
-      <h2 className="section-title daily-claim-title bangers-font">Daily Claim</h2>
+      <h2 className="section-title daily-claim-title bangers-font" style={{
+        position: 'relative',
+        zIndex: 100, // Lower z-index to be under the overlay
+        marginTop: '10px'
+      }}>Daily Claim</h2>
       
       <div className="main-content-wrapper" style={{
         display: 'flex',
         flexDirection: 'row',
         gap: '20px',
-        flexWrap: 'wrap'
+        flexWrap: 'wrap',
+        background: 'transparent'
       }}>
         {/* Calendar UI */}
         <div className="calendar-container" style={{
           flex: '1 1 300px',
-          minWidth: '280px'
+          minWidth: '280px',
+          background: 'transparent'
         }}>
           <div className="calendar-header">
             <button onClick={prevMonth} className="month-nav">&lt;</button>
@@ -876,6 +938,7 @@ const DailyQuestContent = ({ onClose }) => {
                   className={`check-in-button ${!checkInState.canCheckIn ? 'disabled' : ''}`}
                   onClick={performCheckIn}
                   disabled={!checkInState.canCheckIn || checkInState.txPending}
+                  style={{ position: 'relative', zIndex: 100, pointerEvents: 'auto' }}
                 >
                   {checkInState.txPending ? (
                     <div className="loading-spinner"></div>
@@ -1014,7 +1077,10 @@ const DailyQuestContent = ({ onClose }) => {
                   cursor: isCompleted && !isClaimed ? 'pointer' : 'not-allowed',
                   minWidth: '80px',
                   display: 'flex',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  position: 'relative',
+                  zIndex: 100,
+                  pointerEvents: 'auto'
                 }}
               >
                 {isClaimed ? 'Claimed' : 

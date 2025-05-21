@@ -1,19 +1,19 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const apiRoutes = require('./api/index.js');
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import apiRoutes from './api/index.js';
+
+// Get current file and directory paths
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create Express app
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Enable CORS with specific origin to match Vite dev server
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
-
-// Enable JSON parsing
+// Enable CORS and JSON parsing
+app.use(cors());
 app.use(express.json());
 
 // Serve static files from the dist directory (after build)
@@ -21,11 +21,6 @@ app.use(express.static(path.join(__dirname, '../dist')));
 
 // Use API routes
 app.use('/api', apiRoutes);
-
-// Add a test endpoint
-app.get('/api/ping', (req, res) => {
-  res.json({ message: 'API server is running' });
-});
 
 // For any other route, serve the index.html file (client-side routing)
 app.get('*', (req, res) => {
@@ -35,7 +30,6 @@ app.get('*', (req, res) => {
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`API routes available at http://localhost:${PORT}/api`);
 });
 
-module.exports = app; 
+export default app; 

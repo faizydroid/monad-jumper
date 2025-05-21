@@ -1,3 +1,0 @@
-/verify /verify-response.html 200
-/verify/* /verify-response.html 200
-/* /index.html 200 

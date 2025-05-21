@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Jumpnads</title>
     <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
     <link rel="stylesheet" href="style.css">
@@ -870,6 +872,119 @@
         window.getGameInstance = function() {
             return window.gameInstance || null;
         };
+    </script>
+
+    <!-- Orientation handling for mobile -->
+    <script>
+    window.addEventListener('load', function() {
+        function handleOrientation() {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            const orientationMsg = document.getElementById('orientation-message');
+            
+            if (isLandscape && isMobile()) {
+                // Create orientation message if it doesn't exist
+                if (!orientationMsg) {
+                    const msg = document.createElement('div');
+                    msg.id = 'orientation-message';
+                    msg.style.position = 'fixed';
+                    msg.style.top = '0';
+                    msg.style.left = '0';
+                    msg.style.width = '100%';
+                    msg.style.height = '100%';
+                    msg.style.backgroundColor = 'rgba(0,0,0,0.9)';
+                    msg.style.color = 'white';
+                    msg.style.display = 'flex';
+                    msg.style.flexDirection = 'column';
+                    msg.style.justifyContent = 'center';
+                    msg.style.alignItems = 'center';
+                    msg.style.zIndex = '9999';
+                    msg.style.textAlign = 'center';
+                    msg.style.fontFamily = 'Arial, sans-serif';
+                    msg.style.padding = '20px';
+                    
+                    // Add rotate phone icon
+                    const icon = document.createElement('div');
+                    icon.innerHTML = '📱';
+                    icon.style.fontSize = '64px';
+                    icon.style.marginBottom = '20px';
+                    icon.style.transform = 'rotate(90deg)';
+                    icon.style.animation = 'rotate 1.5s ease-in-out infinite';
+                    
+                    const text = document.createElement('div');
+                    text.textContent = 'Please rotate your device to portrait mode for the best experience';
+                    text.style.fontSize = '18px';
+                    text.style.maxWidth = '300px';
+                    
+                    // Add animation style
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        @keyframes rotate {
+                            0%, 100% { transform: rotate(90deg); }
+                            50% { transform: rotate(0deg); }
+                        }
+                    `;
+                    
+                    document.head.appendChild(style);
+                    msg.appendChild(icon);
+                    msg.appendChild(text);
+                    document.body.appendChild(msg);
+                } else {
+                    orientationMsg.style.display = 'flex';
+                }
+            } else if (orientationMsg) {
+                orientationMsg.style.display = 'none';
+            }
+        }
+        
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        
+        // Check orientation on load and resize
+        handleOrientation();
+        window.addEventListener('resize', handleOrientation);
+    });
+    </script>
+
+    <!-- Mobile device detection -->
+    <script>
+    window.addEventListener('load', function() {
+        const canvas = document.getElementById('canvas1');
+        
+        // Check if we're on a mobile device
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            // Enable touch events and prevent default behavior
+            document.addEventListener('touchmove', function(e) {
+                if (e.target === canvas) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            
+            // Prevent double-tap zoom
+            document.addEventListener('touchend', function(e) {
+                const now = Date.now();
+                const DOUBLE_TAP_THRESHOLD = 300;
+                if (now - lastTap < DOUBLE_TAP_THRESHOLD) {
+                    e.preventDefault();
+                }
+                lastTap = now;
+            }, { passive: false });
+            
+            // Initialize timestamp for double-tap detection
+            let lastTap = 0;
+            
+            // Lock screen to portrait on supported devices
+            if (screen.orientation && screen.orientation.lock) {
+                try {
+                    screen.orientation.lock('portrait').catch(() => {
+                        // Silently fail if locking is not supported or user denied permission
+                    });
+                } catch (e) {
+                    // Older browsers might not support this API
+                }
+            }
+        }
+    });
     </script>
 
     <script type="module" src="main.js"></script>

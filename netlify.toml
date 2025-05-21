@@ -2,47 +2,6 @@
   command = "npm run build"
   publish = "dist"
 
-# Explicitly copy verify files to dist
-[[plugins]]
-  package = "@netlify/plugin-functions-core"
-
-  [plugins.inputs]
-    [[plugins.inputs.copy]]
-      from = "public/verify.html"
-      to = "verify.html"
-    [[plugins.inputs.copy]]
-      from = "public/verify-response.html"
-      to = "verify-response.html"
-    [[plugins.inputs.copy]]
-      from = "public/404.html"
-      to = "404.html"
-
-# Specific redirects for verification paths with force=true to ensure they work
-[[redirects]]
-  from = "/verify"
-  to = "/verify.html"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/verify/*"
-  to = "/verify.html"
-  status = 200
-  force = true
-
-# Alternative redirects in case the first set doesn't work
-[[redirects]]
-  from = "/verify"
-  to = "/verify-response.html"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/verify/*"
-  to = "/verify-response.html"
-  status = 200
-  force = true
-
 # Handle SPA routing for React
 [[redirects]]
   from = "/*"

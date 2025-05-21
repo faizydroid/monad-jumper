@@ -32,10 +32,6 @@ import {
   processGameOverAfterRevive, 
   registerSessionToken 
 } from './utils/gameHelpers';
-// Import supabase from the utils directory where it actually exists
-import { supabase } from './utils/supabaseClient';
-// Import NFT Verification Page
-import NFTVerificationPage from './pages/NFTVerificationPage';
 
 // GLOBAL TRANSACTION LOCK SYSTEM
 // This will prevent ANY duplicate transaction attempts
@@ -351,6 +347,12 @@ if (typeof window !== 'undefined') {
     }
   });
 }
+
+// Initialize Supabase client
+const supabase = createClient(
+  import.meta.env.VITE_REACT_APP_SUPABASE_URL,
+  import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY
+);
 
 // Global access to open the mint modal from anywhere
 window.openMintModal = () => {
@@ -5283,9 +5285,20 @@ function GameComponent({ hasMintedNft, isNftLoading, onOpenMintModal, onGameOver
   // Game is showing
   return (
     <div className="app">
-      <div className="game-container" style={{ width: '100vw', maxWidth: '100%', margin: '0', padding: '0', overflow: 'hidden', position: 'absolute', left: '0', right: '0' }}>
-        {/* Wrapper div with background image */}
-        <div className="iframe-background" style={{ width: '100vw', position: 'relative' }}>
+      <div className="game-container" style={{ 
+        width: '100vw', 
+        maxWidth: '100%', 
+        margin: '0', 
+        padding: '0', 
+        overflow: 'hidden', 
+        position: 'absolute', 
+        left: '0', 
+        right: '0',
+        top: '0', /* Add this to make it touch the top */
+        height: '100vh'
+      }}>
+                  {/* Wrapper div with background image */}
+          <div className="iframe-background" style={{ width: '100vw', position: 'relative', margin: 0, padding: 0, top: 0 }}>
           {/* Add a loading overlay that shows when iframe is loading */}
           {isLoading && (
             <div 
@@ -5480,7 +5493,7 @@ function OptimizedGameFrame({ iframeRef, gameId, isLoading, onLoad, onError }) {
         <iframe 
           key={`game-${gameId}`}
           ref={iframeRef}
-      src={srcRef.current}
+          src={srcRef.current}
           title="JumpNads Game"
           className="game-frame"
           allow="autoplay"
@@ -5489,18 +5502,21 @@ function OptimizedGameFrame({ iframeRef, gameId, isLoading, onLoad, onError }) {
           style={{ 
             visibility: isLoading ? 'hidden' : 'visible', 
             opacity: isLoading ? 0 : 1,
-              width: '100vw',
-              height: '100vh',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              border: 'none'
-            }}
-      onError={onError}
-      onLoad={onLoad}
-    />
+            width: '100vw',
+            height: '100vh',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            border: 'none',
+            margin: 0,
+            padding: 0,
+            zIndex: 5
+          }}
+          onError={onError}
+          onLoad={onLoad}
+        />
   );
 }
 
@@ -5619,7 +5635,7 @@ function App() {
   // Use useReadContract instead of useContractRead for Wagmi v2
   const { 
     data: nftBalanceData,
-    isLoading: isNftBalanceLoading = false, // Add default value here
+    isLoading: isNftBalanceLoading,
     refetch: refetchNftBalance
   } = useReadContract({
     address: import.meta.env.VITE_CHARACTER_CONTRACT_ADDRESS,
@@ -5639,7 +5655,7 @@ function App() {
       staleTime: 30000,
       refetchInterval: 60000,
     },
-  }) || { data: null, isLoading: false, refetch: () => {} }; // Add fallback object
+  });
 
   // Calculate NFT ownership status
   const hasMintedNft = useMemo(() => {
@@ -5732,7 +5748,6 @@ function App() {
       <Routes>
         <Route path="/" element={gameComponent} />
         <Route path="/admin" element={<AdminAccess />} />
-        <Route path="/verify" element={<NFTVerificationPage />} />
       </Routes>
       <TransactionNotifications />
 

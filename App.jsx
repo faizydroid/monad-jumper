@@ -1,97 +1,29 @@
 import { ethers } from "ethers";
 import { useState, useEffect, useLayoutEffect } from "react";
-import { useLocation } from "react-router-dom";
 import MobileHomePage from "./src/components/MobileHomePage";
 import characterABI from "./src/data/characterABI.json";
 import usePlayerStats from "./src/hooks/usePlayerStats";
 import HorizontalStats from "./src/components/HorizontalStats";
-// Import NFT components
-import NFTVerificationPage from "./src/pages/NFTVerificationPage";
 // Import Farcaster utilities
 import { initFarcasterSDK, isInFarcasterFrame } from "./src/utils/farcaster";
 
 // Debug information to help troubleshoot mobile display issues
 console.log("Root App.jsx loading. If you see this, the root App.jsx is being used, not src/App.jsx");
 
-// IMPORTANT: Add a global helper function to detect verification page
-// This ensures we have a consistent check that can be called from anywhere
-window.isVerificationPage = function() {
-  const pathname = window.location.pathname;
-  const fullUrl = window.location.href;
-  const searchParams = new URLSearchParams(window.location.search);
-  
-  const result = (
-    pathname === '/verify' || 
-    pathname.startsWith('/verify') ||
-    fullUrl.includes('/verify') ||
-    searchParams.has('verification') ||
-    fullUrl.includes('verification=true') ||
-    window.__ON_VERIFICATION_PAGE__ === true ||
-    document.body.classList.contains('verification-page') ||
-    document.body.getAttribute('data-page') === 'verify'
-  );
-  console.log(`🔍 Global verification check: ${result} for path ${pathname}`);
-  return result;
-}
-
-// Force redirect to mobile view if needed (after wallet connection)
+// Force reload to mobile view if needed (after wallet connection)
 function forceMobileRedirect() {
-  // IMPROVED verification check - multiple methods
-  const pathname = window.location.pathname;
-  const fullUrl = window.location.href;
-  
-  // CRITICAL: Special check for URL parameter - most important case
-  if (fullUrl.includes('verification=true')) {
-    console.log('🔥 EMERGENCY DETECTION - verification=true parameter found, skipping mobile redirect');
-    window.__ON_VERIFICATION_PAGE__ = true;
-    document.body.classList.add('verification-page');
-    document.body.setAttribute('data-page', 'verify');
-    // Force NOT mobile
-    window.__FORCE_MOBILE_VIEW__ = false;
-    localStorage.removeItem('isMobileDevice');
-    sessionStorage.removeItem('isMobileDevice');
-    return false;
-  }
-  
-  // Fix: Check both www and non-www versions for verify path
-  const isVerifyPage = (
-    pathname === '/verify' || 
-    pathname.startsWith('/verify') ||
-    fullUrl.includes('/verify') ||
-    window.__ON_VERIFICATION_PAGE__ === true ||
-    document.body.classList.contains('verification-page') || 
-    document.body.getAttribute('data-page') === 'verify'
-  );
-  
-  if (isVerifyPage) {
-    console.log('✅ Verification page detected, skipping mobile redirect');
-    
-    // Make sure verification flags are set
-    window.__ON_VERIFICATION_PAGE__ = true;
-    document.body.classList.add('verification-page');
-    document.body.setAttribute('data-page', 'verify');
-    
-    return false;
-  }
-  
   // Check flag in window object (set by MobileHomePage)
   if ((window.__FORCE_MOBILE_VIEW__ || detectMobile()) && !document.querySelector('.mobile-container')) {
     console.log('Forcing redirect to mobile view');
     
-    // Get the current URL and preserve the full path and hash
-    const currentUrl = new URL(window.location.href);
-    
-    // Add mobile parameters without changing the pathname
-    currentUrl.searchParams.set('isMobile', 'true');
-    currentUrl.searchParams.set('forceReload', Date.now().toString());
-    
-    // Use the full URL including path
-    const redirectUrl = currentUrl.toString();
-    console.log('Redirecting to:', redirectUrl);
+    // Set the URL parameter and reload
+    const url = new URL(window.location.href);
+    url.searchParams.set('isMobile', 'true');
+    url.searchParams.set('forceReload', Date.now().toString());
     
     // Force reload to apply changes
     setTimeout(() => {
-      window.location.href = redirectUrl;
+      window.location.href = url.toString();
     }, 100);
     return true;
   }
@@ -100,43 +32,6 @@ function forceMobileRedirect() {
 
 // Force mobile detection function - multiple strategies for reliability
 function detectMobile() {
-  // CRITICAL: First check if we're on verification path - ALWAYS return false
-  const pathname = window.location.pathname;
-  const fullUrl = window.location.href;
-  const searchParams = new URLSearchParams(window.location.search);
-  
-  const verifyMatch = (
-    pathname === '/verify' || 
-    pathname.startsWith('/verify') ||
-    fullUrl.includes('/verify') ||
-    searchParams.has('verification') ||
-    fullUrl.includes('verification=true') ||
-    window.__ON_VERIFICATION_PAGE__ === true ||
-    document.body.classList.contains('verification-page') || 
-    document.body.getAttribute('data-page') === 'verify'
-  );
-  
-  // ALWAYS force desktop mode (non-mobile) for verification page
-  if (verifyMatch) {
-    console.log('🛑 detectMobile: On verification page - forcing NON-mobile mode');
-    
-    // Ensure proper flags are set
-    window.__ON_VERIFICATION_PAGE__ = true;
-    window.__FORCE_MOBILE_VIEW__ = false;
-    
-    // Remove any incorrect flags
-    localStorage.removeItem('isMobileDevice');
-    sessionStorage.removeItem('isMobileDevice');
-    
-    // Ensure body has correct classes
-    if (document.body) {
-      document.body.classList.add('verification-page');
-      document.body.setAttribute('data-page', 'verify');
-    }
-    
-    return false;
-  }
-  
   // Strategy 1: Check window object flag (set by MobileHomePage)
   if (window.__FORCE_MOBILE_VIEW__) return true;
   
@@ -182,170 +77,10 @@ function App() {
   // Add debug info to console to help troubleshoot which App.jsx is being used
   console.log("Root App.jsx rendering");
   
-  // CRITICAL PRODUCTION FIX: Direct check for verification=true in URL query parameters
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.has('verification') || urlParams.get('verification') === 'true') {
-    console.log('🚨 FINAL PRODUCTION FIX: verification=true parameter detected, rendering verification page ONLY');
-    // Force all flags for verification
-    window.__ON_VERIFICATION_PAGE__ = true;
-    window.__VERIFY_EMERGENCY_DETECTION__ = true;
-    window.__FORCE_VERIFICATION_PAGE__ = true;
-    window.__DISABLE_MOBILE_REDIRECT__ = true;
-    window.__FORCE_MOBILE_VIEW__ = false;
-    
-    // Clear mobile flags
-    localStorage.removeItem('isMobileDevice');
-    sessionStorage.removeItem('isMobileDevice');
-    
-    // Force functions to return appropriate values
-    window.detectMobile = function() { return false; };
-    window.forceMobileRedirect = function() { return false; };
-    window.isVerificationPage = function() { return true; };
-    
-    // Add style tag to force hide any content that's not verification-related
-    const forceStyle = document.createElement('style');
-    forceStyle.id = 'verification-final-fix-styles';
-    forceStyle.textContent = `
-      body > *:not(.verification-page-container):not(#root) { display: none !important; }
-      #root > *:not(.verification-page-container) { display: none !important; }
-      .desktop-container { display: none !important; }
-      .mobile-container { display: none !important; }
-      .verification-page-container { 
-        display: block !important; 
-        visibility: visible !important;
-        opacity: 1 !important;
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        z-index: 99999 !important;
-      }
-    `;
-    document.head.appendChild(forceStyle);
-    
-    // Set CSS and body attributes
-    document.body.classList.add('verification-page');
-    document.body.setAttribute('data-page', 'verify');
-    
-    // DIRECT RETURN - this skips ALL other logic completely
-    return <NFTVerificationPage />;
-  }
-  
-  // CRITICAL FIX: Immediate check for verification=true parameter
-  const currentUrl = window.location.href;
-  if (currentUrl.includes('verification=true') || currentUrl.includes('/verify')) {
-    console.log('🚨 EMERGENCY VERIFICATION CHECK - Found verification=true in URL:', currentUrl);
-    window.__ON_VERIFICATION_PAGE__ = true;
-    document.body.classList.add('verification-page');
-    document.body.setAttribute('data-page', 'verify');
-    
-    // Force verification flags
-    window.__FORCE_MOBILE_VIEW__ = false;
-    localStorage.removeItem('isMobileDevice');
-    sessionStorage.removeItem('isMobileDevice');
-    
-    // Return NFTVerificationPage immediately - nothing else runs
-    return <NFTVerificationPage />;
-  }
-  
-  // Immediate verification path check - Do this first thing before any other logic
-  const pathname = window.location.pathname;
-  const fullUrl = window.location.href;
-  const searchParams = new URLSearchParams(window.location.search);
-  
-  // ENHANCED: Check verification path with more conditions
-  const isDirectVerifyPath = (
-    pathname === '/verify' || 
-    pathname.startsWith('/verify') || 
-    fullUrl.includes('/verify') ||
-    searchParams.has('verification') ||
-    window.__VERIFY_EMERGENCY_DETECTION__ === true ||
-    window.__ON_VERIFICATION_PAGE__ === true ||
-    document.body.classList.contains('verification-page') ||
-    document.body.getAttribute('data-page') === 'verify' ||
-    window.isVerificationPage?.() === true
-  );
-  
-  // Special quick check - if on /verify path, render verification page immediately
-  if (isDirectVerifyPath) {
-    console.log('🚨 CRITICAL PATH DETECTION - Verification path detected EARLY: ', pathname);
-    console.log('🚨 Bypassing all other logic and rendering verification page immediately');
-    
-    // Set verification flags to ensure other code respects this
-    window.__ON_VERIFICATION_PAGE__ = true;
-    window.__VERIFY_EMERGENCY_DETECTION__ = true;
-    document.body.classList.add('verification-page');
-    document.body.setAttribute('data-page', 'verify');
-    
-    // Set a global function that can be checked anywhere
-    window.isVerificationPage = function() { return true; };
-    
-    // Return verification page immediately
-    return <NFTVerificationPage />;
-  }
-  
-  // Continue with regular App logic only if not on verification path
-  console.log("📱 Mobile detection running - not on verification path");
-  
-  // Get current location from React Router
-  const location = useLocation();
-  
-  // Enhanced verification page detection with more comprehensive checks
-  const rawPathname = location.pathname;
-  
-  // Debug logging of URL information
-  console.log("🔍 DEBUG PATH INFO:", {
-    pathname: rawPathname,
-    search: location.search,
-    fullUrl: fullUrl,
-    urlObject: new URL(fullUrl),
-    isMobile: detectMobile(),
-    hasMobileFlag: window.__FORCE_MOBILE_VIEW__,
-    mobileStorage: localStorage.getItem('isMobileDevice')
-  });
-  
-  // Multi-layered verification page detection - React Router location + window.location
-  const reactRouterVerify = (
-    rawPathname === '/verify' || 
-    rawPathname.startsWith('/verify')
-  );
-  
-  const windowLocationVerify = (
-    window.location.pathname === '/verify' ||
-    window.location.pathname.startsWith('/verify') ||
-    fullUrl.includes('/verify')
-  );
-  
-  // Additional checks for verification flags set by the NFTVerification component
-  const flagsVerify = (
-    window.__ON_VERIFICATION_PAGE__ === true ||
-    document.body.classList.contains('verification-page') || 
-    document.body.getAttribute('data-page') === 'verify'
-  );
-  
-  // Combine all checks to ensure we catch the verification page
-  const isVerificationPage = reactRouterVerify || windowLocationVerify || flagsVerify || window.isVerificationPage();
-  
-  console.log("🎯 VERIFICATION PAGE CHECK:", {
-    reactRouterVerify,
-    windowLocationVerify,
-    flagsVerify,
-    globalCheck: window.isVerificationPage(),
-    finalResult: isVerificationPage
-  });
-  
-  // Only force redirect if NOT on the verification page
-  if (!isVerificationPage && forceMobileRedirect()) {
+  // Immediately check if we need to force redirect
+  if (forceMobileRedirect()) {
     // Return loading state since we're about to redirect
     return <div>Loading...</div>;
-  }
-  
-  // CRITICAL: If we're on the verification page, render it immediately
-  // without any other checks or conditions
-  if (isVerificationPage) {
-    console.log('👉 Rendering NFTVerificationPage - Verification path detected!');
-    return <NFTVerificationPage />;
   }
   
   // Force immediate mobile check before first render
@@ -404,12 +139,6 @@ function App() {
 
   // Run before first render
   useLayoutEffect(() => {
-    // Check if we're on the verification page
-    if (isVerificationPage) {
-      console.log('On verification page, not forcing redirect');
-      return;
-    }
-    
     // Force redirect check
     if (forceMobileRedirect()) return;
     
@@ -420,11 +149,8 @@ function App() {
     // Set up visibility change handler for wallet redirects
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Recheck verification page status on visibility change
-        const currentVerifyPage = window.isVerificationPage();
-        
         // Check if we need to force a redirect (after wallet connection)
-        if (!currentVerifyPage && !forceMobileRedirect()) {
+        if (!forceMobileRedirect()) {
           const currentIsMobile = detectMobile();
           setIsMobile(currentIsMobile);
         }
@@ -438,26 +164,12 @@ function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
     };
-  }, [isVerificationPage]);
+  }, []);
 
   // Special handler for wallet connection 
   useEffect(() => {
     // Check for wallet connection completion
     const checkWalletConnection = () => {
-      // First check if on verification page - NEVER redirect in that case
-      if (window.location.pathname === '/verify' || 
-          window.location.pathname.startsWith('/verify') ||
-          window.location.href.includes('/verify') ||
-          window.__ON_VERIFICATION_PAGE__ === true ||
-          document.body.classList.contains('verification-page') || 
-          document.body.getAttribute('data-page') === 'verify') {
-        console.log('On verification page, not checking wallet connection for mobile redirection');
-        return;
-      }
-      
-      // Skip if we're on the verification page
-      if (window.isVerificationPage()) return;
-      
       // If ethereum is available and we're on mobile
       if (window.ethereum && (detectMobile() || window.__FORCE_MOBILE_VIEW__ || localStorage.getItem('isMobileDevice') === 'true')) {
         // Force mobile immediately
@@ -470,7 +182,7 @@ function App() {
           .then(accounts => {
             if (accounts && accounts.length > 0) {
               // We have connected accounts but might be in desktop view
-              if (!document.querySelector('.mobile-container') && !window.isVerificationPage()) {
+              if (!document.querySelector('.mobile-container')) {
                 console.log('Wallet connected but not in mobile view - forcing redirect');
                 forceMobileRedirect();
               }
@@ -480,31 +192,42 @@ function App() {
       }
     };
     
-    // Only run this effect if not on the verification page
-    if (!isVerificationPage) {
-      // Check initially and on account changes
-      checkWalletConnection();
+    // Check initially and on account changes
+    checkWalletConnection();
+    
+    if (window.ethereum) {
+      // Handle wallet connection events
+      const handleAccountsChanged = () => {
+        checkWalletConnection();
+        // Double-check after a delay to catch post-redirect state
+        setTimeout(checkWalletConnection, 500);
+      };
       
-      if (window.ethereum) {
-        // Handle wallet connection events
-        const handleAccountsChanged = () => {
-          if (!window.isVerificationPage()) {
-            checkWalletConnection();
-            // Double-check after a delay to catch post-redirect state
-            setTimeout(checkWalletConnection, 500);
-          }
-        };
-        
-        window.ethereum.on('accountsChanged', handleAccountsChanged);
-        window.ethereum.on('connect', handleAccountsChanged);
-        
-        return () => {
-          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-          window.ethereum.removeListener('connect', handleAccountsChanged);
-        };
-      }
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('connect', handleAccountsChanged);
     }
-  }, [isVerificationPage]);
+    
+    // Check whenever tab becomes visible (might be after wallet connection redirect)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkWalletConnection();
+        // Double-check after a delay
+        setTimeout(checkWalletConnection, 300);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('connect', handleAccountsChanged);
+      }
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, []);
 
   // Initialize ethers provider and signer
   useEffect(() => {
@@ -523,7 +246,7 @@ function App() {
           }
           
           // If we have accounts but aren't in mobile view, force reload
-          if (accounts.length > 0 && detectMobile() && !document.querySelector('.mobile-container') && !window.isVerificationPage()) {
+          if (accounts.length > 0 && detectMobile() && !document.querySelector('.mobile-container')) {
             forceMobileRedirect();
           }
         } catch (error) {
@@ -533,7 +256,7 @@ function App() {
     };
     
     setupEthers();
-  }, [isVerificationPage]);
+  }, []);
 
   // Add resize listener to handle orientation changes
   useEffect(() => {
@@ -543,7 +266,7 @@ function App() {
         setIsMobile(shouldBeMobile);
         
         // If we switched to mobile but don't have the UI, force reload
-        if (shouldBeMobile && !document.querySelector('.mobile-container') && !window.isVerificationPage()) {
+        if (shouldBeMobile && !document.querySelector('.mobile-container')) {
           forceMobileRedirect();
         }
       }
@@ -556,7 +279,7 @@ function App() {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
     };
-  }, [isMobile, isVerificationPage]);
+  }, [isMobile]);
 
 const handleMintNow = async () => {
   try {
@@ -606,9 +329,6 @@ const handleMintNow = async () => {
 
   // Add meta viewport tag for better mobile display
   useEffect(() => {
-    // Skip this effect if on verification page
-    if (window.isVerificationPage()) return;
-    
     // Find or create viewport meta tag for proper mobile scaling
     let viewport = document.querySelector('meta[name="viewport"]');
     if (!viewport) {
@@ -633,44 +353,9 @@ const handleMintNow = async () => {
   // Final force check on render
   const forcedMobileCheck = detectMobile();
   
-  // Log the pathname for debugging
-  console.log('⚠️ CRITICAL PATH CHECK ⚠️');
-  console.log('CURRENT PATHNAME:', rawPathname);
-  console.log('FULL URL:', fullUrl);
-  console.log('IS VERIFICATION PAGE:', isVerificationPage);
-  
-  // Additional verification check using direct window.location
-  // This ensures we catch verification pages in all scenarios
-  const finalVerificationCheck = (
-    window.location.pathname === '/verify' || 
-    window.location.pathname.startsWith('/verify') || 
-    window.location.href.includes('/verify') ||
-    window.location.href.includes('verification=true') ||
-    searchParams.has('verification') ||
-    isVerificationPage
-  );
-  
-  // VERIFICATION PAGE CHECK - Must be FIRST before any mobile checks
-  // If we're on the verification page, render it regardless of mobile/desktop
-  if (finalVerificationCheck) {
-    console.log('👉 Rendering NFTVerificationPage from main render logic');
-    // This return MUST happen before any other rendering logic
-    return <NFTVerificationPage />;
-  }
-  
-  // For non-verification pages, check if we should use mobile view
+  // Always use mobile view on mobile devices - multiple checks for reliability
   if (isMobile || forcedMobileCheck || localStorage.getItem('isMobileDevice') === 'true' || window.__FORCE_MOBILE_VIEW__) {
     console.log('Rendering mobile view');
-    
-    // DOUBLE CHECK we're not on verification page before rendering mobile
-    if (window.location.pathname === '/verify' || 
-        window.location.pathname.startsWith('/verify') || 
-        window.location.href.includes('/verify')) {
-      console.log('⚠️ Last minute verification path detected - rendering verification page');
-      return <NFTVerificationPage />;
-    }
-    
-    // For all other routes on mobile, render MobileHomePage
     return (
       <MobileHomePage
         characterImg={characterImg}
@@ -688,17 +373,6 @@ const handleMintNow = async () => {
         address={walletAddress}
       />
     );
-  }
-
-  // FINAL VERIFICATION CHECK - Make absolutely sure we're not on verification path
-  // This catches any edge cases where verification wasn't detected earlier
-  if (window.location.pathname === '/verify' || 
-      window.location.pathname.startsWith('/verify') || 
-      window.location.href.includes('/verify') ||
-      window.location.href.includes('verification=true') ||
-      searchParams.has('verification')) {
-    console.log('⚠️ Last chance verification path detected - rendering verification page');
-    return <NFTVerificationPage />;
   }
 
   // Desktop view - only show if definitely not mobile
